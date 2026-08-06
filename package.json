@@ -1,0 +1,20 @@
+{
+  "name": "brokemon",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A top-down grid town where the only thing you're catching is a break.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "typescript": "~5.9.3",
+    "vite": "^7.1.5",
+    "vitest": "^3.2.4"
+  }
+}
