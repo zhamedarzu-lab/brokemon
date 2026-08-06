@@ -66,11 +66,15 @@ export class Input {
     return this.pressed.has(b);
   }
 
-  /** Direction currently held, most recent axis wins ties. */
+  /**
+   * Direction to walk this frame. Held keys win, but a press that arrived and
+   * released between two frames still counts — otherwise a quick tap on the
+   * on-screen d-pad does nothing at all.
+   */
   heldDirection(): "up" | "down" | "left" | "right" | null {
-    for (const d of ["up", "down", "left", "right"] as const) {
-      if (this.held.has(d)) return d;
-    }
+    const dirs = ["up", "down", "left", "right"] as const;
+    for (const d of dirs) if (this.held.has(d)) return d;
+    for (const d of dirs) if (this.pressed.has(d)) return d;
     return null;
   }
 

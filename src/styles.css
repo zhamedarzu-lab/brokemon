@@ -10,6 +10,12 @@
   --accent: #f0c85a;
   --font: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
   --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, monospace;
+
+  --gutter: 8px;
+  /* Bottom strip reserved for on-screen controls. Set per-device below. */
+  --controls: 0px;
+  /* Base UI scale. Overridden with container units where supported. */
+  --ui: clamp(9px, 1.3vh, 14px);
 }
 
 * {
@@ -23,22 +29,55 @@ body {
   background: #08080b;
   color: var(--ink);
   font-family: var(--font);
-  overflow: hidden;
   -webkit-font-smoothing: antialiased;
+}
+
+/*
+ * A game, not a document. Nothing here should scroll, rubber-band, select,
+ * long-press into a callout, or double-tap into a zoom — all of which iPadOS
+ * does enthusiastically by default.
+ */
+body {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/*
+ * touch-action intersects down the tree, so it is scoped to the surfaces that
+ * must not pan — never to body, which would leave the journal and long
+ * dialogues unscrollable on a tablet.
+ */
+#screen {
+  touch-action: none;
+}
+.dialogue,
+.journal-pane,
+#title {
+  touch-action: pan-y;
 }
 
 #app {
   display: grid;
   place-items: center;
-  height: 100%;
-  padding: 8px;
+  height: 100vh;
+  height: 100dvh;
+  padding: var(--gutter);
+  padding-bottom: calc(var(--gutter) + var(--controls) + env(safe-area-inset-bottom));
 }
 
 #frame {
   position: relative;
-  width: min(100vw, calc((100vh - 16px) * 1.4));
+  width: min(
+    100%,
+    calc((100dvh - var(--gutter) * 2 - var(--controls) - env(safe-area-inset-bottom)) * 1.4)
+  );
   aspect-ratio: 336 / 240;
-  max-height: calc(100vh - 16px);
   background: #000;
   border-radius: 6px;
   overflow: hidden;
@@ -47,12 +86,30 @@ body {
     0 24px 70px rgba(0, 0, 0, 0.75);
 }
 
+/* Size every overlay against the frame rather than the viewport, so the HUD
+   keeps the same proportions whatever the screen is doing. */
+@supports (container-type: size) {
+  #frame {
+    container-type: size;
+    container-name: frame;
+  }
+  :root {
+    --ui: clamp(12px, 2.2cqh, 18px);
+  }
+}
+
 #screen {
   display: block;
   width: 100%;
   height: 100%;
   image-rendering: pixelated;
+  image-rendering: -webkit-optimize-contrast;
   image-rendering: crisp-edges;
+}
+
+/* Shown only with a keyboard / only with a touchscreen respectively. */
+.touch-only {
+  display: none;
 }
 
 /* --------------------------------------------------------------------- HUD */
@@ -61,7 +118,7 @@ body {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  font-size: clamp(8px, 1.15vh, 13px);
+  font-size: var(--ui);
   line-height: 1.35;
 }
 
@@ -281,7 +338,7 @@ kbd {
   position: absolute;
   inset: 0;
   display: grid;
-  font-size: clamp(9px, 1.35vh, 15px);
+  font-size: calc(var(--ui) * 1.12);
 }
 .overlay.hidden {
   display: none;
@@ -306,6 +363,12 @@ kbd {
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
   max-height: 88%;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* A box with no choices is dismissed by tapping it, so make that obvious. */
+.dialogue.tappable {
+  cursor: pointer;
 }
 
 .dialogue[data-tone="good"] {
@@ -352,6 +415,7 @@ kbd {
   font: inherit;
   padding: 0.35em 0.6em;
   cursor: pointer;
+  touch-action: manipulation;
 }
 
 .choice.selected {
@@ -428,6 +492,7 @@ kbd {
   font: inherit;
   padding: 0.55em;
   cursor: pointer;
+  touch-action: manipulation;
 }
 .journal-tab.active {
   color: var(--accent);
@@ -435,8 +500,25 @@ kbd {
   background: rgba(240, 200, 90, 0.06);
 }
 
+.journal-close {
+  flex: 0 0 auto;
+  width: 3em;
+  background: transparent;
+  border: 0;
+  border-left: 1px solid var(--line);
+  color: var(--ink-dim);
+  font: inherit;
+  font-size: 1.1em;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.journal-close:hover {
+  color: var(--bad);
+}
+
 .journal-pane {
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   padding: 0.8em 1em;
 }
 
@@ -486,6 +568,7 @@ kbd {
   border: 1px solid transparent;
   border-radius: 5px;
   cursor: pointer;
+  touch-action: manipulation;
 }
 .bag-row.selected {
   background: rgba(240, 200, 90, 0.1);
@@ -582,6 +665,7 @@ kbd {
   background: radial-gradient(circle at 50% 35%, #1d2231, #07070a 75%);
   padding: 1em;
   z-index: 20;
+  overflow-y: auto;
 }
 #title.hidden {
   display: none;
@@ -590,7 +674,7 @@ kbd {
 .title-card {
   max-width: 34em;
   text-align: center;
-  font-size: clamp(9px, 1.4vh, 15px);
+  font-size: calc(var(--ui) * 1.1);
 }
 
 .title-card h1 {
@@ -625,11 +709,13 @@ kbd {
   font: inherit;
   font-size: 1.05em;
   padding: 0.55em 1.6em;
+  min-height: 44px;
   border-radius: 6px;
   border: 1px solid var(--accent);
   background: rgba(240, 200, 90, 0.12);
   color: var(--accent);
   cursor: pointer;
+  touch-action: manipulation;
 }
 .title-buttons button:hover:not(:disabled) {
   background: rgba(240, 200, 90, 0.24);
@@ -650,35 +736,52 @@ kbd {
   font-size: 0.94em;
 }
 
-/* ----------------------------------------------------- touch controls */
+/* ------------------------------------------------------- touch controls */
 
 #touch {
-  position: absolute;
-  inset: auto 0 0 0;
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
   display: none;
   justify-content: space-between;
-  padding: 0.8em;
+  align-items: flex-end;
+  padding: 12px max(14px, env(safe-area-inset-left)) max(12px, env(safe-area-inset-bottom))
+    max(14px, env(safe-area-inset-right));
   pointer-events: none;
+  z-index: 30;
 }
 
 #touch button {
   pointer-events: auto;
-  width: 3em;
-  height: 3em;
-  font-size: 16px;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  background: rgba(20, 20, 26, 0.7);
+  display: grid;
+  place-items: center;
+  width: var(--pad-size);
+  height: var(--pad-size);
+  font-size: calc(var(--pad-size) * 0.34);
+  line-height: 1;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(22, 22, 28, 0.62);
+  backdrop-filter: blur(6px);
   color: var(--ink);
   touch-action: none;
   user-select: none;
+  -webkit-user-select: none;
+  transition: background 80ms, transform 80ms;
+}
+
+#touch button.pressed {
+  background: rgba(240, 200, 90, 0.4);
+  transform: scale(0.94);
 }
 
 .dpad {
+  --pad-size: 62px;
   display: grid;
   grid-template-columns: repeat(3, auto);
-  grid-template-rows: repeat(2, auto);
-  gap: 0.25em;
+  grid-template-rows: repeat(3, auto);
+  gap: 5px;
 }
 .dpad [data-btn="up"] {
   grid-area: 1 / 2;
@@ -686,27 +789,117 @@ kbd {
 .dpad [data-btn="left"] {
   grid-area: 2 / 1;
 }
-.dpad [data-btn="down"] {
-  grid-area: 2 / 2;
-}
 .dpad [data-btn="right"] {
   grid-area: 2 / 3;
 }
+.dpad [data-btn="down"] {
+  grid-area: 3 / 2;
+}
 
 .abuttons {
+  --pad-size: 56px;
   display: flex;
-  gap: 0.4em;
-  align-items: end;
+  gap: 10px;
+  align-items: flex-end;
+}
+
+.abuttons .btn-go {
+  --pad-size: 82px;
+  border-radius: 50%;
+  border-color: rgba(240, 200, 90, 0.55);
+  background: rgba(240, 200, 90, 0.18);
+  color: var(--accent);
+  font-weight: 700;
 }
 
 @media (pointer: coarse) {
   #touch {
     display: flex;
   }
+
+  .touch-only {
+    display: inline;
+  }
+  .controls.touch-only {
+    display: flex;
+  }
+  .key-only {
+    display: none;
+  }
+
+  /* Comfortable tap targets everywhere the game asks for a decision. */
+  .choice {
+    padding: 0.6em 0.7em;
+    min-height: 44px;
+    align-items: center;
+  }
+  .journal-tab {
+    padding: 0.85em 0.4em;
+  }
+  .bag-row {
+    padding: 0.6em;
+  }
+}
+
+/*
+ * Everything inside a dialogue or the journal is tapped directly — choices,
+ * items, tabs, the close button — so the pad has no job while one is open.
+ * Getting it out of the way is what stops it covering the bottom of a panel.
+ */
+#touch {
+  transition: opacity 140ms;
+}
+#touch.overlaid {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Landscape tablet: the pad overlays the lower corners of the frame, so the
+   readouts move up and out from under the thumbs. */
+@media (pointer: coarse) and (orientation: landscape) {
   .hud-left {
-    bottom: 5em;
+    top: 3.2em;
+    bottom: auto;
+  }
+  /* Clear of the six-row meter panel above it. */
+  .toasts {
+    top: 12.8em;
   }
   .hud-bottom {
-    bottom: 5em;
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+    bottom: 0.6em;
+    justify-items: center;
+    text-align: center;
+    max-width: 46%;
+  }
+}
+
+/*
+ * Portrait is always width-limited at this aspect ratio, so reserving a strip
+ * would not buy the frame a single pixel. Instead: screen to the top, pad
+ * lifted off the bottom edge into thumb reach, handheld-console style. The
+ * HUD keeps its desktop positions because nothing overlaps it here.
+ */
+@media (pointer: coarse) and (orientation: portrait) {
+  #app {
+    align-items: start;
+  }
+  #touch {
+    bottom: 12vh;
+  }
+}
+
+/* Small phones: shrink the pad so it doesn't eat the screen. */
+@media (pointer: coarse) and (max-height: 460px) {
+  .dpad {
+    --pad-size: 48px;
+  }
+  .abuttons {
+    --pad-size: 44px;
+  }
+  .abuttons .btn-go {
+    --pad-size: 62px;
   }
 }

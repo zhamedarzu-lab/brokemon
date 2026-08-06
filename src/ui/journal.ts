@@ -25,7 +25,10 @@ export class Journal {
       <div class="journal">
         <div class="journal-tabs"></div>
         <div class="journal-pane"></div>
-        <div class="journal-foot"><kbd>←</kbd><kbd>→</kbd> tabs · <kbd>↑</kbd><kbd>↓</kbd> select · <kbd>Z</kbd> use · <kbd>Tab</kbd> close</div>
+        <div class="journal-foot">
+          <span class="key-only"><kbd>←</kbd><kbd>→</kbd> tabs · <kbd>↑</kbd><kbd>↓</kbd> select · <kbd>Z</kbd> use · <kbd>Tab</kbd> close</span>
+          <span class="touch-only">Tap a tab to switch · tap an item to use it</span>
+        </div>
       </div>
     `;
     this.tabsEl = root.querySelector(".journal-tabs")!;
@@ -89,9 +92,11 @@ export class Journal {
     const s = this.state;
     if (!s) return;
 
-    this.tabsEl.innerHTML = TABS.map(
-      (t) => `<button type="button" class="journal-tab ${t === this.tab ? "active" : ""}" data-tab="${t}">${TAB_LABEL[t]}</button>`,
-    ).join("");
+    this.tabsEl.innerHTML =
+      TABS.map(
+        (t) => `<button type="button" class="journal-tab ${t === this.tab ? "active" : ""}" data-tab="${t}">${TAB_LABEL[t]}</button>`,
+      ).join("") + `<button type="button" class="journal-close" aria-label="Close">✕</button>`;
+
     this.tabsEl.querySelectorAll<HTMLElement>(".journal-tab").forEach((el) => {
       el.addEventListener("click", () => {
         this.tab = el.dataset.tab as Tab;
@@ -99,6 +104,7 @@ export class Journal {
         this.render();
       });
     });
+    this.tabsEl.querySelector<HTMLElement>(".journal-close")?.addEventListener("click", () => this.close());
 
     this.paneEl.innerHTML =
       this.tab === "status"

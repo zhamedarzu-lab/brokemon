@@ -36,6 +36,8 @@ class Game {
   private lastFrame = 0;
   private sinceAutosave = 0;
   private running = false;
+  private padEl: HTMLElement | null = null;
+  private padHidden = false;
 
   constructor(state: GameState, private titleEl: HTMLElement) {
     this.state = state;
@@ -52,6 +54,7 @@ class Game {
     this.journal = new Journal(document.querySelector<HTMLElement>("#journal")!, (id) => this.useItem(id));
 
     this.wireTouchControls();
+    this.wireLifecycle();
   }
 
   /* ------------------------------------------------------------- context */
@@ -101,7 +104,9 @@ class Game {
     this.handleInput();
     if (!this.paused()) this.updateMovement(dt);
 
-    this.hud.update(this.state, !this.paused() && this.state.player.moveFrom === null);
+    const busy = this.paused();
+    this.hud.update(this.state, !busy && this.state.player.moveFrom === null);
+    this.setPadHidden(busy);
     render(this.ctx2d, this.state, now);
 
     this.sinceAutosave += dt;
@@ -239,24 +244,70 @@ class Game {
     }
   }
 
+  /**
+   * On-screen controls. A d-pad is only usable if you can roll your thumb from
+   * one direction into the next without lifting it, so buttons also arm on
+   * pointerenter while a finger is already down, and everything disarms on
+   * leave, up and cancel.
+   */
+  /** Fades the pad out while a panel is open, and releases anything held. */
+  private setPadHidden(hidden: boolean): void {
+    if (hidden === this.padHidden || !this.padEl) return;
+    this.padHidden = hidden;
+    this.padEl.classList.toggle("overlaid", hidden);
+    if (!hidden) return;
+    for (const el of this.padEl.querySelectorAll<HTMLElement>("[data-btn].pressed")) {
+      this.input.virtualRelease(el.dataset.btn as Button);
+      el.classList.remove("pressed");
+    }
+  }
+
   private wireTouchControls(): void {
     const pad = document.querySelector<HTMLElement>("#touch");
     if (!pad) return;
+    this.padEl = pad;
+
     pad.querySelectorAll<HTMLElement>("[data-btn]").forEach((el) => {
       const button = el.dataset.btn as Button;
-      const down = (e: Event) => {
-        e.preventDefault();
+
+      const press = () => {
         this.input.virtualPress(button);
+        el.classList.add("pressed");
       };
-      const up = (e: Event) => {
-        e.preventDefault();
+      const release = () => {
         this.input.virtualRelease(button);
+        el.classList.remove("pressed");
       };
-      el.addEventListener("pointerdown", down);
-      el.addEventListener("pointerup", up);
-      el.addEventListener("pointerleave", up);
-      el.addEventListener("pointercancel", up);
+
+      el.addEventListener("pointerdown", (e) => {
+        e.preventDefault();
+        press();
+      });
+      el.addEventListener("pointerenter", (e) => {
+        // Only when a finger or button is already down — otherwise a mouse
+        // hovering the pad would walk the player across the map.
+        if (e.pressure > 0 || e.buttons > 0) press();
+      });
+      for (const type of ["pointerup", "pointerleave", "pointercancel"] as const) {
+        el.addEventListener(type, (e) => {
+          e.preventDefault();
+          release();
+        });
+      }
+      // Stops iPadOS turning a quick double tap on a button into a page zoom.
+      el.addEventListener("dblclick", (e) => e.preventDefault());
     });
+  }
+
+  /** iPadOS discards backgrounded tabs without warning. Save before it does. */
+  private wireLifecycle(): void {
+    const flush = () => {
+      if (this.running) saveGame(this.state);
+    };
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) flush();
+    });
+    window.addEventListener("pagehide", flush);
   }
 }
 

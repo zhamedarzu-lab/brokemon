@@ -32,6 +32,14 @@ export class Dialogue {
     this.choicesEl = root.querySelector(".dialogue-choices")!;
     this.lockEl = root.querySelector(".dialogue-lock")!;
     root.classList.add("hidden");
+
+    // With no choices there is nothing to aim at, so the whole box is the
+    // button. Without this a touch player cannot dismiss a plain line of prose.
+    this.box.addEventListener("click", (e) => {
+      if (this.prompt?.choices?.length) return;
+      e.stopPropagation();
+      this.confirm();
+    });
   }
 
   isOpen(): boolean {
@@ -134,10 +142,11 @@ export class Dialogue {
 
     this.choicesEl.innerHTML = "";
     const list = this.choices();
+    this.box.classList.toggle("tappable", list.length === 0);
     if (list.length === 0) {
       const hint = document.createElement("div");
       hint.className = "dialogue-continue";
-      hint.innerHTML = `<kbd>Z</kbd> continue`;
+      hint.innerHTML = `<span class="key-only"><kbd>Z</kbd> continue</span><span class="touch-only">Tap to continue</span>`;
       this.choicesEl.appendChild(hint);
       return;
     }

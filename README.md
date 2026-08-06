@@ -29,8 +29,18 @@ npm test           # 95 simulation tests
 
 Controls: **arrows/WASD** move · **Z/Enter** interact · **X/Esc** back ·
 **Tab** status, bag and the career ladder · **L** log · **P** save.
-It autosaves to `localStorage` every 20 seconds. Touch controls appear on
-coarse-pointer devices.
+It autosaves to `localStorage` every 20 seconds, and again whenever the tab is
+backgrounded.
+
+### On a tablet
+
+Touch controls appear automatically on any coarse-pointer device. It's built
+and tested against an iPad Mini in both orientations — landscape gives the
+bigger view, portrait puts the screen up top and the pad in thumb reach.
+The d-pad takes taps and holds and you can roll your thumb between directions
+without lifting. Everything inside a panel is tapped directly, so the pad
+fades out whenever one is open. Add it to the home screen and it runs
+chrome-free.
 
 ---
 
