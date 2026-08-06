@@ -42,6 +42,17 @@ without lifting. Everything inside a panel is tapped directly, so the pad
 fades out whenever one is open. Add it to the home screen and it runs
 chrome-free.
 
+### Deploying
+
+`.github/workflows/pages.yml` builds and publishes to GitHub Pages on every
+push to `main`.
+
+**Pages must be set to Source: GitHub Actions**, not "Deploy from a branch".
+This is a source tree, not a site: `index.html` links no stylesheet and points
+at `/src/main.ts`, both of which only become real files when Vite builds. Point
+Pages at a branch and it serves those raw — you get an unstyled page whose
+buttons do nothing, because the game never loads.
+
 ---
 
 ## The six meters
