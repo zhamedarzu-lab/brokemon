@@ -74,7 +74,7 @@ class Game {
 
   private tick(minutes: number, opts?: Partial<TickOptions>): void {
     const interrupts = advance(this.state, this.rng, { minutes, ...opts });
-    for (const i of interrupts) this.enqueue(interruptPrompt(this.state, i, this.actionCtx()));
+    for (const i of interrupts) this.enqueue(interruptPrompt(i, this.actionCtx()));
   }
 
   private enqueue(prompt: Prompt | null): void {
@@ -219,7 +219,7 @@ class Game {
 
     const police = policeCheck(this.state, this.rng);
     if (police) {
-      this.enqueue(interruptPrompt(this.state, police, this.actionCtx()));
+      this.enqueue(interruptPrompt(police, this.actionCtx()));
       this.openNext();
       return;
     }
@@ -313,7 +313,7 @@ class Game {
 
 /* ----------------------------------------------------- interrupt prompts */
 
-function interruptPrompt(s: GameState, i: Interrupt, ctx: ActionCtx): Prompt | null {
+function interruptPrompt(i: Interrupt, ctx: ActionCtx): Prompt | null {
   switch (i.kind) {
     case "collapse":
       return menu(
@@ -357,7 +357,10 @@ function interruptPrompt(s: GameState, i: Interrupt, ctx: ActionCtx): Prompt | n
       return i.paid ? null : say("Notice", [`You couldn't cover $${i.amount} in rent.`, "It goes on the debt, with a late fee."], "bad");
 
     case "newDay":
-      return dailyIncome(s, i.day);
+      return null;
+
+    case "income":
+      return menu("Overnight", i.lines, [{ label: "Good" }], "money");
 
     case "weather":
     case "fired":
@@ -365,22 +368,6 @@ function interruptPrompt(s: GameState, i: Interrupt, ctx: ActionCtx): Prompt | n
   }
 }
 
-/** Passive income lands overnight once you own something that earns. */
-function dailyIncome(s: GameState, day: number): Prompt | null {
-  const lines: string[] = [];
-  if (s.businessOwned) {
-    const take = 180 + Math.round((s.reputation + 40) * 1.5);
-    s.bank += take;
-    lines.push(`The franchise cleared $${take} yesterday.`);
-  }
-  if (s.mayor) {
-    s.bank += 320;
-    lines.push("Your mayoral salary landed: $320.");
-  }
-  if (lines.length === 0) return null;
-  pushLog(s, lines.join(" "), "money");
-  return menu(`Day ${day}`, lines, [{ label: "Good" }], "money");
-}
 
 
 /* ------------------------------------------------------------ title menu */

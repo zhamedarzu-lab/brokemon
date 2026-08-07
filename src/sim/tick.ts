@@ -18,6 +18,7 @@ export type Interrupt =
   | { kind: "rent"; amount: number; paid: boolean }
   | { kind: "fired"; job: string }
   | { kind: "newDay"; day: number }
+  | { kind: "income"; lines: string[] }
   | { kind: "weather"; text: string };
 
 export interface TickOptions {
@@ -148,6 +149,7 @@ function onNewDay(s: GameState, rng: Rng, day: number, out: Interrupt[]): void {
   s.credit = Math.round(s.credit + Math.sign(target - s.credit) * Math.min(6, Math.abs(target - s.credit)));
 
   chargeRent(s, day, out);
+  payPassiveIncome(s, out);
 
   // A cot is paid for one night at a time. Come morning it isn't yours.
   if (s.housing === "hostel") {
@@ -158,6 +160,29 @@ function onNewDay(s: GameState, rng: Rng, day: number, out: Interrupt[]): void {
     }
   }
 }
+
+/**
+ * What the franchise and the mayor's office pay you while you sleep. This is
+ * economy, not presentation — it belongs on the clock with rent and interest,
+ * not in the renderer, where nothing could test it.
+ */
+function payPassiveIncome(s: GameState, out: Interrupt[]): void {
+  const lines: string[] = [];
+  if (s.businessOwned) {
+    const take = 180 + Math.round((s.reputation + 40) * 1.5);
+    s.bank += take;
+    lines.push(`The franchise cleared $${take} yesterday.`);
+  }
+  if (s.mayor) {
+    s.bank += MAYOR_SALARY;
+    lines.push(`Your mayoral salary landed: $${MAYOR_SALARY}.`);
+  }
+  if (lines.length === 0) return;
+  pushLog(s, lines.join(" "), "money");
+  out.push({ kind: "income", lines });
+}
+
+export const MAYOR_SALARY = 320;
 
 function chargeRent(s: GameState, day: number, out: Interrupt[]): void {
   const def = HOUSING[s.housing];

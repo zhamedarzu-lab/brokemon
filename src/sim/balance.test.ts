@@ -8,6 +8,7 @@ import { createState, currentAppearance, phaseOf, type Facing, type GameState } 
 import { advance } from "./tick";
 import { hourOf, minutesUntilHour } from "./time";
 import { consume, type ActionCtx } from "./work";
+import { BUSINESS_PRICE, ESTATE_PRICE } from "./venues";
 
 /**
  * A headless player. It walks nowhere — it teleports to a tile, faces a thing,
@@ -332,7 +333,8 @@ describe("phase 3 and 4 — the ladder", () => {
   it("only sells the estate to someone who can actually pay for it", () => {
     const bot = new Bot(2);
     const s = bot.state;
-    s.cash = 84_000;
+    // Derived from the real price so a repricing can never silently pass.
+    s.cash = ESTATE_PRICE - 1_000;
     s.credit = 800;
     bot.standOn("estate");
     expect(bot.canChoose(bot.press(), "make an offer")).toBe(false);
@@ -350,7 +352,7 @@ describe("phase 3 and 4 — the ladder", () => {
     const s = bot.state;
     s.housing = "apartment";
     s.employment = "officeAdmin";
-    s.cash = 20_000;
+    s.cash = BUSINESS_PRICE + 1_000;
     s.credit = 750;
     s.meters.hygiene = 95;
     s.wearing = "professional";
@@ -361,7 +363,7 @@ describe("phase 3 and 4 — the ladder", () => {
     expect(s.businessOwned).toBe(true);
     expect(s.won).toBe(false);
 
-    s.cash = 90_000;
+    s.cash = ESTATE_PRICE + 1_000;
     s.credit = 800;
     bot.standOn("estate");
     bot.drive(bot.press(), "make an offer");

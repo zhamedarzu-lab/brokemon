@@ -63,6 +63,37 @@ describe("decay", () => {
     expect(m.health).toBeLessThan(60);
   });
 
+  it("lets Dignity climb back once the basics are handled", () => {
+    // This is the whole reason the meter exists. It used to only ever fall,
+    // which pinned it at zero and left the breakdown gate permanently on.
+    const m = fresh({ morale: 20, hygiene: 80, hunger: 80, thirst: 80 });
+    decay(m, IDLE);
+    expect(m.morale).toBeGreaterThan(20);
+  });
+
+  it("still lets Dignity fall when you are not", () => {
+    const m = fresh({ morale: 60, hygiene: 10, hunger: 10 });
+    decay(m, IDLE);
+    expect(m.morale).toBeLessThan(60);
+  });
+
+  it("stalls the Dignity climb while exhausted", () => {
+    const rested = fresh({ morale: 20, energy: 80 });
+    const shattered = fresh({ morale: 20, energy: 5 });
+    decay(rested, IDLE);
+    decay(shattered, IDLE);
+    expect(shattered.morale).toBeLessThan(rested.morale);
+  });
+
+  it("gives back more energy in a night than a day burns", () => {
+    // Energy was a one-way ratchet too: 15 waking hours cost more than the
+    // best bed returned, so it slid to zero whatever the player did.
+    const awake = fresh({ energy: 100 });
+    decay(awake, { ...IDLE, minutes: 15 * 60, exertion: 1.2 });
+    const burnedInADay = 100 - awake.energy;
+    expect(burnedInADay).toBeLessThan(75); // a hostel cot restores 75
+  });
+
   it("drains morale faster when the body is failing", () => {
     const healthy = fresh();
     const wrecked = fresh({ hygiene: 10, hunger: 10, energy: 10 });

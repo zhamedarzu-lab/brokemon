@@ -71,6 +71,26 @@ describe("advance", () => {
     expect(s.cash + s.bank).toBeLessThan(510);
   });
 
+  it("pays the franchise and the mayor's salary overnight", () => {
+    // This used to live in the renderer, where no test could reach it and a
+    // headless run earned nothing from either.
+    const s = fed();
+    s.businessOwned = true;
+    s.mayor = true;
+    const before = s.bank;
+    const interrupts = advance(s, new Rng(1), { minutes: 24 * HOUR });
+    expect(s.bank).toBeGreaterThan(before);
+    expect(interrupts.some((i) => i.kind === "income")).toBe(true);
+  });
+
+  it("pays nothing overnight when you own nothing", () => {
+    const s = fed();
+    const before = s.bank;
+    const interrupts = advance(s, new Rng(1), { minutes: 24 * HOUR });
+    expect(s.bank).toBe(before);
+    expect(interrupts.some((i) => i.kind === "income")).toBe(false);
+  });
+
   it("resets the daily gig allowance overnight", () => {
     const s = fed();
     s.gigsToday.dayLabor = 1;

@@ -554,7 +554,7 @@ const apartment: Venue = (ctx) => {
 
 /* ------------------------------------------------------------------ estate */
 
-const ESTATE_PRICE = 85000;
+export const ESTATE_PRICE = 38000;
 
 const estate: Venue = (ctx) => {
   const s = ctx.state;
@@ -795,8 +795,8 @@ const bank: Venue = (ctx) => {
 
 /* -------------------------------------------------------- corporate plaza */
 
-const BUSINESS_PRICE = 12000;
-const CAMPAIGN_PRICE = 20000;
+export const BUSINESS_PRICE = 12000;
+export const CAMPAIGN_PRICE = 12000;
 
 const corporatePlaza: Venue = (ctx) => {
   const s = ctx.state;
@@ -994,6 +994,19 @@ const jobBoard: Venue = (ctx) => {
   const s = ctx.state;
   const a = s.assignment;
   const choices: Choice[] = [];
+
+  // The parks office crew muster here. Without this the job is a dead end:
+  // you get hired, there is nowhere to clock in, and because firing only
+  // happens inside a worked shift you are never even let go — just employed
+  // forever at nothing a day.
+  if (s.employment && EMPLOYMENT[s.employment].location === "jobBoard") {
+    const w = shiftWindow(s, s.employment);
+    choices.push({
+      label: "Clock in",
+      hint: w === "open" ? "on time" : w === "late" ? "late" : "not your hours",
+      run: () => workShift(ctx, s.employment as EmploymentId),
+    });
+  }
 
   if (a?.ready) {
     choices.push({ label: `Collect payment — ${a.label}`, hint: `$${a.pay}`, run: () => collectAssignment(ctx) });

@@ -26,10 +26,23 @@ export const DECAY_PER_HOUR: Record<MeterId, number> = {
   hunger: 3.6,
   thirst: 5.0,
   hygiene: 1.9,
-  energy: 3.4,
-  morale: 0.9,
+  // A 15-hour day at light exertion burned 61 of a 100-point bar, against the
+  // 75 a hostel bed gives back — so energy slid downhill no matter what you
+  // did. Work also charges its own lump cost on top of this.
+  energy: 2.6,
+  // Deliberately small. At 0.9 the base drain was 17/day, which exactly
+  // cancelled every free morale source in the game combined, so Dignity sat
+  // at zero forever and the breakdown gate never lifted. The bite is meant
+  // to come from the penalty terms below, not from simply existing.
+  morale: 0.45,
   health: 0,
 };
+
+/**
+ * Dignity regained per hour once you are fed, watered, clean, dry and well.
+ * This is the only thing standing between the meter and a permanent zero.
+ */
+export const MORALE_RECOVERY_PER_HOUR = 1.3;
 
 export function clamp(v: number, lo = 0, hi = 100): number {
   return v < lo ? lo : v > hi ? hi : v;
@@ -72,11 +85,17 @@ export function decay(meters: Meters, ctx: DecayContext): MeterDelta {
     meters.energy = clamp(meters.energy - DECAY_PER_HOUR.energy * hours * ctx.exertion);
   }
 
-  // Dignity tracks the state of the body. Filthy, starving and exhausted is
-  // not a mood, it's a slope.
-  let moraleRate = DECAY_PER_HOUR.morale;
+  // Dignity tracks the state of the body, and it has to move both ways.
+  // Filthy, starving and exhausted is not a mood, it's a slope — but fed,
+  // watered and clean has to climb back, or the meter is a one-way ratchet
+  // to zero that pins the breakdown gate on for the whole game.
+  const lookingAfterYourself =
+    meters.hygiene >= 50 && meters.hunger >= 45 && meters.thirst >= 45 && !ctx.soaked && !ctx.sick;
+
+  let moraleRate = lookingAfterYourself ? -MORALE_RECOVERY_PER_HOUR : DECAY_PER_HOUR.morale;
   if (meters.hygiene < 30) moraleRate += 1.6;
   if (meters.hunger < 25) moraleRate += 1.4;
+  // Exhaustion stalls the climb even when everything else is in order.
   if (meters.energy < 20) moraleRate += 1.2;
   if (ctx.soaked) moraleRate += 2.0;
   if (ctx.sick) moraleRate += 1.0;
