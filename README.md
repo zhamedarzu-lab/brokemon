@@ -42,6 +42,20 @@ without lifting. Everything inside a panel is tapped directly, so the pad
 fades out whenever one is open. Add it to the home screen and it runs
 chrome-free.
 
+### On Replit
+
+Import the repo and press Run. `.replit` installs, starts Vite, and opens the
+webview; the game is playable there and on any device pointed at the
+`*.replit.dev` URL. To publish it, Deploy as a **Static** site — the build
+command and `dist` are already configured.
+
+The one thing that needs saying: Replit serves the dev server through a
+`*.replit.dev` proxy, so the `Host` header never matches localhost and Vite's
+DNS-rebinding protection rejects it with *"Blocked request. This host is not
+allowed."* `vite.config.ts` relaxes `allowedHosts` and points the hot-reload
+socket at port 443 — but only when `REPL_ID` is set, so a dev server on your
+own machine keeps its host checking.
+
 ### Deploying
 
 `.github/workflows/pages.yml` builds and publishes to GitHub Pages on every

@@ -1,0 +1,46 @@
+modules = ["nodejs-22"]
+entrypoint = "index.html"
+run = "npm run dev"
+
+[nix]
+channel = "stable-25_05"
+
+# Vite's dev server, exposed on the webview's default external port.
+[[ports]]
+localPort = 5173
+externalPort = 80
+
+# The game is a pile of static files once built, so it deploys as one.
+[deployment]
+deploymentTarget = "static"
+publicDir = "dist"
+build = ["npm", "run", "build"]
+
+[workflows]
+runButton = "Play Brokemon"
+
+[[workflows.workflow]]
+name = "Play Brokemon"
+author = "agent"
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "npm install"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "npm run dev"
+waitForPort = 5173
+
+[[workflows.workflow]]
+name = "Tests"
+author = "agent"
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "npm test"
+
+[workflows.workflow.metadata]
+isValidation = true
