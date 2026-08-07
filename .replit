@@ -22,11 +22,8 @@ outputType = "webview"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "npm run dev"
-waitForPort = 3000
+waitForPort = 5000
 
-# Vite serves on 3000 (see vite.config.ts). externalPort 80 is what the bare
-# *.replit.dev URL resolves to, so the game answers there with no port suffix —
-# which is what you want when opening it on a phone or tablet.
 [[ports]]
-localPort = 3000
+localPort = 5000
 externalPort = 80
