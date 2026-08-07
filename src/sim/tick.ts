@@ -141,8 +141,19 @@ function onNewDay(s: GameState, rng: Rng, day: number, out: Interrupt[]): void {
   }
 
   if (s.investments > 0) {
+    const before = s.investments;
     const swing = rng.float(-0.018, 0.026);
     s.investments = Math.max(0, Math.round(s.investments * (1 + swing)));
+    s.investmentLastDelta = s.investments - before;
+    if (Math.abs(s.investmentLastDelta) > 5) {
+      const sign = s.investmentLastDelta > 0 ? "▲" : "▼";
+      out.push({
+        kind: "income",
+        lines: [`Index fund: ${sign} $${Math.abs(s.investmentLastDelta)} overnight. Now at $${s.investments.toLocaleString()}.`],
+      });
+    }
+  } else {
+    s.investmentLastDelta = 0;
   }
 
   // Credit score drifts towards how you're actually living.

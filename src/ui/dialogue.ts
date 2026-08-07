@@ -15,8 +15,10 @@ export class Dialogue {
   private prompt: Prompt | null = null;
   private index = 0;
   private onClose: (() => void) | null = null;
+  private onAmountFocus: (() => void) | null = null;
 
-  constructor(root: HTMLElement) {
+  constructor(root: HTMLElement, onAmountFocus?: () => void) {
+    this.onAmountFocus = onAmountFocus ?? null;
     this.root = root;
     root.innerHTML = `
       <div class="dialogue" role="dialog" aria-live="polite">
@@ -35,8 +37,11 @@ export class Dialogue {
 
     // With no choices there is nothing to aim at, so the whole box is the
     // button. Without this a touch player cannot dismiss a plain line of prose.
+    // numberInput prompts have no choices but must NOT be dismissed by a click —
+    // the input field and its buttons handle interaction themselves.
     this.box.addEventListener("click", (e) => {
       if (this.prompt?.choices?.length) return;
+      if (this.prompt?.numberInput) return;
       e.stopPropagation();
       this.confirm();
     });
@@ -56,6 +61,10 @@ export class Dialogue {
 
   close(): void {
     this.prompt = null;
+    // Ensure any focused number-input field relinquishes focus before hiding,
+    // otherwise Input ignores all keyboard events while it stays active.
+    const focused = this.root.querySelector<HTMLElement>(":focus");
+    focused?.blur();
     this.root.classList.add("hidden");
     const cb = this.onClose;
     this.onClose = null;
@@ -141,6 +150,68 @@ export class Dialogue {
     this.bodyEl.innerHTML = p.lines.map((l) => (l === "" ? "<br>" : `<p>${escapeHtml(l)}</p>`)).join("");
 
     this.choicesEl.innerHTML = "";
+
+    // Number-input prompt: render a text field + confirm button instead of choices.
+    if (p.numberInput) {
+      const ni = p.numberInput;
+      const field = document.createElement("input");
+      field.type = "number";
+      field.className = "amount-input";
+      field.min = String(ni.min);
+      field.max = String(ni.max);
+      field.step = "1";
+      field.placeholder = ni.placeholder ?? `${ni.min}–${ni.max}`;
+      field.setAttribute("inputmode", "numeric");
+
+      const confirmBtn = document.createElement("button");
+      confirmBtn.type = "button";
+      confirmBtn.className = "choice selected";
+      confirmBtn.innerHTML = `<span class="choice-label">Confirm</span>`;
+
+      const cancelBtn = document.createElement("button");
+      cancelBtn.type = "button";
+      cancelBtn.className = "choice";
+      cancelBtn.innerHTML = `<span class="choice-label">Cancel</span>`;
+
+      const tryConfirm = () => {
+        const raw = field.value.trim();
+        // Reject empty, decimals, scientific notation, and anything non-integer.
+        const val = /^\d+$/.test(raw) ? Number(raw) : NaN;
+        if (isNaN(val) || val < ni.min || val > ni.max) {
+          this.flashLock(`Enter a whole number between $${ni.min} and $${ni.max}`);
+          return;
+        }
+        const next = ni.onConfirm(val);
+        if (next) {
+          this.prompt = next;
+          this.index = this.firstSelectable(next);
+          this.render();
+        } else {
+          this.close();
+        }
+      };
+
+      confirmBtn.addEventListener("click", tryConfirm);
+      cancelBtn.addEventListener("click", () => this.close());
+      field.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") { e.preventDefault(); tryConfirm(); }
+        if (e.key === "Escape") { e.preventDefault(); this.close(); }
+      });
+
+      this.choicesEl.appendChild(field);
+      this.choicesEl.appendChild(confirmBtn);
+      this.choicesEl.appendChild(cancelBtn);
+
+      // When the field gains focus, clear any held game keys so movement
+      // doesn't stay latched while keyboard events are suppressed.
+      field.addEventListener("focus", () => this.onAmountFocus?.());
+
+      // Focus the field on next tick (after DOM is attached).
+      setTimeout(() => field.focus(), 0);
+      this.box.classList.remove("tappable");
+      return;
+    }
+
     const list = this.choices();
     this.box.classList.toggle("tappable", list.length === 0);
     if (list.length === 0) {

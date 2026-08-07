@@ -30,6 +30,8 @@ export class Input {
   constructor(target: EventTarget = window) {
     const down = (raw: Event) => {
       const e = raw as KeyboardEvent;
+      // Let typed input fields handle their own keys.
+      if (document.activeElement instanceof HTMLInputElement || document.activeElement instanceof HTMLTextAreaElement) return;
       const button = BINDINGS[e.code];
       if (!button) return;
       e.preventDefault();
@@ -38,6 +40,7 @@ export class Input {
     };
     const up = (raw: Event) => {
       const e = raw as KeyboardEvent;
+      if (document.activeElement instanceof HTMLInputElement || document.activeElement instanceof HTMLTextAreaElement) return;
       const button = BINDINGS[e.code];
       if (!button) return;
       e.preventDefault();
@@ -91,6 +94,12 @@ export class Input {
 
   virtualRelease(b: Button): void {
     this.held.delete(b);
+  }
+
+  /** Release all held state — call when focus leaves the game surface. */
+  clearHeld(): void {
+    this.held.clear();
+    this.pressed.clear();
   }
 
   dispose(): void {

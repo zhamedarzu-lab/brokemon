@@ -447,6 +447,26 @@ kbd {
   text-align: right;
 }
 
+.amount-input {
+  width: 100%;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(240, 200, 90, 0.45);
+  border-radius: 5px;
+  color: var(--ink);
+  font: inherit;
+  padding: 0.4em 0.7em;
+  margin-bottom: 0.3em;
+  outline: none;
+  -moz-appearance: textfield;
+}
+.amount-input::-webkit-outer-spin-button,
+.amount-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+}
+.amount-input:focus {
+  border-color: var(--accent);
+}
+
 .dialogue-lock {
   color: var(--bad);
   min-height: 1.4em;

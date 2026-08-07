@@ -19,6 +19,16 @@ export interface Prompt {
   choices?: Choice[];
   /** Tints the box — used for police, illness, payouts. */
   tone?: "plain" | "good" | "bad" | "money";
+  /**
+   * If set, the dialogue renders a number input instead of choices.
+   * The player types an amount and confirms; onConfirm receives the value.
+   */
+  numberInput?: {
+    min: number;
+    max: number;
+    placeholder?: string;
+    onConfirm: (amount: number) => Prompt | null;
+  };
 }
 
 export function say(title: string, lines: string | string[], tone: Prompt["tone"] = "plain"): Prompt {

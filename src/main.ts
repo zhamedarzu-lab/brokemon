@@ -51,7 +51,7 @@ class Game {
     this.ctx2d = canvas.getContext("2d", { alpha: false })!;
 
     this.hud = new Hud(document.querySelector<HTMLElement>("#hud")!);
-    this.dialogue = new Dialogue(document.querySelector<HTMLElement>("#dialogue")!);
+    this.dialogue = new Dialogue(document.querySelector<HTMLElement>("#dialogue")!, () => this.input.clearHeld());
     this.journal = new Journal(document.querySelector<HTMLElement>("#journal")!, (id) => this.useItem(id));
 
     this.wireTouchControls();

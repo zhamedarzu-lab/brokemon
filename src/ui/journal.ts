@@ -5,6 +5,22 @@ import { HOUSING, OUTFITS } from "../sim/social";
 import { checkRequirements, currentAppearance, netWorth, phaseOf, PHASE_NAMES, type GameState } from "../sim/state";
 import { formatClock } from "../sim/time";
 
+function reputationLabel(rep: number): string {
+  if (rep >= 60) return "Respected";
+  if (rep >= 30) return "Reliable";
+  if (rep >= 0) return "Neutral";
+  if (rep >= -30) return "Spotty";
+  return "Infamous";
+}
+
+function investmentDisplay(s: GameState): string {
+  if (s.investments === 0) return "—";
+  const base = `$${s.investments.toLocaleString()}`;
+  if (s.investmentLastDelta === 0) return base;
+  const sign = s.investmentLastDelta > 0 ? "▲" : "▼";
+  return `${base} ${sign} $${Math.abs(s.investmentLastDelta)}`;
+}
+
 type Tab = "status" | "bag" | "ladder" | "log";
 const TABS: Tab[] = ["status", "bag", "ladder", "log"];
 const TAB_LABEL: Record<Tab, string> = { status: "Status", bag: "Bag", ladder: "The Ladder", log: "Log" };
@@ -141,13 +157,13 @@ export class Journal {
         <div class="stat"><span>Sleeping</span><b>${HOUSING[s.housing].name}</b></div>
         <div class="stat"><span>Job</span><b>${s.employment ? EMPLOYMENT[s.employment].name : "None"}</b></div>
         <div class="stat"><span>Credits</span><b>${s.education}/${MAX_CREDITS}</b></div>
-        <div class="stat"><span>Reputation</span><b>${s.reputation}</b></div>
+        <div class="stat"><span>Reputation</span><b>${reputationLabel(s.reputation)}</b></div>
       </div>
       <h3>Money</h3>
       <div class="stat-grid">
         <div class="stat"><span>Cash</span><b>$${s.cash.toLocaleString()}</b></div>
         <div class="stat"><span>Savings</span><b>$${s.bank.toLocaleString()}</b></div>
-        <div class="stat"><span>Invested</span><b>$${s.investments.toLocaleString()}</b></div>
+        <div class="stat"><span>Invested</span><b>${investmentDisplay(s)}</b></div>
         <div class="stat"><span>Debt</span><b class="bad">$${s.debt.toLocaleString()}</b></div>
         <div class="stat"><span>Credit score</span><b>${s.credit}</b></div>
         <div class="stat"><span>Net worth</span><b>$${netWorth(s).toLocaleString()}</b></div>

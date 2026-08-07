@@ -49,6 +49,8 @@ export interface GameState {
   /** 300-850. Gates the apartment lease and the business loan. */
   credit: number;
   investments: number;
+  /** Dollar change in investments from the most recent daily swing (positive = gain). */
+  investmentLastDelta: number;
 
   inventory: Inventory;
   wearing: OutfitId;
@@ -114,6 +116,7 @@ export function createState(seed = Date.now() >>> 0): GameState {
     debt: 240,
     credit: 480,
     investments: 0,
+    investmentLastDelta: 0,
 
     inventory: {},
     wearing: "rags",

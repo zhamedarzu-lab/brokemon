@@ -699,27 +699,46 @@ const bank: Venue = (ctx) => {
 
   if (s.cash > 0) {
     choices.push({
-      label: "Deposit cash",
-      hint: `$${s.cash}`,
-      run: () => {
-        const amount = s.cash;
-        s.bank += amount;
-        s.cash = 0;
-        pushLog(s, `Deposited $${amount}.`, "money");
-        return menu("Bank", [`$${amount} in. Money in a bank cannot be taken off you in a park.`], [BACK], "money");
-      },
+      label: "Deposit amount…",
+      hint: `up to $${s.cash}`,
+      run: () => ({
+        title: "Deposit",
+        lines: [`You have $${s.cash} in hand. How much do you want to put in?`],
+        tone: "money" as const,
+        numberInput: {
+          min: 1,
+          max: s.cash,
+          placeholder: `1–${s.cash}`,
+          onConfirm: (amount: number) => {
+            s.bank += amount;
+            s.cash -= amount;
+            pushLog(s, `Deposited $${amount}. Savings: $${s.bank}.`, "money");
+            return menu("Bank", [`$${amount} in. Savings now $${s.bank}.`], [BACK], "money");
+          },
+        },
+      }),
     });
   }
   if (s.bank > 0) {
     choices.push({
-      label: "Withdraw everything",
-      hint: `$${s.bank}`,
-      run: () => {
-        const amount = s.bank;
-        s.cash += amount;
-        s.bank = 0;
-        return menu("Bank", [`$${amount} out.`], [BACK], "money");
-      },
+      label: "Withdraw amount…",
+      hint: `up to $${s.bank}`,
+      run: () => ({
+        title: "Withdraw",
+        lines: [`You have $${s.bank} in savings. How much do you want to take out?`],
+        tone: "money" as const,
+        numberInput: {
+          min: 1,
+          max: s.bank,
+          placeholder: `1–${s.bank}`,
+          onConfirm: (amount: number) => {
+            s.cash += amount;
+            s.bank -= amount;
+            pushLog(s, `Withdrew $${amount}. Savings: $${s.bank}.`, "money");
+            return menu("Bank", [`$${amount} out. Cash in hand: $${s.cash}.`], [BACK], "money");
+          },
+        },
+      }),
     });
   }
   if (s.debt > 0) {
