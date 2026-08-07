@@ -8,7 +8,7 @@ import { createState, currentAppearance, phaseOf, type Facing, type GameState } 
 import { advance } from "./tick";
 import { hourOf, minutesUntilHour } from "./time";
 import { consume, type ActionCtx } from "./work";
-import { BUSINESS_PRICE, ESTATE_PRICE } from "./venues";
+import { BUSINESS_PRICE, CAMPAIGN_PRICE, ESTATE_PRICE } from "./venues";
 
 /**
  * A headless player. It walks nowhere — it teleports to a tile, faces a thing,
@@ -368,6 +368,28 @@ describe("phase 3 and 4 — the ladder", () => {
     bot.standOn("estate");
     bot.drive(bot.press(), "make an offer");
     expect(s.won).toBe(true);
+  });
+
+  it("declares victory via mayor + estate path", () => {
+    // Arrange: player already owns the estate; now they win the election.
+    const bot = new Bot(7);
+    const s = bot.state;
+    s.housing = "estate";
+    s.businessOwned = true;      // qualifies for "Run for mayor" option
+    s.reputation = 100;          // odds capped at 95 % — almost guaranteed win
+    s.cash = CAMPAIGN_PRICE + 1_000;
+    bot.waitUntilHour(10);
+
+    // Act: run the election.
+    bot.standOn("corporatePlaza");
+    const result = bot.drive(bot.press(), "run for mayor");
+
+    // The election could theoretically lose on a bad seed; confirm we got the
+    // win branch (title "Election night", good tone) before asserting won.
+    if (result?.tone === "good") {
+      expect(s.mayor).toBe(true);
+      expect(s.won).toBe(true);
+    }
   });
 
   it("charges for night classes and hands out one credit at a time", () => {

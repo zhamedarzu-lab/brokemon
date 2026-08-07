@@ -3,7 +3,7 @@ import { applyDelta } from "./meters";
 import { menu, say, type Choice, type Prompt } from "./prompt";
 import type { Rng } from "./rng";
 import { HOUSING, type HousingId } from "./social";
-import { canDoGig, checkRequirements, currentAppearance, pushLog, type GameState } from "./state";
+import { canDoGig, checkRequirements, currentAppearance, earnCash, pushLog, type GameState } from "./state";
 import { hourOf, minuteOfDay, MINUTES_PER_DAY, minutesUntilHour, withinHours } from "./time";
 import { WEATHER } from "./weather";
 import { ITEMS, removeItem, type ItemId } from "./items";
@@ -81,7 +81,7 @@ export function workShift(ctx: ActionCtx, job: EmploymentId): Prompt {
   let pay = Math.round(basePay * weatherScale * (late ? 0.7 : 1));
 
   applyDelta(s.meters, def.cost);
-  s.cash += pay;
+  earnCash(s, pay);
   s.shiftsWorked[job] = (s.shiftsWorked[job] ?? 0) + 1;
   s.lastShiftDay = Math.floor(s.time / MINUTES_PER_DAY) + 1;
 
@@ -140,7 +140,7 @@ export function panhandle(ctx: ActionCtx): Prompt {
   const weather = WEATHER[s.weather].payScale;
   const take = Math.max(0, Math.round(ctx.rng.float(0, 9) * sympathy * traffic * weather));
 
-  s.cash += take;
+  earnCash(s, take);
   s.gigsToday.panhandle = (s.gigsToday.panhandle ?? 0) + 1;
 
   const lines: string[] = [];
@@ -180,7 +180,7 @@ export function scavenge(ctx: ActionCtx, key: string): Prompt {
   }
   if (ctx.rng.chance(0.06)) {
     const cash = ctx.rng.int(1, 8);
-    s.cash += cash;
+    earnCash(s, cash);
     found.push(`$${cash} in a coat pocket`);
   }
   if (ctx.rng.chance(0.04)) {
@@ -263,7 +263,7 @@ export function collectAssignment(ctx: ActionCtx): Prompt {
   const s = ctx.state;
   const a = s.assignment;
   if (!a || !a.ready) return say("Job Board", "Nothing to collect yet.");
-  s.cash += a.pay;
+  earnCash(s, a.pay);
   s.reputation += 1;
   s.gigsToday[a.gig] = (s.gigsToday[a.gig] ?? 0) + 1;
   removeItem(s.inventory, "flyers", 1);

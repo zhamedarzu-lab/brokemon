@@ -241,7 +241,17 @@ export class Journal {
         </div>`;
     }).join("");
 
-    return `<h3>Where you are</h3>${steps}<h3>What's hiring</h3>${jobs}`;
+    const postWin =
+      s.won && s.postWinGoal > 0
+        ? `<div class="ladder-step current">
+            <b>New challenge — Net worth $${s.postWinGoal.toLocaleString()}</b>
+            <span>Current: $${netWorth(s).toLocaleString()} · ${Math.max(0, Math.round((netWorth(s) / s.postWinGoal) * 100))}% there</span>
+          </div>`
+        : s.won && s.postWinGoal === 0
+          ? `<div class="ladder-step done"><b>Challenge complete — $10,000 net worth reached</b><span>You have arrived.</span></div>`
+          : "";
+
+    return `<h3>Where you are</h3>${steps}${postWin}<h3>What's hiring</h3>${jobs}`;
   }
 
   private renderLog(s: GameState): string {

@@ -90,6 +90,13 @@ export interface GameState {
   businessOwned: boolean;
   mayor: boolean;
   won: boolean;
+  /**
+   * Persisted flag: true once the victory screen has been shown and
+   * acknowledged. Distinct from `won` so that a save written right after
+   * winning (but before the screen appears) will still show the popup on
+   * the next load.
+   */
+  victoryAcknowledged: boolean;
 
   /** Days remaining on the weekly bus pass. 0 means none purchased or already expired. */
   busPassDaysLeft: number;
@@ -103,6 +110,14 @@ export interface GameState {
   daysSurvived: number;
   peakPhase: Phase;
   collapses: number;
+
+  /** Cumulative cash received from work, gigs, events, etc. */
+  totalEarned: number;
+  /**
+   * Net-worth target set after winning. 0 means no goal active.
+   * Surfaced in the journal so the player has something to chase post-win.
+   */
+  postWinGoal: number;
 }
 
 export function createState(seed = Date.now() >>> 0): GameState {
@@ -152,6 +167,7 @@ export function createState(seed = Date.now() >>> 0): GameState {
     businessOwned: false,
     mayor: false,
     won: false,
+    victoryAcknowledged: false,
 
     busPassDaysLeft: 0,
 
@@ -162,6 +178,9 @@ export function createState(seed = Date.now() >>> 0): GameState {
     daysSurvived: 0,
     peakPhase: 1,
     collapses: 0,
+
+    totalEarned: 0,
+    postWinGoal: 0,
   };
 }
 
@@ -257,4 +276,45 @@ export function jobName(id: JobId): string {
 export function pushLog(s: GameState, text: string, tone: LogLine["tone"] = "plain"): void {
   s.log.push({ time: s.time, text, tone });
   if (s.log.length > 200) s.log.splice(0, s.log.length - 200);
+}
+
+/**
+ * Add cash to the player's wallet and credit it toward the lifetime total.
+ * Use this for all income (wages, gigs, events, panhandling, recycling, etc.)
+ * rather than assigning s.cash directly, so totalEarned stays accurate.
+ */
+export function earnCash(s: GameState, amount: number): void {
+  s.cash += amount;
+  s.totalEarned += amount;
+  checkPostWinGoal(s);
+}
+const POST_WIN_GOAL = 10_000;
+
+/**
+ * Mark the run as won. Safe to call multiple times — only acts the first time.
+ * Sets the post-win net-worth challenge atomically, skipping it if the player
+ * is already above the threshold.
+ */
+export function setWon(s: GameState): void {
+  if (s.won) return;
+  s.won = true;
+  pushLog(s, "You made it all the way out.", "good");
+  const nw = netWorth(s);
+  if (nw < POST_WIN_GOAL) {
+    s.postWinGoal = POST_WIN_GOAL;
+    pushLog(s, `New challenge: reach a net worth of $${POST_WIN_GOAL.toLocaleString()}.`, "system");
+  }
+}
+
+/**
+ * Resolve the post-win net-worth challenge if the threshold has been reached.
+ * Safe to call at any time; no-ops when not applicable.
+ * Called from earnCash, payPassiveIncome, and onNewDay (as fallback).
+ */
+export function checkPostWinGoal(s: GameState): void {
+  if (!s.won || s.postWinGoal === 0) return;
+  if (netWorth(s) >= s.postWinGoal) {
+    pushLog(s, `Net worth hit $${s.postWinGoal.toLocaleString()}. The numbers say you have arrived.`, "good");
+    s.postWinGoal = 0;
+  }
 }

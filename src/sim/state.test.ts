@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { EMPLOYMENT } from "./jobs";
 import { addItem, countOf } from "./items";
 import { appearance, outfitRank, OUTFIT_ORDER } from "./social";
-import { checkRequirements, createState, currentAppearance, netWorth, phaseOf } from "./state";
+import { checkPostWinGoal, checkRequirements, createState, currentAppearance, earnCash, netWorth, phaseOf, setWon } from "./state";
 
 describe("createState", () => {
   it("starts you broke, dirty and in debt", () => {
@@ -152,5 +152,82 @@ describe("save migration: busPassDaysLeft", () => {
   it("preserves a valid non-zero counter from a current-format save", () => {
     const result = simulateMigration({ inventory: { busPass: 1 }, busPassDaysLeft: 4 });
     expect(result.busPassDaysLeft).toBe(4);
+  });
+});
+
+describe("setWon", () => {
+  it("marks the run as won and sets a post-win goal when net worth is below threshold", () => {
+    const s = createState(1);
+    s.housing = "estate";
+    s.businessOwned = true;
+    s.cash = 100;
+    s.debt = 0;
+    setWon(s);
+    expect(s.won).toBe(true);
+    expect(s.postWinGoal).toBeGreaterThan(0);
+  });
+
+  it("does not set a post-win goal when net worth already clears the threshold", () => {
+    const s = createState(1);
+    s.housing = "estate";
+    s.businessOwned = true;
+    s.bank = 50_000;
+    s.debt = 0;
+    setWon(s);
+    expect(s.won).toBe(true);
+    expect(s.postWinGoal).toBe(0);
+  });
+
+  it("is idempotent — calling it twice does not double-log or reset postWinGoal", () => {
+    const s = createState(1);
+    s.housing = "estate";
+    s.businessOwned = true;
+    s.cash = 100;
+    s.debt = 0;
+    setWon(s);
+    const goal = s.postWinGoal;
+    const logLen = s.log.length;
+    setWon(s);
+    expect(s.postWinGoal).toBe(goal);
+    expect(s.log.length).toBe(logLen);
+  });
+
+  it("leaves victoryAcknowledged false — only the UI sets it", () => {
+    const s = createState(1);
+    s.housing = "estate";
+    s.businessOwned = true;
+    setWon(s);
+    expect(s.victoryAcknowledged).toBe(false);
+  });
+});
+
+describe("checkPostWinGoal", () => {
+  it("resolves the goal immediately when net worth crosses the threshold via earnCash", () => {
+    const s = createState(1);
+    s.won = true;
+    s.postWinGoal = 500;
+    s.debt = 0;
+    s.cash = 499;
+    earnCash(s, 1); // net worth now exactly 500
+    expect(s.postWinGoal).toBe(0);
+  });
+
+  it("does not resolve the goal if net worth is still below the threshold", () => {
+    const s = createState(1);
+    s.won = true;
+    s.postWinGoal = 500;
+    s.debt = 0;
+    s.cash = 0;
+    earnCash(s, 499);
+    expect(s.postWinGoal).toBeGreaterThan(0);
+  });
+
+  it("no-ops when the player has not won", () => {
+    const s = createState(1);
+    s.postWinGoal = 500;
+    s.cash = 1_000;
+    s.debt = 0;
+    checkPostWinGoal(s);
+    expect(s.postWinGoal).toBe(500);
   });
 });

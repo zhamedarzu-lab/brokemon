@@ -14,7 +14,7 @@ import {
 import { applyDelta } from "./meters";
 import { menu, say, type Choice, type Prompt } from "./prompt";
 import { HOUSING, OUTFITS, OUTFIT_ORDER, outfitRank, type OutfitId } from "./social";
-import { canDoGig, checkRequirements, currentAppearance, phaseOf, pushLog } from "./state";
+import { canDoGig, checkRequirements, currentAppearance, earnCash, phaseOf, pushLog, setWon } from "./state";
 import { withinHours } from "./time";
 import {
   collectAssignment,
@@ -203,7 +203,7 @@ function doDayLabor(ctx: ActionCtx): Prompt {
   ctx.advance(def.minutes, { exertion: def.exertion, sheltered: true });
   applyDelta(s.meters, def.cost);
   const pay = def.basePay + ctx.rng.int(-6, 10);
-  s.cash += pay;
+  earnCash(s, pay);
   s.gigsToday.dayLabor = (s.gigsToday.dayLabor ?? 0) + 1;
   pushLog(s, `Day labour at the Mart — $${pay}.`, "money");
   return menu(
@@ -255,7 +255,7 @@ function scratchCard(ctx: ActionCtx): Prompt {
   if (roll > 0.995) win = 500;
   else if (roll > 0.96) win = 20;
   else if (roll > 0.82) win = 4;
-  s.cash += win;
+  if (win > 0) earnCash(s, win);
   if (win === 0) {
     s.meters.morale = Math.max(0, s.meters.morale - 3);
     return menu("Scratch Ticket", ["Three lemons, a bell, and nothing."], [{ label: "Bin it" }]);
@@ -367,7 +367,7 @@ const recycling: Venue = (ctx) => {
         run: () => {
           ctx.advance(15, { exertion: 1.2 });
           removeItem(s.inventory, "recyclables", cans);
-          s.cash += pay;
+          earnCash(s, pay);
           pushLog(s, `Cashed in ${cans} containers for $${pay}.`, "money");
           return menu(
             "Recycling Depot",
@@ -623,7 +623,8 @@ const estate: Venue = (ctx) => {
               s.peakPhase = 4;
               s.meters.morale = 100;
               pushLog(s, "Bought the estate on the hill.", "good");
-              return checkVictory(ctx, menu(
+              if (s.businessOwned || s.mayor) setWon(s);
+              return menu(
                 "The estate",
                 [
                   "The agent hands over the keys in the drive and says it's a wonderful property.",
@@ -631,7 +632,7 @@ const estate: Venue = (ctx) => {
                 ],
                 [BACK],
                 "good",
-              ));
+              );
             },
           }
         : lockedChoice("Make an offer", reasons, `$${ESTATE_PRICE.toLocaleString()}`),
@@ -881,7 +882,8 @@ const corporatePlaza: Venue = (ctx) => {
               s.reputation += 15;
               s.peakPhase = 4;
               pushLog(s, "Bought the Mart franchise.", "good");
-              return checkVictory(ctx, menu(
+              if (s.housing === "estate") setWon(s);
+              return menu(
                 "Silph Regional",
                 [
                   "You sign for the franchise on the same counter you once got moved away from.",
@@ -889,7 +891,7 @@ const corporatePlaza: Venue = (ctx) => {
                 ],
                 [BACK],
                 "good",
-              ));
+              );
             },
           }
         : lockedChoice("Buy the Mart franchise", reasons, `$${BUSINESS_PRICE.toLocaleString()}`),
@@ -1008,7 +1010,8 @@ function runForMayor(ctx: ActionCtx): Prompt {
   s.peakPhase = 4;
   s.reputation += 20;
   pushLog(s, "Elected mayor of Brokemon Town.", "good");
-  return checkVictory(ctx, menu(
+  if (s.housing === "estate") setWon(s);
+  return menu(
     "Election night",
     [
       "You win it on the outskirts. The Heights broke against you three to one and it did not matter.",
@@ -1016,7 +1019,7 @@ function runForMayor(ctx: ActionCtx): Prompt {
     ],
     [BACK],
     "good",
-  ));
+  );
 }
 
 /* ---------------------------------------------------------------- job board */
@@ -1255,31 +1258,6 @@ function makeRide(ctx: ActionCtx, name: string, dest: { x: number; y: number }, 
       return menu("Bus", [`Twelve minutes and you're at ${name}.`], [BACK]);
     },
   };
-}
-
-/* ---------------------------------------------------------------- victory */
-
-export function checkVictory(ctx: ActionCtx, prompt: Prompt): Prompt {
-  const s = ctx.state;
-  if (s.won) return prompt;
-  if (s.housing === "estate" && (s.businessOwned || s.mayor)) {
-    s.won = true;
-    pushLog(s, "You made it all the way out.", "good");
-    return {
-      title: "The Apex",
-      tone: "good",
-      lines: [
-        ...prompt.lines,
-        "",
-        `Day ${Math.floor(s.time / 1440) + 1}. You own the hill and something that pays you while you sleep.`,
-        "The bench is still there. Somebody is on it.",
-        "",
-        "— Keep playing, or start again from the park.",
-      ],
-      choices: [{ label: "Continue" }],
-    };
-  }
-  return prompt;
 }
 
 /* --------------------------------------------------------------- registry */

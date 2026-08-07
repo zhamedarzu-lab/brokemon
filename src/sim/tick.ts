@@ -1,5 +1,5 @@
 import { isOutdoors, zoneAt, type Zone } from "../world/map";
-import { hasItem, phaseOf, pushLog, type GameState, type Phase } from "./state";
+import { checkPostWinGoal, hasItem, phaseOf, pushLog, setWon, type GameState, type Phase } from "./state";
 import { decay, WARN_THRESHOLDS, type MeterId } from "./meters";
 import { dayOf, minuteOfDay, MINUTES_PER_DAY } from "./time";
 import { rollWeather, WEATHER, weatherDuration } from "./weather";
@@ -20,7 +20,8 @@ export type Interrupt =
   | { kind: "fired"; job: string }
   | { kind: "newDay"; day: number }
   | { kind: "income"; lines: string[] }
-  | { kind: "weather"; text: string };
+  | { kind: "weather"; text: string }
+  | { kind: "victory" };
 
 export interface TickOptions {
   /** In-game minutes to advance. */
@@ -180,6 +181,19 @@ function onNewDay(s: GameState, rng: Rng, day: number, out: Interrupt[]): void {
       pushLog(s, "Your cot was paid to this morning. Everyone is out by eight.", "plain");
     }
   }
+
+  // Safety net: fire victory on the next new day if the player somehow reached
+  // the win condition without triggering the immediate check (e.g. a loaded
+  // save that already meets conditions).
+  if (s.housing === "estate" && (s.businessOwned || s.mayor)) {
+    const wasWon = s.won;
+    setWon(s);
+    if (!wasWon && s.won) out.push({ kind: "victory" });
+  }
+
+  // Post-win goal progress (also checked in earnCash and payPassiveIncome;
+  // this catches any remaining edge cases at day boundary).
+  checkPostWinGoal(s);
 }
 
 /**
@@ -201,6 +215,8 @@ function payPassiveIncome(s: GameState, out: Interrupt[]): void {
   if (lines.length === 0) return;
   pushLog(s, lines.join(" "), "money");
   out.push({ kind: "income", lines });
+  // Passive income goes to bank; check goal here since earnCash isn't used.
+  checkPostWinGoal(s);
 }
 
 export const MAYOR_SALARY = 320;

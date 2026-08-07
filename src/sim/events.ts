@@ -2,7 +2,7 @@ import { zoneAt, type ZoneId } from "../world/map";
 import { addItem } from "./items";
 import { applyDelta } from "./meters";
 import { menu, type Choice, type Prompt } from "./prompt";
-import { currentAppearance, phaseOf, pushLog, type GameState } from "./state";
+import { currentAppearance, earnCash, phaseOf, pushLog, type GameState } from "./state";
 import { hourOf } from "./time";
 import type { ActionCtx } from "./work";
 
@@ -41,7 +41,7 @@ const EVENTS: EventDef[] = [
               ctx.advance(25);
               if (ctx.rng.chance(0.5)) {
                 const reward = ctx.rng.int(10, 30);
-                s.cash += reward;
+                earnCash(s, reward);
                 pushLog(s, `Returned a lost wallet. Reward: $${reward}.`, "good");
                 return menu(
                   "A wallet on the pavement",
@@ -67,7 +67,7 @@ const EVENTS: EventDef[] = [
             hint: `$${cash}`,
             run: () => {
               s.flags.walletDone = 1;
-              s.cash += cash;
+              earnCash(s, cash);
               s.reputation -= 6;
               applyDelta(s.meters, { morale: -12 });
               ctx.advance(10);
@@ -210,7 +210,7 @@ const EVENTS: EventDef[] = [
               applyDelta(s.meters, { morale: -6 });
               s.reputation += 4;
               if (ctx.rng.chance(0.4)) {
-                s.cash += 20;
+                earnCash(s, 20);
                 s.flags.colleagueNumberGiven = 1;
                 return menu("Someone says your name", ['"God. Right."', "They give you twenty dollars and their number, and mean both."], [close]);
               }
@@ -248,7 +248,7 @@ const EVENTS: EventDef[] = [
             label: "Yes — pass on my details",
             run: () => {
               s.reputation += 15;
-              s.cash += 40;
+              earnCash(s, 40);
               pushLog(s, "Colleague job lead — $40 and a name dropped in the right room.", "good");
               return menu(
                 "Your phone buzzes",
@@ -333,7 +333,7 @@ const EVENTS: EventDef[] = [
             run: () => {
               ctx.advance(15, { exertion: 1.1 });
               if (ctx.rng.chance(0.55)) {
-                s.cash += cashGain;
+                earnCash(s, cashGain);
                 applyDelta(s.meters, { morale: +6 });
                 pushLog(s, `Pop-up sale find — sold on for $${cashGain}.`, "money");
                 return menu("Pop-up sale", [`The tip was good. You flip a jacket for $${cashGain}.`], [close], "money");
@@ -368,7 +368,7 @@ const EVENTS: EventDef[] = [
             run: () => {
               ctx.advance(5);
               applyDelta(s.meters, { morale: +10 });
-              s.cash += tip;
+              earnCash(s, tip);
               pushLog(s, `Helped some tourists. $${tip} tip.`, "money");
               return menu(
                 "A couple with a map",
@@ -590,7 +590,7 @@ const EVENTS: EventDef[] = [
               s.cash -= 50;
               if (ctx.rng.chance(0.5)) {
                 const gain = 150;
-                s.cash += gain;
+                earnCash(s, gain);
                 applyDelta(s.meters, { morale: +16 });
                 pushLog(s, `Stock tip paid off — $${gain}.`, "money");
                 return menu("Anonymous tip", ["It triples.", "You sit with the number for a minute before you move on."], [close], "money");
@@ -615,7 +615,7 @@ const EVENTS: EventDef[] = [
     build: (ctx) => {
       const s = ctx.state;
       const found = ctx.rng.int(1, 4);
-      s.cash += found;
+      earnCash(s, found);
       return menu("Loose change", [`Coins in the gutter by the drain. $${found}.`, "You take it without breaking stride. You are good at this now."], [close], "money");
     },
   },
@@ -658,7 +658,7 @@ const EVENTS: EventDef[] = [
                 pushLog(s, "The van job went wrong.", "bad");
                 return menu("A man with a van", ["There is a police car at the second address.", `You are not charged, but you are known now, and it costs you $${fine}.`], [close], "bad");
               }
-              s.cash += pay;
+              earnCash(s, pay);
               pushLog(s, `Cash job — $${pay}.`, "money");
               return menu("A man with a van", [`Two hours, no questions, $${pay} in twenties.`, "He does not offer you a lift back."], [close], "money");
             },
