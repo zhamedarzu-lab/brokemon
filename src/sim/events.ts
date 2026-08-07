@@ -1,5 +1,6 @@
 import { zoneAt, type ZoneId } from "../world/map";
 import { addItem } from "./items";
+import { EMPLOYMENT } from "./jobs";
 import { applyDelta } from "./meters";
 import { menu, type Choice, type Prompt } from "./prompt";
 import { changeReputation, currentAppearance, earnCash, phaseOf, pushLog, type GameState } from "./state";
@@ -247,15 +248,16 @@ const EVENTS: EventDef[] = [
           {
             label: "Yes — pass on my details",
             run: () => {
-              changeReputation(s, 15);
-              earnCash(s, 40);
-              pushLog(s, "Colleague job lead — $40 and a name dropped in the right room.", "good");
+              s.flags.colleagueInterviewPending = 1;
+              changeReputation(s, 5);
+              earnCash(s, 10);
+              pushLog(s, "Colleague job lead — interview lined up.", "good");
               return menu(
                 "Your phone buzzes",
                 [
-                  '"Done. You\'ll hear from them."',
-                  "Forty dollars materialises in your account by way of apology for the delay.",
-                  "Your name is in circulation again. That's worth more.",
+                  '"Done. You\'ll hear from them — probably Thursday."',
+                  "Ten dollars lands in your account. A token. The real thing is the name in the right room.",
+                  "You have an interview. It has been a while since you had one of those.",
                 ],
                 [close],
                 "good",
@@ -267,6 +269,134 @@ const EVENTS: EventDef[] = [
             run: () => {
               applyDelta(s.meters, { morale: +6 });
               return menu("Your phone buzzes", ["They understand. Or they say they do.", "Either way, somebody thought of you."], [close]);
+            },
+          },
+        ],
+      );
+    },
+  },
+
+  /* --------------------------------------------------- colleague interview */
+  {
+    id: "colleagueInterview",
+    weight: (s) => (s.flags.colleagueInterviewPending && !s.flags.colleagueInterviewDone ? 4 : 0),
+    once: true,
+    build: (ctx) => {
+      const s = ctx.state;
+      s.flags.colleagueInterviewDone = 1;
+      const look = currentAppearance(s);
+      const repOk = s.reputation >= 20;
+      const lookOk = look >= 50;
+
+      function onHired(): Prompt {
+        const martTier = EMPLOYMENT.martClerk.tier; // 2
+        const currentTier = s.employment ? (EMPLOYMENT[s.employment]?.tier ?? 0) : 0;
+
+        if (currentTier >= martTier) {
+          // Player is already at this tier or higher — reward without downgrading.
+          changeReputation(s, 12);
+          applyDelta(s.meters, { morale: +20 });
+          earnCash(s, 30);
+          pushLog(s, "Interview went well — reputation boost, no job change needed.", "good");
+          return menu(
+            "The interview",
+            [
+              '"You\'re clearly already on your feet. Still, it\'s good to know people."',
+              "Thirty dollars in expenses, and a handshake that means something.",
+              "You are ahead of where this lead was pointing. That is not a bad thing to discover.",
+            ],
+            [close],
+            "good",
+          );
+        }
+
+        const previous = s.employment;
+        s.employment = "martClerk";
+        s.strikes = 0;
+        changeReputation(s, 12);
+        applyDelta(s.meters, { morale: +28 });
+        earnCash(s, 30);
+        pushLog(s, "Got the job — Mart Clerk. Interview paid off.", "good");
+        const lines: string[] = [
+          '"We\'ll start you Monday. The badge says TRAINEE, but don\'t let that bother you."',
+          "Thirty dollars in expenses and a shift card.",
+          "Your name is on a rota. That hasn\'t happened in a long time.",
+        ];
+        if (previous) lines.push(`You send a message to ${previous === "nightStock" ? "the night supervisor" : "your old employer"}. Short. Professional.`);
+        return menu("The interview", lines, [close], "good");
+      }
+
+      function onNearMiss(): Prompt {
+        changeReputation(s, 8);
+        applyDelta(s.meters, { morale: -6 });
+        pushLog(s, "Interview — no offer, but left a decent impression.", "plain");
+        return menu(
+          "The interview",
+          [
+            '"We\'re still seeing people. We\'ll be in touch."',
+            "The polite version of no.",
+            "Your name is known there now. It is not nothing.",
+          ],
+          [close],
+        );
+      }
+
+      function onFail(): Prompt {
+        changeReputation(s, 3);
+        applyDelta(s.meters, { morale: -14 });
+        pushLog(s, "Interview went badly.", "bad");
+        return menu(
+          "The interview",
+          [
+            "It goes badly from the second question.",
+            '"We\'ll keep your details on file." They will not.',
+            "You walk out into the street and stand there for a moment.",
+            "You showed up. That counts for something, even now.",
+          ],
+          [close],
+          "bad",
+        );
+      }
+
+      return menu(
+        "The interview",
+        [
+          "A small office above the Mart. The manager has the colleague\'s message open on her phone.",
+          "She puts it face-down and looks at you.",
+          '"So. Tell me about yourself."',
+        ],
+        [
+          {
+            label: lookOk || repOk ? "Come in confident — you know how this works" : "Try to come in confident",
+            hint: lookOk || repOk ? "best odds" : "appearance or reputation low",
+            run: () => {
+              ctx.advance(45, { sheltered: true });
+              applyDelta(s.meters, { energy: -6 });
+              const baseOdds = 0.55 + (lookOk ? 0.2 : 0) + (repOk ? 0.15 : 0);
+              if (ctx.rng.chance(Math.min(0.9, baseOdds))) return onHired();
+              return onNearMiss();
+            },
+          },
+          {
+            label: "Go in honest — nervous but prepared",
+            hint: "moderate odds",
+            run: () => {
+              ctx.advance(45, { sheltered: true });
+              applyDelta(s.meters, { energy: -6, morale: -4 });
+              if (ctx.rng.chance(0.52)) return onHired();
+              return onNearMiss();
+            },
+          },
+          {
+            label: "Wing it — you've got nothing to lose",
+            hint: "long shot",
+            run: () => {
+              ctx.advance(30, { sheltered: true });
+              applyDelta(s.meters, { energy: -4 });
+              const roll = ctx.rng.next();
+              if (roll > 0.72) return onHired();
+              if (roll > 0.35) return onNearMiss();
+              return onFail();
             },
           },
         ],

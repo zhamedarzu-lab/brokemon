@@ -509,3 +509,162 @@ describe("stockTip event", () => {
     expect(loseFound).toBe(true);
   });
 });
+
+/* -------------------------------------------------------- colleagueInterview */
+
+/** Get the interview prompt, requiring a minimum number of seeds tried. */
+function getInterviewPrompt(s: GameState): Prompt | null {
+  s.flags.colleagueInterviewPending = 1;
+  inZone(s, "downtown");
+  for (let i = 1; i <= 500; i++) {
+    delete s.flags["ev:colleagueInterview"];
+    delete s.flags.colleagueInterviewDone;
+    const ctx = makeCtx(s, i);
+    const p = rollEvent(ctx);
+    if (p?.title === "The interview") return p;
+  }
+  return null;
+}
+
+describe("colleagueInterview event", () => {
+  it("fires when colleagueInterviewPending is set", () => {
+    const s = createState(1);
+    phase2(s);
+    s.meters = { hunger: 100, thirst: 100, hygiene: 80, energy: 100, morale: 80, health: 100 };
+    const prompt = getInterviewPrompt(s);
+    expect(prompt).not.toBeNull();
+    expect(prompt?.title).toBe("The interview");
+  });
+
+  it("does not fire when colleagueInterviewPending is not set", () => {
+    const s = createState(1);
+    phase2(s);
+    s.meters = { hunger: 100, thirst: 100, hygiene: 80, energy: 100, morale: 80, health: 100 };
+    inZone(s, "downtown");
+    let found = false;
+    for (let i = 1; i <= 300; i++) {
+      const ctx = makeCtx(s, i);
+      const p = rollEvent(ctx);
+      if (p?.title === "The interview") { found = true; break; }
+    }
+    expect(found).toBe(false);
+  });
+
+  it("fires only once (once: true)", () => {
+    const s = createState(1);
+    phase2(s);
+    s.meters = { hunger: 100, thirst: 100, hygiene: 80, energy: 100, morale: 80, health: 100 };
+    s.flags.colleagueInterviewPending = 1;
+    inZone(s, "downtown");
+    let count = 0;
+    for (let i = 1; i <= 400; i++) {
+      const ctx = makeCtx(s, i);
+      const p = rollEvent(ctx);
+      if (p?.title === "The interview") count++;
+      // Do NOT reset ev:colleagueInterview — test that once prevents re-fire
+    }
+    expect(count).toBe(1);
+  });
+
+  it("successful confident approach hires unemployed player as martClerk", () => {
+    let hired = false;
+    for (let i = 1; i <= 400 && !hired; i++) {
+      const s = createState(i);
+      phase2(s);
+      s.employment = null;
+      s.reputation = 25; // repOk threshold
+      s.meters = { hunger: 100, thirst: 100, hygiene: 80, energy: 100, morale: 80, health: 100 };
+      const p = getInterviewPrompt(s);
+      if (!p) continue;
+      drive(p, "confident");
+      if (s.employment === "martClerk") hired = true;
+    }
+    expect(hired).toBe(true);
+  });
+
+  it("successful nervous approach can hire unemployed player as martClerk", () => {
+    let hired = false;
+    for (let i = 1; i <= 400 && !hired; i++) {
+      const s = createState(i);
+      phase2(s);
+      s.employment = null;
+      s.meters = { hunger: 100, thirst: 100, hygiene: 80, energy: 100, morale: 80, health: 100 };
+      const p = getInterviewPrompt(s);
+      if (!p) continue;
+      drive(p, "honest");
+      if (s.employment === "martClerk") hired = true;
+    }
+    expect(hired).toBe(true);
+  });
+
+  it("wing-it can both succeed (hire) and fail/near-miss across seeds", () => {
+    // Vary the rollEvent seed directly so the rng path for the outcome roll differs.
+    let hired = false;
+    let nonHire = false;
+    const s = createState(1);
+    phase2(s);
+    s.employment = null;
+    s.meters = { hunger: 100, thirst: 100, hygiene: 80, energy: 100, morale: 80, health: 100 };
+    for (let seed = 1; seed <= 800 && (!hired || !nonHire); seed++) {
+      s.flags.colleagueInterviewPending = 1;
+      delete s.flags["ev:colleagueInterview"];
+      delete s.flags.colleagueInterviewDone;
+      s.employment = null;
+      s.meters.morale = 80;
+      inZone(s, "downtown");
+      const ctx = makeCtx(s, seed);
+      const p = rollEvent(ctx);
+      if (p?.title !== "The interview") continue;
+      drive(p, "wing");
+      if (s.employment === "martClerk") hired = true;
+      else nonHire = true;
+    }
+    expect(hired).toBe(true);
+    expect(nonHire).toBe(true);
+  });
+
+  it("does not downgrade a player already at martClerk tier or higher", () => {
+    const higherTierJobs = ["martClerk", "technician", "officeAdmin", "executive"] as const;
+    for (const job of higherTierJobs) {
+      // Run multiple seeds to ensure success branch fires at least once
+      let successFired = false;
+      for (let i = 1; i <= 400 && !successFired; i++) {
+        const s = createState(i);
+        phase2(s);
+        s.employment = job;
+        s.reputation = 30;
+        s.meters = { hunger: 100, thirst: 100, hygiene: 80, energy: 100, morale: 80, health: 100 };
+        const p = getInterviewPrompt(s);
+        if (!p) continue;
+        drive(p, "confident");
+        // Employment must never have been downgraded to martClerk when starting higher
+        if (job !== "martClerk") {
+          expect(s.employment).toBe(job);
+        }
+        if (s.cash > 0 || s.reputation > 30) successFired = true;
+      }
+    }
+  });
+
+  it("always gives reputation and cash on any success outcome regardless of existing job", () => {
+    let repGained = false;
+    let cashGained = false;
+    for (let i = 1; i <= 400 && (!repGained || !cashGained); i++) {
+      const s = createState(i);
+      phase2(s);
+      s.employment = "technician"; // higher-tier job
+      s.reputation = 25;
+      s.cash = 0;
+      s.meters = { hunger: 100, thirst: 100, hygiene: 80, energy: 100, morale: 80, health: 100 };
+      const p = getInterviewPrompt(s);
+      if (!p) continue;
+      const repBefore = s.reputation;
+      const cashBefore = s.cash;
+      drive(p, "confident");
+      if (s.reputation > repBefore) repGained = true;
+      if (s.cash > cashBefore) cashGained = true;
+    }
+    expect(repGained).toBe(true);
+    expect(cashGained).toBe(true);
+  });
+});
