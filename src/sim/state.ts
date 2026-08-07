@@ -62,6 +62,8 @@ export interface GameState {
 
   employment: EmploymentId | null;
   shiftsWorked: Record<string, number>;
+  /** Per-job pay overrides accumulated from 10-shift raises. */
+  employmentPayOverride: Record<string, number>;
   /** Shifts missed at the current job. Three and you're let go. */
   strikes: number;
   lastShiftDay: number;
@@ -123,6 +125,7 @@ export function createState(seed = Date.now() >>> 0): GameState {
 
     employment: null,
     shiftsWorked: {},
+    employmentPayOverride: {},
     strikes: 0,
     lastShiftDay: 0,
 

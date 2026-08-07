@@ -90,7 +90,7 @@ export function decay(meters: Meters, ctx: DecayContext): MeterDelta {
   // watered and clean has to climb back, or the meter is a one-way ratchet
   // to zero that pins the breakdown gate on for the whole game.
   const lookingAfterYourself =
-    meters.hygiene >= 50 && meters.hunger >= 45 && meters.thirst >= 45 && !ctx.soaked && !ctx.sick;
+    meters.hygiene >= 50 && meters.hunger >= 40 && meters.thirst >= 35 && !ctx.soaked && !ctx.sick;
 
   let moraleRate = lookingAfterYourself ? -MORALE_RECOVERY_PER_HOUR : DECAY_PER_HOUR.morale;
   if (meters.hygiene < 30) moraleRate += 1.6;

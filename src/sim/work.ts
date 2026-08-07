@@ -77,7 +77,8 @@ export function workShift(ctx: ActionCtx, job: EmploymentId): Prompt {
 
   const weather = WEATHER[s.weather];
   const weatherScale = def.salaried ? 1 : weather.payScale * 0.35 + 0.65;
-  let pay = Math.round(def.pay * weatherScale * (late ? 0.7 : 1));
+  const basePay = s.employmentPayOverride[job] ?? def.pay;
+  let pay = Math.round(basePay * weatherScale * (late ? 0.7 : 1));
 
   applyDelta(s.meters, def.cost);
   s.cash += pay;
@@ -93,11 +94,11 @@ export function workShift(ctx: ActionCtx, job: EmploymentId): Prompt {
 
   const shifts = s.shiftsWorked[job] ?? 0;
   if (shifts % 10 === 0) {
-    const raise = Math.round(def.pay * 0.05);
-    pay += raise;
-    s.cash += raise;
+    const oldBase = s.employmentPayOverride[job] ?? def.pay;
+    const newBase = Math.round(oldBase * 1.05);
+    s.employmentPayOverride[job] = newBase;
     s.reputation += 2;
-    lines.push(`Ten shifts in. There's an extra $${raise} in it this week.`);
+    lines.push(`Ten shifts in. Your pay rate goes up to $${newBase} a shift.`);
   }
 
   lines.push(`Paid: $${pay}.`);

@@ -49,7 +49,7 @@ export const GIGS: Record<GigId, GigDef> = {
     desc: "Half an hour on the corner with your hand out and your eyes down.",
     minutes: 30,
     requires: {},
-    cost: { morale: -7, energy: -3 },
+    cost: { morale: -4, energy: -2 },
     exertion: 1,
     stops: 0,
     basePay: 4,

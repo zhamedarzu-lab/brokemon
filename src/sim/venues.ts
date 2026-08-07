@@ -120,10 +120,13 @@ const communityCenter: Venue = (ctx) => {
         s.housing = before === "street" ? "street" : before;
         s.meters.morale = Math.min(100, s.meters.morale + 4);
         pushLog(s, "Slept at the shelter.");
+        const extraLines = s.employment === "nightStock"
+          ? ["Night shift workers often crash here after 3 AM — doors open early."]
+          : [];
         return {
           ...result,
           title: "Shelter",
-          lines: ["Lights out at eleven. Everyone up and out by eight.", ...result.lines],
+          lines: ["Lights out at eleven. Everyone up and out by eight.", ...extraLines, ...result.lines],
         };
       },
     });
@@ -899,11 +902,14 @@ const corporatePlaza: Venue = (ctx) => {
 
 function jobApplications(ctx: ActionCtx): Prompt {
   const s = ctx.state;
+  const phase = phaseOf(s);
   const choices: Choice[] = [];
 
   for (const id of EMPLOYMENT_ORDER) {
     const def = EMPLOYMENT[id];
     if (s.employment === id) continue;
+    // Hide jobs more than one tier beyond the player's current phase.
+    if (def.tier > phase + 1) continue;
     const gate = checkRequirements(s, def.requires);
     choices.push(
       gate.ok
@@ -918,7 +924,7 @@ function jobApplications(ctx: ActionCtx): Prompt {
   choices.push(BACK);
   return menu(
     "Openings",
-    ["The board lists everything going in town, and what it will take from you."],
+    ["The board lists what's available for someone at your level, and what it will take from you."],
     choices,
   );
 }
