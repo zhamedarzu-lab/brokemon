@@ -20,11 +20,31 @@ primitives.
 
 ## Running it
 
+This is a source tree, not a site. `index.html` links no stylesheet and points
+at `/src/main.ts` — both only become real files once Vite builds. Anything that
+serves the repo directory raw shows an unstyled page with dead buttons, so it
+needs the dev server or a build.
+
+### On Replit
+
+Press **Run**. Vite serves on port 3000, which `.replit` waits for and maps to
+the webview; the game is playable there and on any device pointed at the
+`*.replit.dev` URL. `server.allowedHosts` is on because Replit proxies through
+that domain, and Vite's DNS-rebinding protection would otherwise refuse it with
+*"Blocked request. This host is not allowed."*
+
+If the webview ever comes up blank, check the port first — Vite's `port` in
+`vite.config.ts`, the workflow's `waitForPort`, and the `[[ports]]` mapping all
+have to agree on 3000.
+
+### Locally
+
 ```sh
 npm install
-npm run dev        # vite dev server
-npm run build      # typecheck + production bundle into dist/
-npm test           # 95 simulation tests
+npm run dev             # vite dev server
+npm run dev -- --host   # ...also reachable from other devices on the network
+npm run build           # typecheck + production bundle into dist/
+npm test                # 95 simulation tests
 ```
 
 Controls: **arrows/WASD** move · **Z/Enter** interact · **X/Esc** back ·
@@ -41,17 +61,6 @@ The d-pad takes taps and holds and you can roll your thumb between directions
 without lifting. Everything inside a panel is tapped directly, so the pad
 fades out whenever one is open. Add it to the home screen and it runs
 chrome-free.
-
-### Deploying
-
-`.github/workflows/pages.yml` builds and publishes to GitHub Pages on every
-push to `main`.
-
-**Pages must be set to Source: GitHub Actions**, not "Deploy from a branch".
-This is a source tree, not a site: `index.html` links no stylesheet and points
-at `/src/main.ts`, both of which only become real files when Vite builds. Point
-Pages at a branch and it serves those raw — you get an unstyled page whose
-buttons do nothing, because the game never loads.
 
 ---
 
