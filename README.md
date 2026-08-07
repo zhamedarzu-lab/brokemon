@@ -20,9 +20,31 @@ primitives.
 
 ## Running it
 
+This is a source tree, not a site. `index.html` links no stylesheet and points
+at `/src/main.ts` — both only become real files once Vite builds, so anything
+that serves the repo directory raw will show an unstyled page with dead
+buttons. It needs a build step or a dev server.
+
+### On Replit
+
+Import the repo and press Run. `.replit` installs, starts Vite, and opens the
+webview; the game is playable there and on any device pointed at the
+`*.replit.dev` URL. To publish it, Deploy as a **Static** site — the build
+command and `dist` are already configured.
+
+The one thing that needs saying: Replit serves the dev server through a
+`*.replit.dev` proxy, so the `Host` header never matches localhost and Vite's
+DNS-rebinding protection rejects it with *"Blocked request. This host is not
+allowed."* `vite.config.ts` relaxes `allowedHosts` and points the hot-reload
+socket at port 443 — but only when `REPL_ID` is set, so a dev server on your
+own machine keeps its host checking.
+
+### Locally
+
 ```sh
 npm install
 npm run dev        # vite dev server
+npm run dev -- --host   # ...also reachable from other devices on the network
 npm run build      # typecheck + production bundle into dist/
 npm test           # 95 simulation tests
 ```
@@ -41,31 +63,6 @@ The d-pad takes taps and holds and you can roll your thumb between directions
 without lifting. Everything inside a panel is tapped directly, so the pad
 fades out whenever one is open. Add it to the home screen and it runs
 chrome-free.
-
-### On Replit
-
-Import the repo and press Run. `.replit` installs, starts Vite, and opens the
-webview; the game is playable there and on any device pointed at the
-`*.replit.dev` URL. To publish it, Deploy as a **Static** site — the build
-command and `dist` are already configured.
-
-The one thing that needs saying: Replit serves the dev server through a
-`*.replit.dev` proxy, so the `Host` header never matches localhost and Vite's
-DNS-rebinding protection rejects it with *"Blocked request. This host is not
-allowed."* `vite.config.ts` relaxes `allowedHosts` and points the hot-reload
-socket at port 443 — but only when `REPL_ID` is set, so a dev server on your
-own machine keeps its host checking.
-
-### Deploying
-
-`.github/workflows/pages.yml` builds and publishes to GitHub Pages on every
-push to `main`.
-
-**Pages must be set to Source: GitHub Actions**, not "Deploy from a branch".
-This is a source tree, not a site: `index.html` links no stylesheet and points
-at `/src/main.ts`, both of which only become real files when Vite builds. Point
-Pages at a branch and it serves those raw — you get an unstyled page whose
-buttons do nothing, because the game never loads.
 
 ---
 
