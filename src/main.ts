@@ -217,6 +217,7 @@ class Game {
   private onStepComplete(): void {
     this.stepsTaken += 1;
     this.stepsSinceEvent += 1;
+    this.state.lastMovedTime = this.state.time;
 
     const police = policeCheck(this.state, this.rng);
     if (police) {

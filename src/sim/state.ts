@@ -84,6 +84,8 @@ export interface GameState {
   /** Warnings from the current patrol encounter. */
   policeWarnings: number;
   lastPoliceCheck: number;
+  /** Game-time minute of the most recent step — used to detect idleness for loitering. */
+  lastMovedTime: number;
 
   businessOwned: boolean;
   mayor: boolean;
@@ -145,6 +147,7 @@ export function createState(seed = Date.now() >>> 0): GameState {
     fines: 0,
     policeWarnings: 0,
     lastPoliceCheck: 0,
+    lastMovedTime: 7 * 60,
 
     businessOwned: false,
     mayor: false,

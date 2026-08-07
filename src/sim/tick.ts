@@ -259,14 +259,19 @@ function collapse(s: GameState, rng: Rng, out: Interrupt[]): Interrupt {
   return { kind: "collapse", cost };
 }
 
+/** Minimum in-game minutes standing still before a loitering check can fire. */
+const LOITER_IDLE_MINUTES = 5;
+
 /**
- * Zone enforcement. Called on movement rather than on the clock — you get
- * noticed when you go somewhere, not when you stand still.
+ * Zone enforcement. Only fires after the player has been stationary for at
+ * least LOITER_IDLE_MINUTES game-minutes, so walking through a zone never
+ * triggers a loitering warning.
  */
 export function policeCheck(s: GameState, rng: Rng): Interrupt | null {
   const zone = zoneAt(s.player.pos.y);
   if (zone.fineScale === 0) return null;
   if (!isOutdoors(s.player.pos.x, s.player.pos.y)) return null;
+  if (s.time - s.lastMovedTime < LOITER_IDLE_MINUTES) return null;
   if (s.time - s.lastPoliceCheck < 45) return null;
 
   const look = currentAppearance(s);

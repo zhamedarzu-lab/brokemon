@@ -167,6 +167,7 @@ describe("policeCheck", () => {
     let stopped = false;
     for (let i = 0; i < 30 && !stopped; i++) {
       s.lastPoliceCheck = -10_000;
+      s.lastMovedTime = -10_000; // simulate the player standing still for a long time
       stopped = policeCheck(s, new Rng(i)) !== null;
     }
     expect(stopped).toBe(true);
