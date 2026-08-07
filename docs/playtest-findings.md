@@ -5,35 +5,63 @@ police checks and street encounters on the way, and records where each day
 actually goes (`npm run playtest`). Numbers below are from four seeds run to a
 win.
 
-The **Fixed** section is done and on the branch. Everything under **Open** is
-scope, not work in progress — nothing here has been changed.
+Everything under **Fixed** is merged to `main`, with the commit and the test
+that guards it. Check there before picking up a follow-up task — two items on
+this list were reported again after they had already been done.
+
+Everything under **Open** is scope, not work in progress. Nothing there has been
+changed.
 
 ---
 
 ## Fixed
 
-| # | Fault | Effect |
-|---|---|---|
-| 1 | `sleep()` read "until 7AM" literally at 8AM | 23 hours gone, woke starving on the far side of an unplayed day |
-| 2 | Sleep paid a full night's rest for any duration | Lying down at 7:00 for the half hour left on the clock returned a whole night, repeatably |
-| 3 | Overnight shift stamped with the day it *ended* | The stocker could only work every other night |
-| 4 | Mart shut its own staff out at 11PM | The 10PM–3AM shift was clockable only in its first hour |
-| 5 | Yard work could send a phase-1 player to the estate | Behind a gate wanting appearance 70; burned the day's only yard slot on an impossible job |
-| 6 | Index fund did not count toward credit | Estate wants 720, debt-free ceiling is 700 — taking the bank's own advice locked the ending |
-| 7 | Lease and estate blamed the credit score | The real levers (the debt, the savings) were never named |
+All in `3551a76`.
+
+| # | Fault | Effect | Guarded by |
+|---|---|---|---|
+| 1 | `sleep()` read "until 7AM" literally at 8AM | 23 hours gone, woke starving on the far side of an unplayed day | `tick` — gives you a nap, not a lost day |
+| 2 | Sleep paid a full night's rest for any duration | Lying down at 7:00 for the half hour left on the clock returned a whole night, repeatably | `tick` — pays back rest by the hour |
+| 3 | Overnight shift stamped with the day it *ended* | The stocker could only work every other night | `tick` — lets the overnight crew work every night |
+| 4 | Mart shut its own staff out at 11PM | The 10PM–3AM shift was clockable only in its first hour | `balance` — lets the overnight stocker in when the shutters are down |
+| 5 | Yard work could send a phase-1 player to the estate | Behind a gate wanting appearance 70; burned the day's only yard slot on an impossible job | `balance` — does not send a phase-1 player up the hill to mow a lawn |
+| 6 | Index fund did not count toward credit | Estate wants 720, debt-free ceiling is 700 — taking the bank's own advice locked the ending | `tick` — counts the index fund as savings |
+| 7 | Lease and estate blamed the credit score | The real levers (the debt, the savings) were never named | text only, no test |
 
 ### Second pass
 
-| # | Fault | Effect |
-|---|---|---|
-| 8 | Night class wanted 20 energy and cost 18 | A shift left you at ~12, so earning and studying could not happen on the same day. Now 10 and 12 — you can attend on fumes and have nothing left after |
-| 9 | Marble drew a two-tone 8px checker | The fountain plaza is a solid 13x7 field of it and read as a transparency hole in the map. Polished slabs with grout and veining now |
-| 10 | Every building was the same brown wall | Nameplates over every door — the only way to find the hostel was to open all of them |
-| 11 | Filler encounters drowned out the zone ones | `change` + `cans` were two encounters in five everywhere, including a gated private road. Weighted by zone, and eighteen new situations added |
-| 12 | The same encounter could come up twice running | The cooldown discounted repeats but never barred them. The last two are now excluded outright |
-| 13 | The interview hired you into a dress code you might not meet | Hired in rags as Mart Clerk, every shift a strike, three strikes and the lead was gone. It says so now |
-| 14 | A pending interview existed only as a flag | Set up, never mentioned again, then fired days later as a random encounter. It sits in the HUD task line now |
-| 15 | `repDescriptor` in `main.ts` duplicated `reputationLabel` | Two copies of the same thresholds. One source of truth, and the crossing-message tables are total records so a new tier cannot compile without its lines |
+All in `4b44b36`.
+
+| # | Fault | Effect | Guarded by |
+|---|---|---|---|
+| 8 | Night class wanted 20 energy and cost 18 | A shift left you at ~12, so earning and studying could not happen on the same day. Now 10 and 12 — you can attend on fumes and have nothing left after | `balance` — lets you sit the class on fumes |
+| 9 | Marble drew a two-tone 8px checker | The fountain plaza is a solid 13x7 field of it and read as a transparency hole in the map. Polished slabs with grout and veining now | visual, no test |
+| 10 | Every building was the same brown wall | Nameplates over every door — the only way to find the hostel was to open all of them | `map` — puts a name over every door you can walk into |
+| 11 | Filler encounters drowned out the zone ones | `change` + `cans` were two encounters in five everywhere, including a gated private road. Weighted by zone, and eighteen new situations added | `events` — gives each zone a spread; does not put a split bin bag on a private road |
+| 12 | The same encounter could come up twice running | The cooldown discounted repeats but never barred them. The last two are now excluded outright | `events` — never shows the same event twice running |
+| 13 | The interview hired you into a dress code you might not meet | Hired in rags as Mart Clerk, every shift a strike, three strikes and the lead was gone. It says so now | `events` — warns when the dress code is beyond you |
+| 14 | A pending interview existed only as a flag | Set up, never mentioned again, then fired days later as a random encounter. It sits in the HUD task line now | UI only, no test |
+| 15 | `repDescriptor` in `main.ts` duplicated `reputationLabel` | Two copies of the same thresholds. One source of truth, and the crossing-message tables are total records so a new tier cannot compile without its lines | `state` — has a crossing message for every tier; plus the compiler |
+
+### Already done, if a follow-up task says otherwise
+
+Two items came back round as fresh tasks after they had been fixed. Both are
+closed by `4b44b36`:
+
+- **Deduplicate the reputation label.** Done. `repDescriptor` and its threshold
+  table are gone from `main.ts`; `REPUTATION_TIERS` in `src/sim/state.ts` is the
+  only definition, and `main.ts`, `journal.ts` and `changeReputation` all read
+  from it.
+- **Let the interview unlock the Mart Clerk shift for a player in a lower job.**
+  There is nothing to do here as written, and it is worth knowing why. The hire
+  path compares tiers, so it already declines to demote a night stocker,
+  landscaper or technician — and no employment sits below tier 2, so the case
+  the task describes cannot occur. The real defect was next to it: the interview
+  reads you on appearance, which a clean face in rags passes, while the till has
+  a dress code. You were hired, sent home from every shift, fired, and the
+  once-only lead was spent. That is item 13, and it is fixed. If the task's
+  acceptance criteria are written against the original framing they will not
+  match the code.
 
 ---
 
@@ -160,3 +188,9 @@ the same lock reason repeating eighty times.
 The teleporting bot in `progression.test.ts` is still the regression net; it is
 fast and deterministic. It cannot find anything that costs time or distance,
 which is what the walking rig is for.
+
+The "guarded by" column names the file and the test. To check one item:
+
+```
+npx vitest run -t "lets you sit the class on fumes"
+```
