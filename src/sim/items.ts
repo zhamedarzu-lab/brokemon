@@ -199,6 +199,7 @@ export const SHOP_STOCK: ItemId[] = [
   "poncho",
   "sleepingBag",
   "busPass",
+  "bicycle",
   "phone",
   "lotteryTicket",
 ];

@@ -158,7 +158,10 @@ const EVENTS: EventDef[] = [
               s.cash -= lost;
               applyDelta(s.meters, { health: -14, morale: -16 });
               pushLog(s, "Jumped outside the chip shop.", "bad");
-              return menu("Three lads", [`It goes badly. You lose $${lost} and the skin off one hand.`, "Nobody in the queue looks up."], [close], "bad");
+              const lostLine = lost > 0
+                ? `It goes badly. You lose $${lost} and the skin off one hand.`
+                : "It goes badly. Nothing to take, so they settle for leaving you on the pavement.";
+              return menu("Three lads", [lostLine, "Nobody in the queue looks up."], [close], "bad");
             },
           },
         ],

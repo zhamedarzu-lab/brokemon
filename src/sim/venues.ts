@@ -380,32 +380,37 @@ const hostel: Venue = (ctx) => {
   const rate = HOUSING.hostel.rent;
   const choices: Choice[] = [];
 
-  if (s.cash >= rate) {
-    choices.push({
-      label: "Pay for a cot",
-      hint: `$${rate}/night`,
-      run: () => {
-        s.cash -= rate;
-        s.housing = "hostel";
-        s.nightsPaid = 1;
-        pushLog(s, `Paid $${rate} for a hostel cot.`, "money");
-        return sleep(ctx, "hostel", 7);
-      },
-    });
-    choices.push({
-      label: "Use the showers",
-      hint: "$2, 20 min",
-      locked: s.cash < 2 ? "You can't afford it" : undefined,
-      run: () => {
-        s.cash -= 2;
-        ctx.advance(20, { sheltered: true });
-        applyDelta(s.meters, { hygiene: +28, morale: +6 });
-        return menu("Hostel", ["Two dollars for eight minutes of hot water. Worth it."], [BACK], "good");
-      },
-    });
-  } else {
-    choices.push({ label: "Pay for a cot", hint: `$${rate}/night`, locked: `You're $${rate - s.cash} short` });
-  }
+  choices.push(
+    s.cash >= rate
+      ? {
+          label: "Pay for a cot",
+          hint: `$${rate}/night`,
+          run: () => {
+            s.cash -= rate;
+            s.housing = "hostel";
+            s.nightsPaid = 1;
+            pushLog(s, `Paid $${rate} for a hostel cot.`, "money");
+            return sleep(ctx, "hostel", 7);
+          },
+        }
+      : { label: "Pay for a cot", hint: `$${rate}/night`, locked: `You're $${rate - s.cash} short` },
+  );
+
+  // The shower is always available — you don't need a cot to wash up.
+  choices.push(
+    s.cash >= 2
+      ? {
+          label: "Use the showers",
+          hint: "$2, 20 min",
+          run: () => {
+            s.cash -= 2;
+            ctx.advance(20, { sheltered: true });
+            applyDelta(s.meters, { hygiene: +28, morale: +6 });
+            return menu("Hostel", ["Two dollars for eight minutes of hot water. Worth it."], [BACK], "good");
+          },
+        }
+      : { label: "Use the showers", hint: "$2", locked: "You can't afford it" },
+  );
 
   choices.push(BACK);
   return menu(

@@ -217,6 +217,16 @@ export function workAssignmentStop(ctx: ActionCtx, index: number): Prompt | null
   const s = ctx.state;
   const a = s.assignment;
   if (!a) return null;
+
+  // Expire stale assignments so they can't be completed days later.
+  const currentDay = Math.floor(s.time / MINUTES_PER_DAY) + 1;
+  if (currentDay > a.expiresAtDay) {
+    pushLog(s, `The ${a.label} job expired. The board has moved on.`, "bad");
+    removeItem(s.inventory, "flyers", 1);
+    s.assignment = null;
+    return say("Job Board", "That job's window has passed. The board has reassigned it.");
+  }
+
   const def = GIGS[a.gig];
   const gate = canDoGig(s, a.gig);
   if (!gate.ok) return say("You can't", cap(gate.reasons[0] ?? "not right now") + ".");
@@ -266,7 +276,10 @@ export function collectAssignment(ctx: ActionCtx): Prompt {
 export function sleep(ctx: ActionCtx, where: HousingId, untilHour = 7): Prompt {
   const s = ctx.state;
   const def = HOUSING[where];
-  const minutes = minutesUntilHour(s.time, untilHour);
+  const raw = minutesUntilHour(s.time, untilHour);
+  // If we're exactly at the wake hour, minutesUntilHour returns a full day.
+  // Treat that as "already morning" — give a short mandatory rest instead.
+  const minutes = raw >= MINUTES_PER_DAY ? 30 : raw;
   const lines: string[] = [];
 
   ctx.advance(minutes, { asleep: true, sheltered: where !== "bench" && where !== "street" });
@@ -326,6 +339,13 @@ export function consume(ctx: ActionCtx, id: ItemId): Prompt | null {
 
   ctx.advance(def.minutes ?? 5, { sheltered: true });
   if (def.effect) applyDelta(s.meters, def.effect);
+
+  // Medicine specifically breaks the fever; the clinic does the same but costs money.
+  if (id === "medicine" && s.sick) {
+    s.sick = false;
+    pushLog(s, "The fever breaks. Your head clears.", "good");
+  }
+
   pushLog(s, `Used ${def.name}.`);
   return def.flavor ? say(def.name, def.flavor) : null;
 }
