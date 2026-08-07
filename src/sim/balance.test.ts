@@ -1,10 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { markerPos } from "../world/map";
+import { markerPos, zoneAt } from "../world/map";
 import { interact } from "./actions";
+import { EMPLOYMENT, EMPLOYMENT_ORDER } from "./jobs";
 import { countOf, type ItemId } from "./items";
 import type { Choice, Prompt } from "./prompt";
 import { Rng } from "./rng";
-import { createState, currentAppearance, phaseOf, type Facing, type GameState } from "./state";
+import {
+  checkRequirements,
+  createState,
+  currentAppearance,
+  phaseOf,
+  type Assignment,
+  type Facing,
+  type GameState,
+} from "./state";
 import { advance } from "./tick";
 import { hourOf, minutesUntilHour } from "./time";
 import { consume, type ActionCtx } from "./work";
@@ -405,6 +414,101 @@ describe("phase 3 and 4 — the ladder", () => {
     expect(s.cash).toBe(155);
     // Three hours gone: the class runs you past closing.
     expect(hourOf(s.time)).toBeGreaterThanOrEqual(22);
+  });
+});
+
+/** The assignment the board just handed out, with an address on it. */
+function takeAssignment(s: GameState): Assignment {
+  const a = s.assignment;
+  if (!a || a.targets.length === 0) throw new Error("the board handed out a job with no address");
+  return a;
+}
+
+describe("jobs the town can actually deliver on", () => {
+  it("does not send a phase-1 player up the hill to mow a lawn", () => {
+    // Yard work asks for a strong back and nothing else, but one of the
+    // addresses was behind the security gate. Taking it burned the day's only
+    // yard slot on a job that could never be finished.
+    const bot = new Bot(1);
+    const s = bot.state;
+    s.meters = { hunger: 90, thirst: 90, hygiene: 20, energy: 90, morale: 60, health: 90 };
+    expect(currentAppearance(s)).toBeLessThan(70);
+
+    for (let i = 0; i < 30; i++) {
+      s.assignment = null;
+      s.gigsToday = {};
+      bot.standOn("jobBoard");
+      bot.drive(bot.press(), "Yard work", "Take the job");
+      const job = takeAssignment(s);
+      expect(zoneAt(job.targets[0]!.y).id, `sent to ${job.label}`).not.toBe("heights");
+    }
+  });
+
+  it("still offers the estate lawn to someone the gate will let through", () => {
+    const bot = new Bot(1);
+    const s = bot.state;
+    s.meters.hygiene = 100;
+    s.wearing = "tailored";
+    s.wardrobe.push("tailored");
+
+    let sawTheHill = false;
+    for (let i = 0; i < 40 && !sawTheHill; i++) {
+      s.assignment = null;
+      s.gigsToday = {};
+      bot.standOn("jobBoard");
+      bot.drive(bot.press(), "Yard work", "Take the job");
+      sawTheHill = zoneAt(takeAssignment(s).targets[0]!.y).id === "heights";
+    }
+    expect(sawTheHill).toBe(true);
+  });
+
+  it("makes the tier-2 rungs a ladder rather than a shelf", () => {
+    // Grounds Crew carried an experience requirement of zero shifts, which no
+    // check can ever fail — so the best-paid job of the tier was open on the
+    // first morning and the two beneath it were content nobody would touch.
+    const withExperience = EMPLOYMENT_ORDER.filter((id) => EMPLOYMENT[id].requires.experience);
+    expect(withExperience.length).toBeGreaterThan(0);
+    for (const id of withExperience) {
+      expect(EMPLOYMENT[id].requires.experience!.shifts, `${id} asks for no shifts`).toBeGreaterThan(0);
+    }
+  });
+
+  it("does not open the best phase-2 job to someone off the bench", () => {
+    const bot = new Bot(1);
+    const s = bot.state;
+    s.meters = { hunger: 90, thirst: 90, hygiene: 70, energy: 90, morale: 60, health: 90 };
+    expect(checkRequirements(s, EMPLOYMENT.landscaper.requires).ok).toBe(false);
+    s.shiftsWorked.martClerk = 10;
+    expect(checkRequirements(s, EMPLOYMENT.landscaper.requires).ok).toBe(true);
+  });
+});
+
+describe("the Mart after hours", () => {
+  it("lets the overnight stocker in when the shutters are down", () => {
+    const bot = new Bot(1);
+    const s = bot.state;
+    s.employment = "nightStock";
+    s.meters = { hunger: 90, thirst: 90, hygiene: 90, energy: 90, morale: 60, health: 90 };
+    s.time = 23 * 60 + 30; // shop shut at 11, shift runs to 3AM
+    bot.standOn("mart");
+    expect(bot.canChoose(bot.press(), "clock in")).toBe(true);
+  });
+
+  it("keeps everyone else out", () => {
+    const bot = new Bot(1);
+    bot.state.time = 23 * 60 + 30;
+    bot.standOn("mart");
+    const prompt = bot.press();
+    expect(prompt?.choices ?? []).toHaveLength(0);
+    expect(prompt?.lines.join(" ")).toContain("Shutters down");
+  });
+
+  it("does not let staff clock in outside their own hours", () => {
+    const bot = new Bot(1);
+    bot.state.employment = "martClerk";
+    bot.state.time = 3 * 60; // day shift is 10AM–3PM
+    bot.standOn("mart");
+    expect(bot.canChoose(bot.press(), "clock in")).toBe(false);
   });
 });
 

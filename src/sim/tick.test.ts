@@ -3,6 +3,8 @@ import { Rng } from "./rng";
 import { createState } from "./state";
 import { advance, policeCheck } from "./tick";
 import { markerPos } from "../world/map";
+import { sleep as sleepIn, workShift } from "./work";
+import { minutesUntilHour } from "./time";
 
 const HOUR = 60;
 
@@ -143,6 +145,113 @@ describe("bus pass expiry", () => {
     s.busPassDaysLeft = 0;
     advance(s, new Rng(1), { minutes: 24 * HOUR });
     expect(s.inventory.busPass).toBeUndefined();
+  });
+});
+
+describe("credit score", () => {
+  function drift(setup: (s: ReturnType<typeof fed>) => void, days = 120): number {
+    const s = fed();
+    s.debt = 0;
+    setup(s);
+    const rng = new Rng(1);
+    // Hour at a time, topping up as we go — a collapse would put a clinic bill
+    // on the debt and drag the score down to the in-arrears ceiling.
+    for (let h = 0; h < days * 24; h++) {
+      s.meters = { hunger: 100, thirst: 100, hygiene: 80, energy: 100, morale: 80, health: 100 };
+      advance(s, rng, { minutes: 60, sheltered: true });
+    }
+    return s.credit;
+  }
+
+  it("stops at 700 for someone debt-free with nothing put by", () => {
+    expect(drift(() => {})).toBe(700);
+  });
+
+  it("counts the index fund as savings", () => {
+    // The estate wants 720 and the ceiling without savings is 700, so reading
+    // the current account alone meant taking the bank's own investment advice
+    // locked you out of the ending.
+    expect(drift((s) => void (s.bank = 5_000))).toBe(790);
+    expect(drift((s) => void (s.investments = 5_000))).toBe(790);
+  });
+
+  it("keeps the estate reachable for someone fully invested", () => {
+    expect(drift((s) => void (s.investments = 40_000))).toBeGreaterThanOrEqual(720);
+  });
+});
+
+describe("sleep", () => {
+  function bedded(hour: number) {
+    const s = fed();
+    s.time = hour * 60;
+    s.meters.energy = 20;
+    const rng = new Rng(1);
+    const ctx = {
+      state: s,
+      rng,
+      advance: (m: number, o?: Parameters<typeof advance>[2]) => void advance(s, rng, { ...o, minutes: m }),
+      teleport: () => {},
+    };
+    const t0 = s.time;
+    sleepIn(ctx, "hostel", 7);
+    return { s, slept: (s.time - t0) / 60 };
+  }
+
+  it("sleeps through the night when there is a night left to sleep", () => {
+    expect(bedded(22).slept).toBe(9);
+    expect(bedded(2).slept).toBe(5);
+  });
+
+  it("gives you a nap, not a lost day, when you lie down after morning", () => {
+    // "Until 7AM" once meant twenty-three hours if you lay down at eight, and
+    // you woke up starving on the far side of a day you never played.
+    const morning = bedded(8);
+    expect(morning.slept).toBeLessThanOrEqual(4);
+    expect(morning.s.meters.hunger).toBeGreaterThan(70);
+    expect(bedded(13).slept).toBeLessThanOrEqual(4);
+  });
+
+  it("pays back rest by the hour, so a nap is not a night", () => {
+    // Lying down at 7AM used to buy a whole night's energy for thirty minutes.
+    const nap = bedded(6.5);
+    const night = bedded(22);
+    expect(nap.slept).toBeLessThan(1);
+    expect(nap.s.meters.energy - 20).toBeLessThan((night.s.meters.energy - 20) / 4);
+  });
+});
+
+describe("shift rota", () => {
+  function nightlyStocker() {
+    const s = fed();
+    s.employment = "nightStock";
+    s.wearing = "thrift";
+    s.wardrobe.push("thrift");
+    const rng = new Rng(1);
+    const ctx = {
+      state: s,
+      rng,
+      advance: (m: number, o?: Parameters<typeof advance>[2]) => {
+        advance(s, rng, { ...o, minutes: m });
+        s.meters = { hunger: 100, thirst: 100, hygiene: 90, energy: 100, morale: 80, health: 100 };
+      },
+      teleport: () => {},
+    };
+    const wind = (h: number) => ctx.advance(minutesUntilHour(s.time, h));
+    wind(22);
+    let worked = 0;
+    for (let n = 0; n < 6; n++) {
+      const before = s.shiftsWorked.nightStock ?? 0;
+      workShift(ctx, "nightStock");
+      if ((s.shiftsWorked.nightStock ?? 0) > before) worked += 1;
+      wind(22);
+    }
+    return worked;
+  }
+
+  it("lets the overnight crew work every night, not every other one", () => {
+    // The 10PM–3AM shift finishes on the next calendar day, and stamping it
+    // with that day made the following night read as "already worked today".
+    expect(nightlyStocker()).toBe(6);
   });
 });
 

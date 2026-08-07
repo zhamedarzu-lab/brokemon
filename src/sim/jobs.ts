@@ -160,6 +160,9 @@ export const EMPLOYMENT: Record<EmploymentId, EmploymentDef> = {
     shiftEnd: 13,
     grace: 1,
     pay: 74,
+    // This asked for zero shifts once, which is a requirement no check can
+    // fail — the best-paid job of the tier was open on the first morning and
+    // the two beneath it were content nobody had a reason to touch.
     requires: { hygiene: 30, energy: 35, experience: { job: "martClerk", shifts: 3 } },
     cost: { energy: -20, hygiene: -26, hunger: -26, thirst: -34, morale: +2 },
     exertion: 2.4,

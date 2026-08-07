@@ -61,6 +61,13 @@ export function outfitRank(id: OutfitId): number {
  * How you read to a stranger: mostly hygiene, partly clothes, and clothes
  * cannot fully cover for being filthy.
  */
+/**
+ * What the guard on the Heights barrier wants to see. Everything up the hill
+ * is behind this one number — the estate, and the corporate plaza where every
+ * career job is actually worked.
+ */
+export const HEIGHTS_GATE_LOOK = 70;
+
 export function appearance(hygiene: number, outfit: OutfitId): number {
   const dress = OUTFITS[outfit].presentation;
   const raw = hygiene * 0.55 + dress * 0.45;

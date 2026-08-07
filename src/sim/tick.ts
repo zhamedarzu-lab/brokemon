@@ -157,8 +157,12 @@ function onNewDay(s: GameState, rng: Rng, day: number, out: Interrupt[]): void {
     s.investmentLastDelta = 0;
   }
 
-  // Credit score drifts towards how you're actually living.
-  const target = s.debt > 400 ? 430 : s.debt > 0 ? 600 : s.bank > 2000 ? 790 : 700;
+  // Credit score drifts towards how you're actually living. Savings count
+  // whether they sit in the account or the index fund — the estate wants 720
+  // and the debt-free ceiling is only 700, so reading `bank` alone meant
+  // moving your money into the fund quietly locked the endgame.
+  const saved = s.bank + s.investments;
+  const target = s.debt > 400 ? 430 : s.debt > 0 ? 600 : saved > 2000 ? 790 : 700;
   s.credit = Math.round(s.credit + Math.sign(target - s.credit) * Math.min(6, Math.abs(target - s.credit)));
 
   // Bus pass expiry: count down daily and remove when exhausted.

@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "playtest": "vite-node src/sim/playtest.ts"
   },
   "devDependencies": {
     "typescript": "~5.9.3",

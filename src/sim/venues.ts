@@ -13,8 +13,18 @@ import {
 } from "./jobs";
 import { applyDelta } from "./meters";
 import { menu, say, type Choice, type Prompt } from "./prompt";
-import { HOUSING, OUTFITS, OUTFIT_ORDER, outfitRank, type OutfitId } from "./social";
-import { canDoGig, changeReputation, checkRequirements, currentAppearance, earnCash, phaseOf, pushLog, setWon } from "./state";
+import { HEIGHTS_GATE_LOOK, HOUSING, OUTFITS, OUTFIT_ORDER, outfitRank, type OutfitId } from "./social";
+import {
+  canDoGig,
+  changeReputation,
+  checkRequirements,
+  currentAppearance,
+  earnCash,
+  phaseOf,
+  pushLog,
+  setWon,
+  type GameState,
+} from "./state";
 import { withinHours } from "./time";
 import {
   collectAssignment,
@@ -143,7 +153,23 @@ const communityCenter: Venue = (ctx) => {
 const mart: Venue = (ctx) => {
   const s = ctx.state;
   const open = withinHours(s.time, 6, 23);
-  if (!open) return say("Brokemon Mart", "Shutters down. Opens at 6AM.");
+  const staffJob = s.employment === "martClerk" || s.employment === "nightStock" ? s.employment : null;
+  const staffWindow = staffJob ? shiftWindow(s, staffJob) : "closed";
+  const onShift = staffWindow === "open" || staffWindow === "late";
+
+  if (!open) {
+    // The shop shuts at eleven; the overnight stocker's shift runs to three.
+    // Without a staff door the whole job was unreachable after 11PM.
+    if (!onShift) return say("Brokemon Mart", "Shutters down. Opens at 6AM.");
+    return menu(
+      "Brokemon Mart — staff entrance",
+      ["The shop floor is dark and the shutters are down.", "You let yourself in round the back."],
+      [
+        { label: "Clock in", hint: staffWindow === "late" ? "late" : "on time", run: () => workShift(ctx, staffJob!) },
+        BACK,
+      ],
+    );
+  }
 
   const look = currentAppearance(s);
   if (look < 28) {
@@ -169,12 +195,11 @@ const mart: Venue = (ctx) => {
     },
   ];
 
-  if (s.employment === "martClerk" || s.employment === "nightStock") {
-    const w = shiftWindow(s, s.employment);
+  if (staffJob) {
     choices.push({
       label: "Clock in",
-      hint: w === "open" ? "on time" : w === "late" ? "late" : "not your hours",
-      run: () => workShift(ctx, s.employment as EmploymentId),
+      hint: staffWindow === "open" ? "on time" : staffWindow === "late" ? "late" : "not your hours",
+      run: () => workShift(ctx, staffJob),
     });
   }
 
@@ -520,7 +545,16 @@ const apartment: Venue = (ctx) => {
   const deposit = def.rent * 2;
   const creditNeeded = 620;
   const reasons: string[] = [];
-  if (s.credit < creditNeeded) reasons.push(`your credit score is ${s.credit}, they want ${creditNeeded}`);
+  if (s.credit < creditNeeded) {
+    // The score is capped at 600 while anything is outstanding, so pointing at
+    // the number alone sends the player off to earn money they cannot spend on
+    // the problem. Name the debt instead.
+    reasons.push(
+      s.debt > 0
+        ? `your credit score is ${s.credit} and they want ${creditNeeded} — it will not climb past 600 while you still owe $${s.debt}`
+        : `your credit score is ${s.credit}, they want ${creditNeeded}`,
+    );
+  }
   if (s.cash + s.bank < deposit) reasons.push(`the deposit is $${deposit} and you have $${s.cash + s.bank}`);
   if (!s.employment || EMPLOYMENT[s.employment].tier < 3) reasons.push("they want to see three months of professional payslips");
 
@@ -597,7 +631,13 @@ const estate: Venue = (ctx) => {
   const funds = s.cash + s.bank + s.investments;
   const reasons: string[] = [];
   if (funds < ESTATE_PRICE) reasons.push(`the asking price is $${ESTATE_PRICE.toLocaleString()} and you have $${funds.toLocaleString()}`);
-  if (s.credit < 720) reasons.push(`they will not take an offer from a ${s.credit} credit score`);
+  if (s.credit < 720) {
+    reasons.push(
+      s.bank + s.investments <= 2000
+        ? `they will not take an offer from a ${s.credit} credit score, and it stops at 700 until you are holding more than $2,000 in savings`
+        : `they will not take an offer from a ${s.credit} credit score`,
+    );
+  }
 
   return menu(
     "The estate on the hill — FOR SALE",
@@ -694,7 +734,7 @@ const college: Venue = (ctx) => {
 
 const bank: Venue = (ctx) => {
   const s = ctx.state;
-  if (!withinHours(s.time, 9, 17)) return say("Route 1 Savings & Loan", "Closed. Open 9AM to 5PM, weekdays and every day here.");
+  if (!withinHours(s.time, 9, 17)) return say("Route 1 Savings & Loan", "Closed. Open 9AM to 5PM, every day.");
 
   const choices: Choice[] = [];
 
@@ -1065,7 +1105,7 @@ const jobBoard: Venue = (ctx) => {
             label: GIGS.yardWork.name,
             hint: `1 stop, $${GIGS.yardWork.basePay}`,
             run: () => {
-              const spot = ctx.rng.pick(YARD_SPOTS);
+              const spot = ctx.rng.pick(yardSpotsFor(s));
               const p = markerPos(spot.marker);
               return startAssignment(ctx, "yardWork", [{ x: p.x + spot.dx, y: p.y + spot.dy }], `Yard work — ${spot.name}`);
             },
@@ -1087,13 +1127,33 @@ const jobBoard: Venue = (ctx) => {
   );
 };
 
-const YARD_SPOTS: Array<{ marker: string; dx: number; dy: number; name: string }> = [
-  { marker: "estate", dx: 0, dy: 1, name: "the estate on the hill" },
+interface YardSpot {
+  marker: string;
+  dx: number;
+  dy: number;
+  name: string;
+  /** Up past the security gate, so only worth offering to someone who'll be let through. */
+  heights?: boolean;
+}
+
+const YARD_SPOTS: YardSpot[] = [
+  { marker: "estate", dx: 0, dy: 1, name: "the estate on the hill", heights: true },
   { marker: "hostel", dx: 0, dy: 1, name: "behind the hostel" },
   { marker: "trailer", dx: 0, dy: 1, name: "the trailer park" },
   { marker: "college", dx: 0, dy: 1, name: "the college grounds" },
   { marker: "apartment", dx: 0, dy: 1, name: "the apartment block" },
 ];
+
+/**
+ * The board will not send you somewhere the gate won't let you reach. Yard
+ * work only asks for a strong back, so without this filter a phase-1 player
+ * could take the estate job, be turned away at the barrier, and lose the day's
+ * only yard slot to a job they could never finish.
+ */
+function yardSpotsFor(s: GameState): YardSpot[] {
+  const usable = YARD_SPOTS.filter((spot) => !spot.heights || currentAppearance(s) >= HEIGHTS_GATE_LOOK);
+  return usable.length > 0 ? usable : YARD_SPOTS.filter((spot) => !spot.heights);
+}
 
 function flyerRoute(ctx: ActionCtx): { x: number; y: number }[] {
   const doors = ["communityCenter", "mart", "college", "bank", "laundromat", "apartment", "hostel"];

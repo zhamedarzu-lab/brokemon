@@ -3,7 +3,7 @@ import { tileAt } from "../world/tiles";
 import { applyDelta } from "./meters";
 import { menu, say, type Choice, type Prompt } from "./prompt";
 import { currentAppearance, pushLog, type GameState } from "./state";
-import { HOUSING } from "./social";
+import { HEIGHTS_GATE_LOOK, HOUSING } from "./social";
 import { VENUES } from "./venues";
 import { panhandle, scavenge, sleep, workAssignmentStop, type ActionCtx } from "./work";
 
@@ -199,7 +199,7 @@ function heightsGate(ctx: ActionCtx, cell: Vec2): Prompt {
     return say("Security gate", "The gate opens outward without asking anything of you.");
   }
 
-  if (look >= 70) {
+  if (look >= HEIGHTS_GATE_LOOK) {
     ctx.teleport(cell.x, cell.y - 1);
     pushLog(s, "Passed the Heights security gate.");
     return say("Security gate", [
@@ -215,7 +215,7 @@ function heightsGate(ctx: ActionCtx, cell: Vec2): Prompt {
     [
       "The guard steps out of the box before you reach the barrier.",
       `"Residents and guests. Are you either?"`,
-      `You look like a ${look}. The gate wants a 70.`,
+      `You look like a ${look}. The gate wants a ${HEIGHTS_GATE_LOOK}.`,
     ],
     "bad",
   );

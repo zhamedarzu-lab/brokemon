@@ -8,7 +8,7 @@ import { createState, currentAppearance, phaseOf, type Facing, type GameState } 
 import { advance } from "./tick";
 import { dayOf, formatClock, hourOf, minuteOfDay, minutesUntilHour } from "./time";
 import { consume, type ActionCtx } from "./work";
-import { EMPLOYMENT, EMPLOYMENT_ORDER } from "./jobs";
+import { EMPLOYMENT, EMPLOYMENT_ORDER, type EmploymentId } from "./jobs";
 import { shiftWindow } from "./work";
 
 class Player {
@@ -152,35 +152,52 @@ function shop(p: Player): void {
   }
 }
 
-/** Take the best job we now qualify for, trying every rung, not just the top. */
+/**
+ * Take the best job we now qualify for — and, when nothing better is open,
+ * take a pay cut into whichever rung the next one wants on your record. The
+ * ladder is not sorted by wage: Grounds Crew pays more than Mart Clerk and
+ * asks for shifts behind a Mart Clerk till before it will look at you.
+ */
 function jobHunt(p: Player): void {
   const s = p.s;
-  if (hourOf(s.time) < 8 || hourOf(s.time) >= 18) return;
-  if (currentAppearance(s) < 55) return;
+  if (hourOf(s.time) < 8 || hourOf(s.time) >= 17) return;
 
+  // The board outside the parks office carries the same listings as the plaza
+  // lobby, and does not have a security desk in front of it.
+  p.goto("jobBoard");
+  const list = p.drive(p.press(), "career listings");
+  const open = EMPLOYMENT_ORDER.filter((id) => id !== s.employment && p.can(list, EMPLOYMENT[id].name));
   const currentPay = s.employment ? EMPLOYMENT[s.employment].pay : 0;
-  const wanted = EMPLOYMENT_ORDER.filter((id) => EMPLOYMENT[id].pay > currentPay)
-    .sort((a, b) => EMPLOYMENT[b].pay - EMPLOYMENT[a].pay);
-  if (wanted.length === 0) return;
 
-  p.goto("corporatePlaza");
-  const lobby = p.press();
-  if (!p.can(lobby, "openings")) {
-    p.note(`plaza refused entry (look ${currentAppearance(s)})`);
-    return;
+  const apply = (id: EmploymentId) => {
+    const before = s.employment;
+    p.drive(list, EMPLOYMENT[id].name);
+    p.note(s.employment !== before ? `HIRED as ${EMPLOYMENT[id].name}` : `interview failed: ${EMPLOYMENT[id].name}`);
+  };
+
+  // Rungs that are held up only by shifts we have not put in anywhere yet.
+  const owed = new Set<EmploymentId>();
+  for (const id of EMPLOYMENT_ORDER) {
+    const exp = EMPLOYMENT[id].requires.experience;
+    if (exp && (s.shiftsWorked[exp.job] ?? 0) < exp.shifts) owed.add(exp.job);
   }
-  const list = p.drive(lobby, "ask about openings");
-  for (const id of wanted) {
-    if (p.can(list, EMPLOYMENT[id].name)) {
-      const before = s.employment;
-      p.drive(list, EMPLOYMENT[id].name);
-      if (s.employment !== before) p.note(`HIRED as ${EMPLOYMENT[id].name}`);
-      else p.note(`interview failed: ${EMPLOYMENT[id].name}`);
-      return;
-    }
+  // Never walk out of a job we are only holding for the reference — chasing
+  // the extra sixteen dollars a shift costs more than it pays.
+  if (s.employment && owed.has(s.employment)) return;
+
+  const raise = open
+    .filter((id) => EMPLOYMENT[id].pay > currentPay)
+    .sort((a, b) => EMPLOYMENT[b].pay - EMPLOYMENT[a].pay)[0];
+  if (raise) return apply(raise);
+
+  const stepDown = open.find((id) => owed.has(id));
+  if (stepDown) {
+    p.note(`stepping down to ${EMPLOYMENT[stepDown].name} for the reference`);
+    return apply(stepDown);
   }
-  const cheapest = wanted[wanted.length - 1]!;
-  p.note(`no job open. ${EMPLOYMENT[cheapest].name} blocked: ${p.lockReason(list, EMPLOYMENT[cheapest].name)}`);
+
+  const next = EMPLOYMENT_ORDER.filter((id) => EMPLOYMENT[id].pay > currentPay)[0];
+  if (next) p.note(`no job open. ${EMPLOYMENT[next].name} blocked: ${p.lockReason(list, EMPLOYMENT[next].name)}`);
 }
 
 /** Stock up on food. The food bank alone does not cover a day's hunger. */
@@ -195,6 +212,22 @@ function groceries(p: Player): void {
   for (let i = 0; i < 3 && s.cash > 25; i++) {
     if (!p.can(shopMenu, "Deli Sandwich")) break;
     shopMenu = p.drive(shopMenu, "Deli Sandwich");
+  }
+}
+
+/** Drink up to `target` energy on gas-station coffee, if the Mart is open. */
+function caffeinate(p: Player, target: number): void {
+  const s = p.s;
+  if (s.meters.energy >= target || s.cash < 10) return;
+  if (hourOf(s.time) < 6 || hourOf(s.time) >= 23) return;
+  p.goto("mart");
+  let m = p.press();
+  if (!p.can(m, "buy something")) return;
+  m = p.drive(m, "buy something");
+  for (let i = 0; i < 3 && s.meters.energy < target && s.cash >= 4; i++) {
+    if (!p.can(m, "Coffee")) break;
+    m = p.drive(m, "Coffee");
+    consume(p.ctx, "coffee");
   }
 }
 
@@ -350,7 +383,10 @@ function playDay(p: Player): void {
   p.drink();
 
   // Night school is the only door to phase 3, so it outranks saving.
-  if (s.education < 5 && s.cash >= 55 && s.meters.energy > 22 && hourOf(s.time) < 19) {
+  if (s.education < 5 && s.cash >= 55 && hourOf(s.time) < 21) {
+    // A shift plus a day on your feet leaves you under the twenty energy the
+    // class wants. Gas-station coffee is the only thing that closes the gap.
+    caffeinate(p, 26);
     p.waitUntil(19);
     p.goto("college");
     const c = p.press();
@@ -361,6 +397,8 @@ function playDay(p: Player): void {
 
   p.eat();
   p.wash();
+  // The overnight shift starts at 10PM, after everything else has shut.
+  if (!worked) workShiftIfDue(p);
   sleep(p);
 }
 

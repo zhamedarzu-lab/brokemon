@@ -4,7 +4,7 @@ import { menu, say, type Choice, type Prompt } from "./prompt";
 import type { Rng } from "./rng";
 import { HOUSING, type HousingId } from "./social";
 import { canDoGig, changeReputation, checkRequirements, currentAppearance, earnCash, pushLog, type GameState } from "./state";
-import { hourOf, minuteOfDay, MINUTES_PER_DAY, minutesUntilHour, withinHours } from "./time";
+import { dayOf, hourOf, minuteOfDay, MINUTES_PER_DAY, minutesUntilHour, withinHours } from "./time";
 import { WEATHER } from "./weather";
 import { ITEMS, removeItem, type ItemId } from "./items";
 
@@ -39,10 +39,24 @@ export function shiftWindow(s: GameState, job: EmploymentId): ShiftWindow {
   return until <= 120 ? "early" : "closed";
 }
 
+/**
+ * Which day's rota a clock-in belongs to. A shift that runs past midnight —
+ * the 10PM–3AM stocker — still belongs to the evening it started on. Stamping
+ * it with the calendar day it *finished* on meant the overnight crew could
+ * only ever work every other night.
+ */
+export function rotaDay(s: GameState, job: EmploymentId): number {
+  const def = EMPLOYMENT[job];
+  const crossesMidnight = def.shiftEnd <= def.shiftStart;
+  const beforeSunrise = crossesMidnight && hourOf(s.time) < def.shiftEnd;
+  return dayOf(s.time) - (beforeSunrise ? 1 : 0);
+}
+
 export function workShift(ctx: ActionCtx, job: EmploymentId): Prompt {
   const s = ctx.state;
   const def = EMPLOYMENT[job];
   const window = shiftWindow(s, job);
+  const rota = rotaDay(s, job);
 
   if (window === "closed" || window === "early") {
     const until = minutesUntilHour(s.time, def.shiftStart);
@@ -52,7 +66,7 @@ export function workShift(ctx: ActionCtx, job: EmploymentId): Prompt {
     );
   }
 
-  if (s.lastShiftDay === Math.floor(s.time / MINUTES_PER_DAY) + 1) {
+  if (s.lastShiftDay === rota) {
     return say(def.employer, "You've already worked today. Go home.");
   }
 
@@ -83,7 +97,7 @@ export function workShift(ctx: ActionCtx, job: EmploymentId): Prompt {
   applyDelta(s.meters, def.cost);
   earnCash(s, pay);
   s.shiftsWorked[job] = (s.shiftsWorked[job] ?? 0) + 1;
-  s.lastShiftDay = Math.floor(s.time / MINUTES_PER_DAY) + 1;
+  s.lastShiftDay = rota;
 
   const lines = [`${fmtDuration(minutes)} on the clock.`];
   if (late) {
@@ -274,23 +288,40 @@ export function collectAssignment(ctx: ActionCtx): Prompt {
 
 /* ------------------------------------------------------------------- sleep */
 
+/** The longest run at morning that still counts as going to bed for the night. */
+const LONGEST_NIGHT = 13 * 60;
+/** What you get instead when you lie down in the middle of the day. */
+const NAP = 4 * 60;
+/** A full night. Rest is scaled against this, so a nap is not a night. */
+const FULL_NIGHT = 8 * 60;
+
 export function sleep(ctx: ActionCtx, where: HousingId, untilHour = 7): Prompt {
   const s = ctx.state;
   const def = HOUSING[where];
+  // Once the wake hour is behind you, `minutesUntilHour` wraps to tomorrow.
+  // Taken literally that meant lying down at 8AM cost twenty-three hours and
+  // woke you starving. Past a plausible bedtime it is a nap, not a night.
   const raw = minutesUntilHour(s.time, untilHour);
-  // If we're exactly at the wake hour, minutesUntilHour returns a full day.
-  // Treat that as "already morning" — give a short mandatory rest instead.
-  const minutes = raw >= MINUTES_PER_DAY ? 30 : raw;
+  const overnight = raw <= LONGEST_NIGHT;
+  const minutes = overnight ? raw : NAP;
   const lines: string[] = [];
 
   ctx.advance(minutes, { asleep: true, sheltered: where !== "bench" && where !== "street" });
+  const wokeAt = Math.floor(minuteOfDay(s.time) / 60);
 
-  const restored = Math.round(100 * def.restQuality * (s.sick ? 0.7 : 1));
+  // Rest is paid by the hour. Without this, lying down at 7:00 for the half
+  // hour the clock had left handed back a whole night's energy, over and over.
+  const share = Math.min(1, minutes / FULL_NIGHT);
+  const restored = Math.round(100 * def.restQuality * share * (s.sick ? 0.7 : 1));
   s.meters.energy = Math.min(100, s.meters.energy + restored);
-  s.meters.morale = Math.min(100, s.meters.morale + (def.restQuality >= 0.7 ? 10 : 2));
-  if (def.hasShower) s.meters.hygiene = Math.min(100, s.meters.hygiene + 8);
+  s.meters.morale = Math.min(100, s.meters.morale + (def.restQuality >= 0.7 ? 10 : 2) * share);
+  if (def.hasShower) s.meters.hygiene = Math.min(100, s.meters.hygiene + 8 * share);
 
-  lines.push(`You sleep until ${fmtHour(untilHour)}.`);
+  lines.push(
+    overnight
+      ? `You sleep until ${fmtHour(wokeAt)}.`
+      : `It is the middle of the day. You get four hours and wake at ${fmtHour(wokeAt)}, no better off.`,
+  );
 
   if (def.risk > 0 && ctx.rng.chance(def.risk)) {
     const roll = ctx.rng.next();
