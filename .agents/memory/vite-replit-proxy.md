@@ -1,24 +1,31 @@
 ---
 name: Vite + Replit proxy white screen fix
-description: Why Vite dev server causes a blank white screen through Replit's proxy, and how to fix it.
+description: Why Vite dev server causes a blank white screen through Replit's proxy, and the correct conditional fix.
 ---
 
 ## Rule
-Always set `server.hmr.clientPort: 443` in `vite.config.ts` for any Vite dev server running behind Replit's proxy.
+Gate `hmr.clientPort` on `REPL_ID` — do not set it unconditionally.
 
-**Why:** Vite's HMR client script (`/@vite/client`) tries to open a WebSocket back to the dev server. It uses the same host as the page but the dev server's *local* port (e.g. 3000). Replit's proxy only forwards port 80/443 externally — port 3000 is never reachable from the browser. The stalled WebSocket blocks module loading and leaves the page white. Setting `clientPort: 443` tells the HMR client to connect on the external HTTPS port, which routes correctly through the proxy.
+**Why:** Vite's HMR client opens a WebSocket back to the dev server. Through Replit's HTTPS proxy the browser can only reach the server on port 443, not the local dev port. But setting `clientPort: 443` unconditionally breaks non-Replit loads (local dev, CI) by aiming the socket at `:443` on a plain-HTTP server, which throws "WebSocket closed without opened" on every page load.
 
-**How to apply:** Any time a Vite project is set up in Replit and users report a blank/white screen despite the server returning 200:
+**Correct fix** (gate on `REPL_ID`):
 
 ```ts
-server: {
+const onReplit = Boolean(process.env.REPL_ID);
+
+const throughProxy = {
   host: true,
-  port: 3000,          // or whatever port the server uses
+  port: 3000,
   allowedHosts: true,
-  hmr: {
-    clientPort: 443,   // ← the fix
-  },
-},
+  ...(onReplit ? { hmr: { protocol: "wss" as const, clientPort: 443 } } : {}),
+};
+
+export default defineConfig({
+  server: throughProxy,
+  preview: throughProxy,   // covers production preview builds too
+});
 ```
 
-Also confirmed: the `.replit` `[[ports]]` table must have exactly one entry mapping the server's local port to `externalPort = 80`. Extra stale mappings (pointing at ports where nothing listens) silently make the primary bare URL serve nothing.
+**Also confirmed:** the `.replit` `[[ports]]` table must have exactly one entry mapping the server's local port to `externalPort = 80`. Stale extra mappings (pointing at ports where nothing listens) silently make the primary bare URL serve nothing.
+
+**Note:** An unconditional `hmr: { clientPort: 443 }` also appears to fix the white screen on Replit, but carries a hidden cost on every other environment.
