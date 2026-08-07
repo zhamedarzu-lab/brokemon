@@ -87,13 +87,13 @@ export const ITEMS: Record<ItemId, ItemDef> = {
   },
   coffee: {
     id: "coffee",
-    name: "Gas Station Coffee",
-    price: 2,
-    desc: "Burnt, scalding, effective.",
+    name: "Coffee",
+    price: 3,
+    desc: "Hot, real, and served in an actual mug.",
     consumable: true,
     minutes: 5,
-    effect: { energy: +22, thirst: +6, morale: +5, health: -2 },
-    flavor: "Your hands stop shaking. That's either the coffee or the caffeine debt.",
+    effect: { thirst: +30, morale: +10, energy: +12 },
+    flavor: "Small pleasure. It counts.",
   },
   soap: {
     id: "soap",

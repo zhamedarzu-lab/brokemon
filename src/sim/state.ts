@@ -85,6 +85,9 @@ export interface GameState {
   mayor: boolean;
   won: boolean;
 
+  /** Days remaining on the weekly bus pass. 0 means none purchased or already expired. */
+  busPassDaysLeft: number;
+
   /** One-shot narrative flags. */
   flags: Record<string, number>;
   log: LogLine[];
@@ -140,6 +143,8 @@ export function createState(seed = Date.now() >>> 0): GameState {
     businessOwned: false,
     mayor: false,
     won: false,
+
+    busPassDaysLeft: 0,
 
     flags: {},
     log: [],

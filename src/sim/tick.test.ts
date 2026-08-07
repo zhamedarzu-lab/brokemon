@@ -111,6 +111,41 @@ describe("advance", () => {
   });
 });
 
+describe("bus pass expiry", () => {
+  it("decrements busPassDaysLeft each day", () => {
+    const s = fed();
+    s.inventory.busPass = 1;
+    s.busPassDaysLeft = 7;
+    advance(s, new Rng(1), { minutes: 24 * HOUR });
+    expect(s.busPassDaysLeft).toBe(6);
+    expect(s.inventory.busPass).toBe(1);
+  });
+
+  it("removes the bus pass from inventory when the counter hits zero", () => {
+    const s = fed();
+    s.inventory.busPass = 1;
+    s.busPassDaysLeft = 1;
+    advance(s, new Rng(1), { minutes: 24 * HOUR });
+    expect(s.busPassDaysLeft).toBe(0);
+    expect(s.inventory.busPass).toBeUndefined();
+  });
+
+  it("logs a message when the pass expires", () => {
+    const s = fed();
+    s.inventory.busPass = 1;
+    s.busPassDaysLeft = 1;
+    advance(s, new Rng(1), { minutes: 24 * HOUR });
+    expect(s.log.some((l) => l.text.toLowerCase().includes("expired"))).toBe(true);
+  });
+
+  it("does not touch inventory when busPassDaysLeft is already zero", () => {
+    const s = fed();
+    s.busPassDaysLeft = 0;
+    advance(s, new Rng(1), { minutes: 24 * HOUR });
+    expect(s.inventory.busPass).toBeUndefined();
+  });
+});
+
 describe("policeCheck", () => {
   const heightsTile = { x: 20, y: 12 };
 

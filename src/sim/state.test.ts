@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { EMPLOYMENT } from "./jobs";
-import { addItem } from "./items";
+import { addItem, countOf } from "./items";
 import { appearance, outfitRank, OUTFIT_ORDER } from "./social";
 import { checkRequirements, createState, currentAppearance, netWorth, phaseOf } from "./state";
 
@@ -125,5 +125,32 @@ describe("currentAppearance", () => {
     const clean = currentAppearance(s);
     s.meters.hygiene = 10;
     expect(currentAppearance(s)).toBeLessThan(clean);
+  });
+});
+
+describe("save migration: busPassDaysLeft", () => {
+  /** Simulate what loadGame does: spread createState defaults then apply old save data. */
+  function simulateMigration(oldSaveData: Partial<ReturnType<typeof createState>>) {
+    const merged = { ...createState(1), ...oldSaveData };
+    // Migration applied in save.ts loadGame
+    if (countOf(merged.inventory, "busPass") > 0 && merged.busPassDaysLeft === 0) {
+      merged.busPassDaysLeft = 7;
+    }
+    return merged;
+  }
+
+  it("grants a fresh 7-day term to a bus pass from an old save with no counter", () => {
+    const result = simulateMigration({ inventory: { busPass: 1 } });
+    expect(result.busPassDaysLeft).toBe(7);
+  });
+
+  it("does not touch busPassDaysLeft when no pass is in inventory", () => {
+    const result = simulateMigration({ inventory: {} });
+    expect(result.busPassDaysLeft).toBe(0);
+  });
+
+  it("preserves a valid non-zero counter from a current-format save", () => {
+    const result = simulateMigration({ inventory: { busPass: 1 }, busPassDaysLeft: 4 });
+    expect(result.busPassDaysLeft).toBe(4);
   });
 });

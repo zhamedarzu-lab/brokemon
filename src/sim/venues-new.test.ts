@@ -119,7 +119,7 @@ describe("diner venue", () => {
     bot.goto("diner");
     bot.drive(bot.press(), "coffee");
     expect(bot.s.meters.energy).toBeGreaterThan(40);
-    expect(bot.s.cash).toBe(8); // 10 - 2
+    expect(bot.s.cash).toBe(7); // 10 - 3
   });
 
   it("tap water is free and raises thirst", () => {
@@ -179,7 +179,7 @@ describe("outskirts bus stop", () => {
     const bot = new Player(13);
     bot.s.cash = 0;
     bot.s.inventory.busPass = 1;
-    bot.s.flags["busPassExpiry"] = 99;
+    bot.s.busPassDaysLeft = 7;
     bot.goto("outskirtsBusStop");
     const cashBefore = bot.s.cash;
     bot.drive(bot.press(), "market square");
@@ -212,17 +212,17 @@ describe("bus pass expiry", () => {
     const bot = new Player(20);
     bot.s.meters = { hunger: 100, thirst: 100, hygiene: 80, energy: 100, morale: 80, health: 100 };
     bot.s.inventory.busPass = 1;
-    bot.s.flags["busPassExpiry"] = Math.floor(bot.s.time / 1440) + 1; // expires tomorrow
+    bot.s.busPassDaysLeft = 1; // expires after the next day rollover
     bot.ctx.advance(24 * 60); // advance one full day
     expect(countOf(bot.s.inventory, "busPass")).toBe(0);
-    expect(bot.s.flags["busPassExpiry"]).toBeUndefined();
+    expect(bot.s.busPassDaysLeft).toBe(0);
   });
 
   it("logs expiry message", () => {
     const bot = new Player(21);
     bot.s.meters = { hunger: 100, thirst: 100, hygiene: 80, energy: 100, morale: 80, health: 100 };
     bot.s.inventory.busPass = 1;
-    bot.s.flags["busPassExpiry"] = Math.floor(bot.s.time / 1440) + 1;
+    bot.s.busPassDaysLeft = 1;
     bot.ctx.advance(24 * 60);
     expect(bot.s.log.some(l => l.text.includes("bus pass has expired"))).toBe(true);
   });
@@ -231,12 +231,12 @@ describe("bus pass expiry", () => {
     const bot = new Player(22);
     bot.s.meters = { hunger: 100, thirst: 100, hygiene: 80, energy: 100, morale: 80, health: 100 };
     bot.s.inventory.busPass = 1;
-    bot.s.flags["busPassExpiry"] = Math.floor(bot.s.time / 1440) + 5; // expires in 5 days
+    bot.s.busPassDaysLeft = 5; // expires in 5 days
     bot.ctx.advance(24 * 60); // only 1 day
     expect(countOf(bot.s.inventory, "busPass")).toBe(1);
   });
 
-  it("buying a bus pass at the Mart sets the expiry flag", () => {
+  it("buying a bus pass at the Mart sets the expiry counter", () => {
     const bot = new Player(23);
     bot.s.cash = 50;
     bot.s.meters = { hunger: 80, thirst: 80, hygiene: 70, energy: 80, morale: 70, health: 80 };
@@ -246,8 +246,7 @@ describe("bus pass expiry", () => {
     bot.goto("mart");
     bot.drive(bot.press(), "buy something", "weekly bus pass");
     expect(countOf(bot.s.inventory, "busPass")).toBe(1);
-    expect(bot.s.flags["busPassExpiry"]).toBeDefined();
-    expect(bot.s.flags["busPassExpiry"]).toBeGreaterThan(Math.floor(bot.s.time / 1440));
+    expect(bot.s.busPassDaysLeft).toBe(7);
   });
 
   it("diner marker exists on the map", () => {

@@ -265,6 +265,8 @@ const VENUE_LABELS: Record<string, string> = {
   laundromat: "Laundromat",
   recycling: "Recycling",
   busStop: "Bus stop",
+  outskirtsBusStop: "Bus stop",
+  diner: "Diner",
   jobBoard: "Job board",
   panhandleSpot: "The corner",
 };

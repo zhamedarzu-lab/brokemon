@@ -149,12 +149,13 @@ function onNewDay(s: GameState, rng: Rng, day: number, out: Interrupt[]): void {
   const target = s.debt > 400 ? 430 : s.debt > 0 ? 600 : s.bank > 2000 ? 790 : 700;
   s.credit = Math.round(s.credit + Math.sign(target - s.credit) * Math.min(6, Math.abs(target - s.credit)));
 
-  // Bus pass expires after 7 days.
-  const busExpiry = s.flags["busPassExpiry"];
-  if (busExpiry !== undefined && day >= busExpiry) {
-    removeItem(s.inventory, "busPass");
-    delete s.flags["busPassExpiry"];
-    pushLog(s, "Your weekly bus pass has expired.", "system");
+  // Bus pass expiry: count down daily and remove when exhausted.
+  if (s.busPassDaysLeft > 0) {
+    s.busPassDaysLeft -= 1;
+    if (s.busPassDaysLeft === 0) {
+      removeItem(s.inventory, "busPass");
+      pushLog(s, "Your weekly bus pass has expired.", "plain");
+    }
   }
 
   chargeRent(s, day, out);

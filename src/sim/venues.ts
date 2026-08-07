@@ -228,9 +228,12 @@ function shop(ctx: ActionCtx, title: string, stock: ItemId[]): Prompt {
       run: () => {
         s.cash -= price;
         if (id === "lotteryTicket") return scratchCard(ctx);
-        addItem(s.inventory, id);
         if (id === "busPass") {
-          s.flags["busPassExpiry"] = Math.floor(s.time / 1440) + 7;
+          // Renewal: don't stack a second pass in inventory; just reset the counter.
+          if (countOf(s.inventory, "busPass") === 0) addItem(s.inventory, id);
+          s.busPassDaysLeft = 7;
+        } else {
+          addItem(s.inventory, id);
         }
         pushLog(s, `Bought ${def.name} for $${price}.`, "money");
         return shop(ctx, title, stock);
@@ -1108,53 +1111,6 @@ const busStop: Venue = (ctx) => {
   );
 };
 
-/* --------------------------------------------------- outskirts bus stop */
-
-const outskirtsBusStop: Venue = (ctx) => {
-  const s = ctx.state;
-  const hasPass = countOf(s.inventory, "busPass") > 0;
-  const fare = 3;
-
-  const choices: Choice[] = [
-    {
-      label: "The Outskirts",
-      hint: "you're here",
-      locked: "You are already at this stop",
-    },
-    makeRide(ctx, "Market Square", markerPos("busStop"), hasPass, fare),
-    {
-      label: "Wait",
-      run: () => {
-        ctx.advance(15);
-        return say("Bus Stop", "You find a spot and kill some time. The next bus will come when it comes.");
-      },
-    },
-  ];
-
-  return menu(
-    "Bus Stop — The Outskirts",
-    hasPass
-      ? ["You have a weekly pass. Show it and get on."]
-      : [`$${fare} a ride, exact change.`],
-    choices,
-  );
-};
-
-function makeRide(ctx: ActionCtx, name: string, dest: { x: number; y: number }, hasPass: boolean, fare: number): Choice {
-  const s = ctx.state;
-  if (!hasPass && s.cash < fare) return { label: name, hint: `$${fare}`, locked: "You don't have the fare" };
-  return {
-    label: name,
-    hint: hasPass ? "pass" : `$${fare}`,
-    run: () => {
-      if (!hasPass) s.cash -= fare;
-      ctx.advance(12, { sheltered: true });
-      ctx.teleport(dest.x, dest.y);
-      return menu("Bus", [`Twelve minutes and you're at ${name}.`], [BACK]);
-    },
-  };
-}
-
 /* ------------------------------------------------------------------ diner */
 
 const diner: Venue = (ctx) => {
@@ -1229,6 +1185,53 @@ const diner: Venue = (ctx) => {
   );
 };
 
+/* --------------------------------------------------- outskirts bus stop */
+
+const outskirtsBusStop: Venue = (ctx) => {
+  const s = ctx.state;
+  const hasPass = countOf(s.inventory, "busPass") > 0;
+  const fare = 3;
+
+  const choices: Choice[] = [
+    {
+      label: "The Outskirts",
+      hint: "you're here",
+      locked: "You are already at this stop",
+    },
+    makeRide(ctx, "Market Square", markerPos("busStop"), hasPass, fare),
+    {
+      label: "Wait",
+      run: () => {
+        ctx.advance(15);
+        return say("Bus Stop", "You find a place to sit and wait. The bus runs on its own schedule.");
+      },
+    },
+  ];
+
+  return menu(
+    "Bus Stop — The Outskirts",
+    hasPass
+      ? ["You have a weekly pass. Show it and get on."]
+      : [`$${fare} a ride, exact change. Pick up a weekly pass at the Mart for $${ITEMS.busPass.price}.`],
+    choices,
+  );
+};
+
+function makeRide(ctx: ActionCtx, name: string, dest: { x: number; y: number }, hasPass: boolean, fare: number): Choice {
+  const s = ctx.state;
+  if (!hasPass && s.cash < fare) return { label: name, hint: `$${fare}`, locked: "You don't have the fare" };
+  return {
+    label: name,
+    hint: hasPass ? "pass" : `$${fare}`,
+    run: () => {
+      if (!hasPass) s.cash -= fare;
+      ctx.advance(12, { sheltered: true });
+      ctx.teleport(dest.x, dest.y);
+      return menu("Bus", [`Twelve minutes and you're at ${name}.`], [BACK]);
+    },
+  };
+}
+
 /* ---------------------------------------------------------------- victory */
 
 export function checkVictory(ctx: ActionCtx, prompt: Prompt): Prompt {
@@ -1270,7 +1273,6 @@ export const VENUES: Record<string, Venue> = {
   corporatePlaza,
   jobBoard,
   busStop,
-  outskirtsBusStop,
   diner,
+  outskirtsBusStop,
 };
-
