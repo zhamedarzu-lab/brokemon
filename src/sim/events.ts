@@ -870,16 +870,45 @@ const EVENTS: EventDef[] = [
 /** Steps between encounter rolls. */
 export const EVENT_STEP_INTERVAL = 26;
 
+/**
+ * Recency-cooldown constants.
+ * An event seen within COOLDOWN_FULL_MIN minutes has its weight multiplied by
+ * COOLDOWN_DECAY_FACTOR.  The multiplier recovers linearly to 1.0 by
+ * COOLDOWN_RECOVER_MIN minutes after the last sighting.
+ */
+export const COOLDOWN_FULL_MIN = 60;
+export const COOLDOWN_RECOVER_MIN = 180;
+export const COOLDOWN_DECAY_FACTOR = 0.2;
+
+/**
+ * Return the weight multiplier (0.2 → 1.0) for an event based on how recently
+ * it was last seen.  The last-seen timestamp is stored in s.flags as
+ * `ev_last:<id>` (absolute in-game minute).
+ */
+function cooldownMultiplier(s: GameState, id: string): number {
+  const lastSeen = s.flags[`ev_last:${id}`];
+  if (!lastSeen) return 1;
+  const elapsed = s.time - lastSeen;
+  if (elapsed >= COOLDOWN_RECOVER_MIN) return 1;
+  if (elapsed <= COOLDOWN_FULL_MIN) return COOLDOWN_DECAY_FACTOR;
+  // Linear recovery between COOLDOWN_FULL_MIN and COOLDOWN_RECOVER_MIN.
+  const t = (elapsed - COOLDOWN_FULL_MIN) / (COOLDOWN_RECOVER_MIN - COOLDOWN_FULL_MIN);
+  return COOLDOWN_DECAY_FACTOR + t * (1 - COOLDOWN_DECAY_FACTOR);
+}
+
 export function rollEvent(ctx: ActionCtx): Prompt | null {
   const s = ctx.state;
   const zone = zoneAt(s.player.pos.y).id;
   const fired: Record<string, number> = s.flags;
 
   const entries = EVENTS.filter((e) => !(e.once && fired[`ev:${e.id}`])).map(
-    (e) => [e, e.weight(s, zone)] as const,
+    (e) => [e, e.weight(s, zone) * cooldownMultiplier(s, e.id)] as const,
   );
   const picked = ctx.rng.weighted(entries);
   if (!picked) return null;
   if (picked.once) fired[`ev:${picked.id}`] = 1;
+  // Record the last-seen time for cooldown tracking (skip once-only events —
+  // they can never repeat, so cooldown is irrelevant).
+  if (!picked.once) fired[`ev_last:${picked.id}`] = s.time;
   return picked.build(ctx);
 }

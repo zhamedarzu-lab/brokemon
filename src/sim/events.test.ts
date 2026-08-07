@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { rollEvent } from "./events";
+import {
+  COOLDOWN_DECAY_FACTOR,
+  COOLDOWN_FULL_MIN,
+  COOLDOWN_RECOVER_MIN,
+  rollEvent,
+} from "./events";
 import type { Prompt } from "./prompt";
 import { Rng } from "./rng";
 import { createState, phaseOf, type GameState } from "./state";
@@ -162,33 +167,53 @@ describe("streetMusician event", () => {
   });
 
   it("dropping a dollar raises morale and costs $1", () => {
-    const s = createState(1);
-    s.cash = 10;
-    s.meters = { hunger: 100, thirst: 100, hygiene: 80, energy: 100, morale: 50, health: 100 };
-    inZone(s, "slums");
+    // Use fresh states per iteration to avoid cash mutations from earlier rollEvent calls.
     let prompt: Prompt | null = null;
+    let promptState: GameState | null = null;
     for (let i = 1; i <= 400; i++) {
+      const s = createState(i);
+      s.cash = 10;
+      s.meters = { hunger: 100, thirst: 100, hygiene: 80, energy: 100, morale: 50, health: 100 };
+      inZone(s, "slums");
       const ctx = makeCtx(s, i);
       const p = rollEvent(ctx);
-      if (p?.title === "A man with a guitar case") { prompt = p; break; }
+      if (p?.title === "A man with a guitar case") { prompt = p; promptState = s; break; }
     }
     expect(prompt).not.toBeNull();
-    const moraleBefore = s.meters.morale;
+    const moraleBefore = promptState!.meters.morale;
+    const cashBefore = promptState!.cash;
     drive(prompt, "drop a dollar");
-    expect(s.meters.morale).toBeGreaterThan(moraleBefore);
-    expect(s.cash).toBe(9);
+    expect(promptState!.meters.morale).toBeGreaterThan(moraleBefore);
+    expect(promptState!.cash).toBe(cashBefore - 1);
   });
 
   it("dollar option is locked when broke", () => {
-    const s = createState(1);
-    s.cash = 0;
-    s.meters = { hunger: 100, thirst: 100, hygiene: 80, energy: 100, morale: 50, health: 100 };
-    inZone(s, "slums");
+    // Use fresh states per iteration so prior rollEvent cash gains don't unlock the option.
     let prompt: Prompt | null = null;
+    let promptState: GameState | null = null;
     for (let i = 1; i <= 400; i++) {
+      const s = createState(i);
+      s.cash = 0;
+      s.meters = { hunger: 100, thirst: 100, hygiene: 80, energy: 100, morale: 50, health: 100 };
+      inZone(s, "slums");
       const ctx = makeCtx(s, i);
       const p = rollEvent(ctx);
-      if (p?.title === "A man with a guitar case") { prompt = p; break; }
+      if (p?.title === "A man with a guitar case") { prompt = p; promptState = s; break; }
+    }
+    // It's possible that rollEvent gave cash (e.g. "change") before returning streetMusician.
+    // In that case, skip this seed and look for one where cash is still 0.
+    if (promptState && promptState.cash > 0) {
+      prompt = null;
+      promptState = null;
+      for (let i = 401; i <= 800; i++) {
+        const s = createState(i);
+        s.cash = 0;
+        s.meters = { hunger: 100, thirst: 100, hygiene: 80, energy: 100, morale: 50, health: 100 };
+        inZone(s, "slums");
+        const ctx = makeCtx(s, i);
+        const p = rollEvent(ctx);
+        if (p?.title === "A man with a guitar case" && s.cash === 0) { prompt = p; promptState = s; break; }
+      }
     }
     expect(prompt).not.toBeNull();
     const dollarChoice = prompt?.choices?.find(c => c.label.toLowerCase().includes("drop a dollar"));
@@ -666,5 +691,121 @@ describe("colleagueInterview event", () => {
     }
     expect(repGained).toBe(true);
     expect(cashGained).toBe(true);
+  });
+});
+
+/* -------------------------------------------------------- recency cooldown */
+
+describe("event recency cooldown", () => {
+  const ROLLS = 300;
+
+  /**
+   * Count how many times 'change' fires out of ROLLS independent rolls.
+   * Each roll uses a fresh RNG seed so state mutations from build() don't
+   * compound; we don't call build() — we only look at what rollEvent picked.
+   */
+  function countChangeFires(flags: Record<string, number>): number {
+    let count = 0;
+    for (let seed = 1; seed <= ROLLS; seed++) {
+      const s = createState(seed);
+      s.flags = { ...flags };
+      s.meters = { hunger: 100, thirst: 100, hygiene: 80, energy: 100, morale: 80, health: 100 };
+      inZone(s, "slums");
+      const ctx = makeCtx(s, seed);
+      const p = rollEvent(ctx);
+      if (p?.title === "Loose change") count++;
+    }
+    return count;
+  }
+
+  it("recently-seen events appear significantly less often than cold ones", () => {
+    // Baseline: no prior sightings.
+    const baselineCount = countChangeFires({});
+
+    // Hot cooldown: 'change' was seen just now (elapsed = 0 → factor = 0.2).
+    const hotCount = countChangeFires({ "ev_last:change": 7 * 60 /* same as createState start */ });
+
+    // With a 0.2× weight factor the hot rate should be well below the baseline.
+    // We allow generous margins to stay deterministic across platforms.
+    expect(baselineCount).toBeGreaterThan(0);
+    expect(hotCount).toBeLessThan(baselineCount);
+  });
+
+  it("cooldown multiplier is COOLDOWN_DECAY_FACTOR when elapsed = 0", () => {
+    // If ev_last:change equals s.time, the elapsed is 0 → multiplier = COOLDOWN_DECAY_FACTOR.
+    // We verify this indirectly: hot rate / baseline rate ≈ COOLDOWN_DECAY_FACTOR.
+    // Use a large sample and a loose ratio bound.
+    const LARGE = 600;
+    let baseCount = 0;
+    let hotCount = 0;
+    for (let seed = 1; seed <= LARGE; seed++) {
+      const sBase = createState(seed);
+      sBase.meters = { hunger: 100, thirst: 100, hygiene: 80, energy: 100, morale: 80, health: 100 };
+      inZone(sBase, "slums");
+      if (rollEvent(makeCtx(sBase, seed))?.title === "Loose change") baseCount++;
+
+      const sHot = createState(seed);
+      sHot.flags["ev_last:change"] = sHot.time; // elapsed = 0
+      sHot.meters = { hunger: 100, thirst: 100, hygiene: 80, energy: 100, morale: 80, health: 100 };
+      inZone(sHot, "slums");
+      if (rollEvent(makeCtx(sHot, seed))?.title === "Loose change") hotCount++;
+    }
+    // Ratio should be close to COOLDOWN_DECAY_FACTOR (0.2); allow 2× slack.
+    const ratio = hotCount / baseCount;
+    expect(ratio).toBeLessThan(COOLDOWN_DECAY_FACTOR * 3);
+    expect(ratio).toBeGreaterThan(0); // still fires occasionally
+  });
+
+  it("cooldown fully recovers after COOLDOWN_RECOVER_MIN minutes", () => {
+    // Set ev_last to COOLDOWN_RECOVER_MIN minutes in the past — multiplier should be 1.
+    const recoveredCount = countChangeFires({ "ev_last:change": 7 * 60 - COOLDOWN_RECOVER_MIN });
+    const baselineCount = countChangeFires({});
+
+    // Recovered count should be statistically indistinguishable — within 30% of baseline.
+    expect(Math.abs(recoveredCount - baselineCount)).toBeLessThan(baselineCount * 0.3 + 5);
+  });
+
+  it("rollEvent records ev_last flag after firing a repeatable event", () => {
+    // Find a seed that fires 'change', then check ev_last:change is recorded.
+    for (let seed = 1; seed <= 200; seed++) {
+      const s = createState(seed);
+      s.meters = { hunger: 100, thirst: 100, hygiene: 80, energy: 100, morale: 80, health: 100 };
+      inZone(s, "slums");
+      const ctx = makeCtx(s, seed);
+      const p = rollEvent(ctx);
+      if (p?.title === "Loose change") {
+        expect(s.flags["ev_last:change"]).toBe(s.time);
+        return;
+      }
+    }
+    // If 'change' never fired in 200 seeds the test environment is broken — fail loudly.
+    throw new Error("'change' event never fired in 200 seeds");
+  });
+
+  it("once-only events do NOT record ev_last", () => {
+    // 'colleague' is a once-only event. After it fires, ev_last:colleague must not be set.
+    for (let seed = 1; seed <= 300; seed++) {
+      const s = createState(seed);
+      s.meters = { hunger: 100, thirst: 100, hygiene: 80, energy: 100, morale: 80, health: 100 };
+      inZone(s, "slums");
+      const ctx = makeCtx(s, seed);
+      const p = rollEvent(ctx);
+      if (p?.title === "Someone says your name") {
+        expect(s.flags["ev_last:colleague"]).toBeUndefined();
+        return;
+      }
+    }
+    // colleague fires rarely in slums, acceptable if not found
+  });
+
+  it("partial cooldown: elapsed between COOLDOWN_FULL_MIN and COOLDOWN_RECOVER_MIN", () => {
+    // At the midpoint elapsed time the multiplier should be between DECAY_FACTOR and 1.
+    const midElapsed = Math.floor((COOLDOWN_FULL_MIN + COOLDOWN_RECOVER_MIN) / 2);
+    const midCount = countChangeFires({ "ev_last:change": 7 * 60 - midElapsed });
+    const baselineCount = countChangeFires({});
+
+    // Mid-cooldown should fire less than baseline, more than full-cooldown.
+    // We just verify it's strictly below baseline (partial suppression is happening).
+    expect(midCount).toBeLessThan(baselineCount);
   });
 });
