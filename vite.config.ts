@@ -5,7 +5,7 @@ export default defineConfig({
   build: { target: "es2022", outDir: "dist" },
   server: {
     host: true,
-    port: 5000,
+    port: 3000,
     allowedHosts: true,
   },
 });
