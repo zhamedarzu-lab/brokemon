@@ -276,7 +276,7 @@ function collapse(s: GameState, rng: Rng, out: Interrupt[]): Interrupt {
 }
 
 /** Minimum in-game minutes standing still before a loitering check can fire. */
-const LOITER_IDLE_MINUTES = 5;
+const LOITER_IDLE_MINUTES = 30;
 
 /**
  * Zone enforcement. Only fires after the player has been stationary for at
