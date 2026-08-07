@@ -1087,7 +1087,13 @@ const busStop: Venue = (ctx) => {
     },
     makeRide(ctx, "The Outskirts", { x: markerPos("hostel").x, y: markerPos("hostel").y + 1 }, hasPass, fare),
     makeRide(ctx, "The Heights gate", { x: 23, y: 15 }, hasPass, fare),
-    { label: "Wait", run: () => null },
+    {
+      label: "Wait",
+      run: () => {
+        ctx.advance(15);
+        return say("Bus Stop", "You find a bench and kill some time. The next bus will come when it comes.");
+      },
+    },
   ];
 
   return menu(

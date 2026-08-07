@@ -6,6 +6,7 @@ import { interact } from "./sim/actions";
 import { EVENT_STEP_INTERVAL, rollEvent } from "./sim/events";
 import type { ItemId } from "./sim/items";
 import { menu, say, type Prompt } from "./sim/prompt";
+import { EMPLOYMENT } from "./sim/jobs";
 import { Rng } from "./sim/rng";
 import { clearSave, hasSave, loadGame, saveGame } from "./sim/save";
 import { createState, pushLog, type GameState } from "./sim/state";
@@ -15,7 +16,7 @@ import { cap, consume, type ActionCtx } from "./sim/work";
 import { Dialogue } from "./ui/dialogue";
 import { Hud } from "./ui/hud";
 import { Journal } from "./ui/journal";
-import { isSolid } from "./world/map";
+import { isSolid, markerPos } from "./world/map";
 
 const STEP_MS = 180;
 const BIKE_STEP_MS = 95;
@@ -315,7 +316,9 @@ class Game {
 
 function interruptPrompt(i: Interrupt, ctx: ActionCtx): Prompt | null {
   switch (i.kind) {
-    case "collapse":
+    case "collapse": {
+      const cc = markerPos("communityCenter");
+      ctx.teleport(cc.x, cc.y);
       return menu(
         "The clinic",
         [
@@ -326,6 +329,7 @@ function interruptPrompt(i: Interrupt, ctx: ActionCtx): Prompt | null {
         [{ label: "Get up" }],
         "bad",
       );
+    }
 
     case "police": {
       if (i.escorted) {
@@ -363,8 +367,14 @@ function interruptPrompt(i: Interrupt, ctx: ActionCtx): Prompt | null {
       return menu("Overnight", i.lines, [{ label: "Good" }], "money");
 
     case "weather":
+      return say("Weather", i.text);
+
     case "fired":
-      return null;
+      return say(
+        "Let go",
+        [`You are no longer employed at ${EMPLOYMENT[i.job as keyof typeof EMPLOYMENT]?.employer ?? i.job}.`],
+        "bad",
+      );
   }
 }
 

@@ -175,7 +175,7 @@ export const ITEMS: Record<ItemId, ItemDef> = {
     id: "recyclables",
     name: "Recyclables",
     sellPrice: 1,
-    desc: "Cans and bottles. Ten cents each, and the depot rounds down.",
+    desc: "Cans and bottles. A dollar each at the depot.",
     consumable: false,
     gear: true,
   },
