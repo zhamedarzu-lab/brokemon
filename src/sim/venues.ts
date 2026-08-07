@@ -229,6 +229,9 @@ function shop(ctx: ActionCtx, title: string, stock: ItemId[]): Prompt {
         s.cash -= price;
         if (id === "lotteryTicket") return scratchCard(ctx);
         addItem(s.inventory, id);
+        if (id === "busPass") {
+          s.flags["busPassExpiry"] = Math.floor(s.time / 1440) + 7;
+        }
         pushLog(s, `Bought ${def.name} for $${price}.`, "money");
         return shop(ctx, title, stock);
       },
@@ -1085,7 +1088,7 @@ const busStop: Venue = (ctx) => {
       hint: "you're here",
       locked: "You are already at this stop",
     },
-    makeRide(ctx, "The Outskirts", { x: markerPos("hostel").x, y: markerPos("hostel").y + 1 }, hasPass, fare),
+    makeRide(ctx, "The Outskirts", markerPos("outskirtsBusStop"), hasPass, fare),
     makeRide(ctx, "The Heights gate", { x: 23, y: 15 }, hasPass, fare),
     {
       label: "Wait",
@@ -1105,6 +1108,38 @@ const busStop: Venue = (ctx) => {
   );
 };
 
+/* --------------------------------------------------- outskirts bus stop */
+
+const outskirtsBusStop: Venue = (ctx) => {
+  const s = ctx.state;
+  const hasPass = countOf(s.inventory, "busPass") > 0;
+  const fare = 3;
+
+  const choices: Choice[] = [
+    {
+      label: "The Outskirts",
+      hint: "you're here",
+      locked: "You are already at this stop",
+    },
+    makeRide(ctx, "Market Square", markerPos("busStop"), hasPass, fare),
+    {
+      label: "Wait",
+      run: () => {
+        ctx.advance(15);
+        return say("Bus Stop", "You find a spot and kill some time. The next bus will come when it comes.");
+      },
+    },
+  ];
+
+  return menu(
+    "Bus Stop — The Outskirts",
+    hasPass
+      ? ["You have a weekly pass. Show it and get on."]
+      : [`$${fare} a ride, exact change.`],
+    choices,
+  );
+};
+
 function makeRide(ctx: ActionCtx, name: string, dest: { x: number; y: number }, hasPass: boolean, fare: number): Choice {
   const s = ctx.state;
   if (!hasPass && s.cash < fare) return { label: name, hint: `$${fare}`, locked: "You don't have the fare" };
@@ -1119,6 +1154,80 @@ function makeRide(ctx: ActionCtx, name: string, dest: { x: number; y: number }, 
     },
   };
 }
+
+/* ------------------------------------------------------------------ diner */
+
+const diner: Venue = (ctx) => {
+  const s = ctx.state;
+  if (!withinHours(s.time, 6, 22)) return say("Route 1 Diner", "Closed. Open 6AM to 10PM.");
+
+  const hotMeal = ITEMS.hotMeal;
+  const coffee = ITEMS.coffee;
+  const choices: Choice[] = [];
+
+  choices.push(
+    s.cash >= hotMeal.price!
+      ? {
+          label: hotMeal.name,
+          hint: `$${hotMeal.price}`,
+          run: () => {
+            s.cash -= hotMeal.price!;
+            ctx.advance(hotMeal.minutes!, { sheltered: true });
+            applyDelta(s.meters, hotMeal.effect!);
+            pushLog(s, `Hot meal at the diner — $${hotMeal.price}.`, "good");
+            return menu(
+              "Route 1 Diner",
+              ["A plate of food. Actual food, hot, on a table.", hotMeal.flavor!],
+              [BACK],
+              "good",
+            );
+          },
+        }
+      : { label: hotMeal.name, hint: `$${hotMeal.price}`, locked: "You can't afford it" },
+  );
+
+  choices.push(
+    s.cash >= coffee.price!
+      ? {
+          label: coffee.name,
+          hint: `$${coffee.price}`,
+          run: () => {
+            s.cash -= coffee.price!;
+            ctx.advance(coffee.minutes!, { sheltered: true });
+            applyDelta(s.meters, coffee.effect!);
+            pushLog(s, `Coffee at the diner — $${coffee.price}.`, "money");
+            return menu(
+              "Route 1 Diner",
+              ["A mug arrives without ceremony.", coffee.flavor!],
+              [BACK],
+            );
+          },
+        }
+      : { label: coffee.name, hint: `$${coffee.price}`, locked: "You can't afford it" },
+  );
+
+  choices.push({
+    label: "Ask for tap water",
+    hint: "free, 5 min",
+    run: () => {
+      ctx.advance(5, { sheltered: true });
+      applyDelta(s.meters, { thirst: +18, morale: +2 });
+      return menu(
+        "Route 1 Diner",
+        ["She puts it on the table without being asked. The glass is clean."],
+        [BACK],
+        "good",
+      );
+    },
+  });
+
+  choices.push(BACK);
+  return menu(
+    "Route 1 Diner",
+    ["Twelve stools, a counter, and a laminated menu that hasn't changed in thirty years."],
+    choices,
+  );
+};
 
 /* ---------------------------------------------------------------- victory */
 
@@ -1161,5 +1270,7 @@ export const VENUES: Record<string, Venue> = {
   corporatePlaza,
   jobBoard,
   busStop,
+  outskirtsBusStop,
+  diner,
 };
 

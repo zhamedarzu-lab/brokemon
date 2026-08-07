@@ -6,6 +6,7 @@ import { rollWeather, WEATHER, weatherDuration } from "./weather";
 import { HOUSING } from "./social";
 import type { Rng } from "./rng";
 import { currentAppearance } from "./state";
+import { removeItem } from "./items";
 
 /**
  * Something that has to stop the player and be acknowledged. The renderer
@@ -147,6 +148,14 @@ function onNewDay(s: GameState, rng: Rng, day: number, out: Interrupt[]): void {
   // Credit score drifts towards how you're actually living.
   const target = s.debt > 400 ? 430 : s.debt > 0 ? 600 : s.bank > 2000 ? 790 : 700;
   s.credit = Math.round(s.credit + Math.sign(target - s.credit) * Math.min(6, Math.abs(target - s.credit)));
+
+  // Bus pass expires after 7 days.
+  const busExpiry = s.flags["busPassExpiry"];
+  if (busExpiry !== undefined && day >= busExpiry) {
+    removeItem(s.inventory, "busPass");
+    delete s.flags["busPassExpiry"];
+    pushLog(s, "Your weekly bus pass has expired.", "system");
+  }
 
   chargeRent(s, day, out);
   payPassiveIncome(s, out);
