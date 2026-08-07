@@ -278,6 +278,42 @@ export function pushLog(s: GameState, text: string, tone: LogLine["tone"] = "pla
   if (s.log.length > 200) s.log.splice(0, s.log.length - 200);
 }
 
+export function reputationLabel(rep: number): string {
+  if (rep >= 60) return "Respected";
+  if (rep >= 30) return "Reliable";
+  if (rep >= 0) return "Neutral";
+  if (rep >= -30) return "Spotty";
+  return "Infamous";
+}
+
+const REP_CROSS_UP: Partial<Record<string, string>> = {
+  Spotty:    "You've clawed back a little ground. People round here would call you Spotty — still rough, but not Infamous.",
+  Neutral:   "The slate clears a little. People round here would call you Neutral — no stain on your name.",
+  Reliable:  "Word gets around. People are starting to call you Reliable.",
+  Respected: "Your name means something in this town now. You've earned the word Respected.",
+};
+
+const REP_CROSS_DOWN: Partial<Record<string, string>> = {
+  Reliable: "The shine came off. You're Reliable now, nothing more.",
+  Neutral:  "You slipped. Back to Neutral — the goodwill is spent.",
+  Spotty:   "People are talking, and not kindly. Your name is Spotty around here.",
+  Infamous: "You're known now, for all the wrong reasons. Infamous.",
+};
+
+/**
+ * Apply a reputation delta and log a message if the descriptor tier changes.
+ * Use this instead of mutating s.reputation directly.
+ */
+export function changeReputation(s: GameState, delta: number): void {
+  const before = reputationLabel(s.reputation);
+  s.reputation += delta;
+  const after = reputationLabel(s.reputation);
+  if (after !== before) {
+    const msg = delta > 0 ? REP_CROSS_UP[after] : REP_CROSS_DOWN[after];
+    if (msg) pushLog(s, msg, delta > 0 ? "good" : "bad");
+  }
+}
+
 /**
  * Add cash to the player's wallet and credit it toward the lifetime total.
  * Use this for all income (wages, gigs, events, panhandling, recycling, etc.)

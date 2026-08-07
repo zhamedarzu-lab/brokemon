@@ -3,7 +3,7 @@ import { applyDelta } from "./meters";
 import { menu, say, type Choice, type Prompt } from "./prompt";
 import type { Rng } from "./rng";
 import { HOUSING, type HousingId } from "./social";
-import { canDoGig, checkRequirements, currentAppearance, earnCash, pushLog, type GameState } from "./state";
+import { canDoGig, changeReputation, checkRequirements, currentAppearance, earnCash, pushLog, type GameState } from "./state";
 import { hourOf, minuteOfDay, MINUTES_PER_DAY, minutesUntilHour, withinHours } from "./time";
 import { WEATHER } from "./weather";
 import { ITEMS, removeItem, type ItemId } from "./items";
@@ -97,7 +97,7 @@ export function workShift(ctx: ActionCtx, job: EmploymentId): Prompt {
     const oldBase = s.employmentPayOverride[job] ?? def.pay;
     const newBase = Math.round(oldBase * 1.05);
     s.employmentPayOverride[job] = newBase;
-    s.reputation += 2;
+    changeReputation(s, 2);
     lines.push(`Ten shifts in. Your pay rate goes up to $${newBase} a shift.`);
   }
 
@@ -111,7 +111,7 @@ function maybeFire(s: GameState, prompt: Prompt): Prompt {
   const job = EMPLOYMENT[s.employment];
   s.employment = null;
   s.strikes = 0;
-  s.reputation -= 5;
+  changeReputation(s, -5);
   s.meters.morale = Math.max(0, s.meters.morale - 15);
   pushLog(s, `You were let go from ${job.employer}.`, "bad");
   return {
@@ -264,7 +264,7 @@ export function collectAssignment(ctx: ActionCtx): Prompt {
   const a = s.assignment;
   if (!a || !a.ready) return say("Job Board", "Nothing to collect yet.");
   earnCash(s, a.pay);
-  s.reputation += 1;
+  changeReputation(s, 1);
   s.gigsToday[a.gig] = (s.gigsToday[a.gig] ?? 0) + 1;
   removeItem(s.inventory, "flyers", 1);
   s.assignment = null;

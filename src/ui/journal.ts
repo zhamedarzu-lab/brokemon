@@ -2,16 +2,8 @@ import { ITEMS, type ItemId } from "../sim/items";
 import { EMPLOYMENT, EMPLOYMENT_ORDER, MAX_CREDITS } from "../sim/jobs";
 import { METER_LABEL, METER_ORDER } from "../sim/meters";
 import { HOUSING, OUTFITS } from "../sim/social";
-import { checkRequirements, currentAppearance, netWorth, phaseOf, PHASE_NAMES, type GameState } from "../sim/state";
+import { checkRequirements, currentAppearance, netWorth, phaseOf, PHASE_NAMES, reputationLabel, type GameState } from "../sim/state";
 import { formatClock } from "../sim/time";
-
-function reputationLabel(rep: number): string {
-  if (rep >= 60) return "Respected";
-  if (rep >= 30) return "Reliable";
-  if (rep >= 0) return "Neutral";
-  if (rep >= -30) return "Spotty";
-  return "Infamous";
-}
 
 function investmentDisplay(s: GameState): string {
   if (s.investments === 0) return "—";

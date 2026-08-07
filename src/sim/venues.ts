@@ -14,7 +14,7 @@ import {
 import { applyDelta } from "./meters";
 import { menu, say, type Choice, type Prompt } from "./prompt";
 import { HOUSING, OUTFITS, OUTFIT_ORDER, outfitRank, type OutfitId } from "./social";
-import { canDoGig, checkRequirements, currentAppearance, earnCash, phaseOf, pushLog, setWon } from "./state";
+import { canDoGig, changeReputation, checkRequirements, currentAppearance, earnCash, phaseOf, pushLog, setWon } from "./state";
 import { withinHours } from "./time";
 import {
   collectAssignment,
@@ -879,7 +879,7 @@ const corporatePlaza: Venue = (ctx) => {
               s.cash -= fromCash;
               s.bank -= BUSINESS_PRICE - fromCash;
               s.businessOwned = true;
-              s.reputation += 15;
+              changeReputation(s, 15);
               s.peakPhase = 4;
               pushLog(s, "Bought the Mart franchise.", "good");
               if (s.housing === "estate") setWon(s);
@@ -974,7 +974,7 @@ function hire(ctx: ActionCtx, id: EmploymentId): Prompt {
   const previous = s.employment;
   s.employment = id;
   s.strikes = 0;
-  s.reputation += 3;
+  changeReputation(s, 3);
   s.meters.morale = Math.min(100, s.meters.morale + 25);
   if (def.tier >= 3) s.peakPhase = Math.max(s.peakPhase, 3) as 3 | 4;
   pushLog(s, `Hired: ${def.name} at ${def.employer}.`, "good");
@@ -996,7 +996,7 @@ function runForMayor(ctx: ActionCtx): Prompt {
 
   const odds = Math.min(0.95, 0.3 + s.reputation / 120);
   if (!ctx.rng.chance(odds)) {
-    s.reputation += 5;
+    changeReputation(s, 5);
     pushLog(s, "Lost the mayoral election.", "bad");
     return menu(
       "Election night",
@@ -1008,7 +1008,7 @@ function runForMayor(ctx: ActionCtx): Prompt {
 
   s.mayor = true;
   s.peakPhase = 4;
-  s.reputation += 20;
+  changeReputation(s, 20);
   pushLog(s, "Elected mayor of Brokemon Town.", "good");
   if (s.housing === "estate") setWon(s);
   return menu(

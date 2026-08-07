@@ -2,7 +2,7 @@ import { zoneAt, type ZoneId } from "../world/map";
 import { addItem } from "./items";
 import { applyDelta } from "./meters";
 import { menu, type Choice, type Prompt } from "./prompt";
-import { currentAppearance, earnCash, phaseOf, pushLog, type GameState } from "./state";
+import { changeReputation, currentAppearance, earnCash, phaseOf, pushLog, type GameState } from "./state";
 import { hourOf } from "./time";
 import type { ActionCtx } from "./work";
 
@@ -36,7 +36,7 @@ const EVENTS: EventDef[] = [
             hint: "reputation",
             run: () => {
               s.flags.walletDone = 1;
-              s.reputation += 12;
+              changeReputation(s, 12);
               applyDelta(s.meters, { morale: +14 });
               ctx.advance(25);
               if (ctx.rng.chance(0.5)) {
@@ -68,14 +68,14 @@ const EVENTS: EventDef[] = [
             run: () => {
               s.flags.walletDone = 1;
               earnCash(s, cash);
-              s.reputation -= 6;
+              changeReputation(s, -6);
               applyDelta(s.meters, { morale: -12 });
               ctx.advance(10);
               pushLog(s, `Took $${cash} from a found wallet.`, "money");
               if (ctx.rng.chance(0.18)) {
                 const fine = 60;
                 s.debt += fine;
-                s.reputation -= 10;
+                changeReputation(s, -10);
                 return menu(
                   "A wallet on the pavement",
                   [
@@ -121,7 +121,7 @@ const EVENTS: EventDef[] = [
             label: '"Yeah. It\'s terrible for you."',
             run: () => {
               applyDelta(s.meters, { morale: +8 });
-              s.reputation -= 1;
+              changeReputation(s, -1);
               return menu("An old man at his gate", ["He blinks. He has never been answered before.", "It costs you nothing and it is the best thing that happens all day."], [close]);
             },
           },
@@ -208,7 +208,7 @@ const EVENTS: EventDef[] = [
             label: "Tell them the truth",
             run: () => {
               applyDelta(s.meters, { morale: -6 });
-              s.reputation += 4;
+              changeReputation(s, 4);
               if (ctx.rng.chance(0.4)) {
                 earnCash(s, 20);
                 s.flags.colleagueNumberGiven = 1;
@@ -247,7 +247,7 @@ const EVENTS: EventDef[] = [
           {
             label: "Yes — pass on my details",
             run: () => {
-              s.reputation += 15;
+              changeReputation(s, 15);
               earnCash(s, 40);
               pushLog(s, "Colleague job lead — $40 and a name dropped in the right room.", "good");
               return menu(
@@ -431,7 +431,7 @@ const EVENTS: EventDef[] = [
       s.flags.oldBossDone = 1;
       const look = currentAppearance(s);
       if (look >= 60) {
-        s.reputation += 8;
+        changeReputation(s, 8);
         applyDelta(s.meters, { morale: +10 });
         pushLog(s, "Ran into your old boss. Made a decent impression.", "good");
         return menu(
@@ -446,7 +446,7 @@ const EVENTS: EventDef[] = [
             {
               label: '"Getting there."',
               run: () => {
-                s.reputation += 4;
+                changeReputation(s, 4);
                 return menu("Someone you used to work for", ["They nod and trade cards.", '"Good. Keep at it."', "They say it like they remember you were worth something."], [close], "good");
               },
             },
@@ -458,7 +458,7 @@ const EVENTS: EventDef[] = [
           "good",
         );
       }
-      s.reputation -= 5;
+      changeReputation(s, -5);
       applyDelta(s.meters, { morale: -12 });
       pushLog(s, "Ran into your old boss. Awkward.", "bad");
       return menu(
@@ -499,7 +499,7 @@ const EVENTS: EventDef[] = [
             run: () => {
               ctx.advance(30, { sheltered: true });
               applyDelta(s.meters, { morale: +18, thirst: +20, energy: -12 });
-              s.reputation += 2;
+              changeReputation(s, 2);
               pushLog(s, "Networking happy hour. Two drinks and a business card.", "good");
               return menu(
                 "Happy hour",
@@ -541,7 +541,7 @@ const EVENTS: EventDef[] = [
             hint: "reputation++",
             run: () => {
               ctx.advance(20);
-              s.reputation += 20;
+              changeReputation(s, 20);
               applyDelta(s.meters, { morale: +14 });
               pushLog(s, "Profile piece in the local paper. Reputation up.", "good");
               return menu(
@@ -652,7 +652,7 @@ const EVENTS: EventDef[] = [
               ctx.advance(120, { exertion: 2.2 });
               applyDelta(s.meters, { energy: -30, hygiene: -15, hunger: -18, thirst: -20 });
               if (ctx.rng.chance(0.22)) {
-                s.reputation -= 8;
+                changeReputation(s, -8);
                 const fine = 120;
                 s.debt += fine;
                 pushLog(s, "The van job went wrong.", "bad");
@@ -702,7 +702,7 @@ const EVENTS: EventDef[] = [
     weight: (s, z) => (z === "downtown" && phaseOf(s) >= 2 && s.education >= 1 ? 2 : 0),
     build: (ctx) => {
       const s = ctx.state;
-      s.reputation += 3;
+      changeReputation(s, 3);
       return menu(
         "A card in your hand",
         [
@@ -723,7 +723,7 @@ const EVENTS: EventDef[] = [
       const s = ctx.state;
       const look = currentAppearance(s);
       if (look >= 80) {
-        s.reputation += 2;
+        changeReputation(s, 2);
         return menu("On the hill", ['A man walking a whippet says good morning as though you live here.', "You say it back. Nobody checks."], [close]);
       }
       applyDelta(s.meters, { morale: -8 });

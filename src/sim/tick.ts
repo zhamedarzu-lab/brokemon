@@ -1,5 +1,5 @@
 import { isOutdoors, zoneAt, type Zone } from "../world/map";
-import { checkPostWinGoal, hasItem, phaseOf, pushLog, setWon, type GameState, type Phase } from "./state";
+import { changeReputation, checkPostWinGoal, hasItem, phaseOf, pushLog, setWon, type GameState, type Phase } from "./state";
 import { decay, WARN_THRESHOLDS, type MeterId } from "./meters";
 import { dayOf, minuteOfDay, MINUTES_PER_DAY } from "./time";
 import { rollWeather, WEATHER, weatherDuration } from "./weather";
@@ -318,7 +318,7 @@ export function policeCheck(s: GameState, rng: Rng): Interrupt | null {
     s.debt += fine;
   }
   s.fines += fine;
-  s.reputation -= 3;
+  changeReputation(s, -3);
   s.meters.morale = Math.max(0, s.meters.morale - 10);
   pushLog(s, `Citation issued — $${fine}. Reason on the ticket: "${reason}".`, "bad");
   return { kind: "police", zone, reason, fine, escorted: true };
