@@ -252,7 +252,8 @@ export function interactionLabel(s: GameState): string | null {
   }
 }
 
-const VENUE_LABELS: Record<string, string> = {
+/** Long names, for the A-button hint. Also the source for the map nameplates. */
+export const VENUE_LABELS: Record<string, string> = {
   communityCenter: "Community Center",
   mart: "Mart",
   corporatePlaza: "Corporate Plaza",
@@ -269,5 +270,28 @@ const VENUE_LABELS: Record<string, string> = {
   diner: "Diner",
   jobBoard: "Job board",
   panhandleSpot: "The corner",
+};
+
+/**
+ * What goes on the sign over the door. Short enough to sit inside a couple of
+ * tiles at 16px, because a player standing in the street should be able to
+ * tell a hostel from a laundromat without walking into either.
+ */
+export const DOOR_SIGNS: Record<string, string> = {
+  communityCenter: "COMMUNITY",
+  mart: "MART",
+  corporatePlaza: "SILPH",
+  hostel: "HOSTEL",
+  trailer: "TO LET",
+  apartment: "APARTMENTS",
+  estate: "FOR SALE",
+  college: "COLLEGE",
+  bank: "BANK",
+  laundromat: "LAUNDRY",
+  recycling: "DEPOT",
+  diner: "DINER",
+  busStop: "BUS",
+  outskirtsBusStop: "BUS",
+  jobBoard: "JOBS",
 };
 

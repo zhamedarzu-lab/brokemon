@@ -278,26 +278,51 @@ export function pushLog(s: GameState, text: string, tone: LogLine["tone"] = "pla
   if (s.log.length > 200) s.log.splice(0, s.log.length - 200);
 }
 
-export function reputationLabel(rep: number): string {
-  if (rep >= 60) return "Respected";
-  if (rep >= 30) return "Reliable";
-  if (rep >= 0) return "Neutral";
-  if (rep >= -30) return "Spotty";
+/**
+ * The one place a reputation number becomes a word. Highest threshold first;
+ * the last entry is the floor and must stay at -Infinity so the lookup is
+ * total.
+ */
+export const REPUTATION_TIERS = [
+  { at: 60, label: "Respected" },
+  { at: 30, label: "Reliable" },
+  { at: 0, label: "Neutral" },
+  { at: -30, label: "Spotty" },
+  { at: -Infinity, label: "Infamous" },
+] as const;
+
+export type ReputationLabel = (typeof REPUTATION_TIERS)[number]["label"];
+
+export function reputationLabel(rep: number): ReputationLabel {
+  for (const tier of REPUTATION_TIERS) if (rep >= tier.at) return tier.label;
   return "Infamous";
 }
 
-const REP_CROSS_UP: Partial<Record<string, string>> = {
+/**
+ * What the player is told when they cross into a tier. These are total records
+ * rather than partial ones on purpose: add a tier to REPUTATION_TIERS without
+ * writing its two lines and this stops compiling, instead of silently
+ * swallowing the notification at runtime.
+ *
+ * The bottom tier cannot be entered from below and the top cannot be entered
+ * from above, so those two entries are unreachable while the tiers stand as
+ * they are. They are written anyway — the point is that a future threshold
+ * change cannot open a hole.
+ */
+const REP_CROSS_UP: Record<ReputationLabel, string> = {
+  Infamous:  "Even by your own standards this counts as clawing upward. Infamous, still.",
   Spotty:    "You've clawed back a little ground. People round here would call you Spotty — still rough, but not Infamous.",
   Neutral:   "The slate clears a little. People round here would call you Neutral — no stain on your name.",
   Reliable:  "Word gets around. People are starting to call you Reliable.",
   Respected: "Your name means something in this town now. You've earned the word Respected.",
 };
 
-const REP_CROSS_DOWN: Partial<Record<string, string>> = {
-  Reliable: "The shine came off. You're Reliable now, nothing more.",
-  Neutral:  "You slipped. Back to Neutral — the goodwill is spent.",
-  Spotty:   "People are talking, and not kindly. Your name is Spotty around here.",
-  Infamous: "You're known now, for all the wrong reasons. Infamous.",
+const REP_CROSS_DOWN: Record<ReputationLabel, string> = {
+  Respected: "Whatever that was, it did not stick to you. Still Respected.",
+  Reliable:  "The shine came off. You're Reliable now, nothing more.",
+  Neutral:   "You slipped. Back to Neutral — the goodwill is spent.",
+  Spotty:    "People are talking, and not kindly. Your name is Spotty around here.",
+  Infamous:  "You're known now, for all the wrong reasons. Infamous.",
 };
 
 /**

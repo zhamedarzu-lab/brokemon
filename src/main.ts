@@ -9,7 +9,7 @@ import { menu, say, type Prompt } from "./sim/prompt";
 import { EMPLOYMENT } from "./sim/jobs";
 import { Rng } from "./sim/rng";
 import { clearSave, hasSave, loadGame, saveGame } from "./sim/save";
-import { createState, netWorth, pushLog, type GameState } from "./sim/state";
+import { createState, netWorth, pushLog, reputationLabel, type GameState } from "./sim/state";
 import { advance, escortDestination, policeCheck, type Interrupt, type TickOptions } from "./sim/tick";
 import { MS_PER_MINUTE } from "./sim/time";
 import { cap, consume, type ActionCtx } from "./sim/work";
@@ -404,25 +404,10 @@ function interruptPrompt(i: Interrupt, ctx: ActionCtx): Prompt | null {
   }
 }
 
-const REP_LABEL: [number, string][] = [
-  [60, "Respected"],
-  [30, "Reliable"],
-  [0, "Neutral"],
-  [-30, "Spotty"],
-  [-Infinity, "Infamous"],
-];
-
-function repDescriptor(rep: number): string {
-  for (const [threshold, label] of REP_LABEL) {
-    if (rep >= threshold) return label;
-  }
-  return "Infamous";
-}
-
 function victoryPrompt(s: GameState): Prompt {
   const day = s.daysSurvived;
   const nw = netWorth(s);
-  const rep = repDescriptor(s.reputation);
+  const rep = reputationLabel(s.reputation);
   const how = s.mayor && s.businessOwned
     ? "franchise owner and mayor"
     : s.mayor

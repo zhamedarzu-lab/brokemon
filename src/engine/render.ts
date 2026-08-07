@@ -1,10 +1,10 @@
-import { glyphAt, MAP_HEIGHT, MAP_WIDTH } from "../world/map";
+import { glyphAt, MAP_HEIGHT, MAP_WIDTH, TOWN } from "../world/map";
 import { tileAt } from "../world/tiles";
 import { daylight } from "../sim/time";
 import { WEATHER } from "../sim/weather";
 import type { GameState } from "../sim/state";
 import { OUTFITS } from "../sim/social";
-import { assignmentStopAt, facingTile } from "../sim/actions";
+import { assignmentStopAt, DOOR_SIGNS, facingTile } from "../sim/actions";
 
 export const TILE = 16;
 export const VIEW_W = 21;
@@ -60,6 +60,7 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState, timeMs: 
     }
   }
 
+  drawDoorSigns(ctx, cam);
   drawAssignmentMarkers(ctx, state, cam, timeMs);
   drawPlayer(ctx, state, cam, timeMs);
   drawLighting(ctx, state, cam);
@@ -173,13 +174,35 @@ function drawTile(ctx: CanvasRenderingContext2D, x: number, y: number, sx: numbe
       speckle(ctx, x, y, sx, sy, tile.accent!, 2);
       break;
 
-    case "marble":
-      ctx.fillStyle = tile.accent!;
-      ctx.fillRect(sx, sy, TILE / 2, TILE / 2);
-      ctx.fillRect(sx + TILE / 2, sy + TILE / 2, TILE / 2, TILE / 2);
-      ctx.strokeStyle = "rgba(255,255,255,0.12)";
-      ctx.strokeRect(sx + 0.5, sy + 0.5, TILE - 1, TILE - 1);
+    case "marble": {
+      // This used to be two light greys in an 8px checker, which is exactly
+      // the pattern every image editor uses to mean "nothing here" — the
+      // fountain plaza is a solid 13x7 field of it and read as a hole in the
+      // map. Polished slabs instead: one flat tone per tile, a grout line, and
+      // a little veining.
+      const tone = hash(x, y, 31);
+      if (tone > 0.72) {
+        ctx.fillStyle = tile.accent!;
+        ctx.fillRect(sx, sy, TILE, TILE);
+      }
+      ctx.fillStyle = "rgba(255,255,255,0.10)";
+      ctx.fillRect(sx, sy, TILE, 1);
+      ctx.fillStyle = "rgba(0,0,0,0.13)";
+      ctx.fillRect(sx, sy + TILE - 1, TILE, 1);
+      ctx.fillRect(sx + TILE - 1, sy, 1, TILE);
+
+      if (tone < 0.34) {
+        // A vein wandering across the slab, fixed per tile so it never crawls.
+        ctx.fillStyle = "rgba(120,124,132,0.34)";
+        let vx = Math.floor(hash(x, y, 32) * (TILE - 4)) + 2;
+        for (let vy = 3; vy < TILE - 2; vy++) {
+          ctx.fillRect(sx + vx, sy + vy, 1, 1);
+          vx += hash(x, y, 40 + vy) > 0.5 ? 1 : -1;
+          vx = vx < 2 ? 2 : vx > TILE - 3 ? TILE - 3 : vx;
+        }
+      }
       break;
+    }
 
     case "gravel":
       speckle(ctx, x, y, sx, sy, tile.accent!, 6);
@@ -440,6 +463,36 @@ function drawWeather(ctx: CanvasRenderingContext2D, s: GameState, t: number): vo
     ctx.fillStyle = "rgba(255,255,255,0.35)";
     ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
   }
+}
+
+/**
+ * A nameplate over every door in view. Without these the town is a wall of
+ * identical brown buildings and the only way to learn which is the hostel is
+ * to walk into all of them.
+ */
+function drawDoorSigns(ctx: CanvasRenderingContext2D, cam: Camera): void {
+  ctx.font = "6px 'Courier New', monospace";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+
+  for (const [id, pos] of Object.entries(TOWN.markers)) {
+    const sign = DOOR_SIGNS[id];
+    if (!sign) continue;
+
+    const cx = pos.x * TILE - cam.px + TILE / 2;
+    // Sits in the wall above the doorway, where a real sign would be.
+    const cy = pos.y * TILE - cam.py - 4;
+    if (cx < -40 || cy < -8 || cx > CANVAS_W + 40 || cy > CANVAS_H + 8) continue;
+
+    const w = ctx.measureText(sign).width + 4;
+    ctx.fillStyle = "rgba(16,16,20,0.82)";
+    ctx.fillRect(Math.round(cx - w / 2), cy - 4, Math.round(w), 8);
+    ctx.fillStyle = "rgba(240,232,200,0.94)";
+    ctx.fillText(sign, Math.round(cx), cy);
+  }
+
+  ctx.textAlign = "start";
+  ctx.textBaseline = "alphabetic";
 }
 
 function drawAssignmentMarkers(ctx: CanvasRenderingContext2D, s: GameState, cam: Camera, t: number): void {

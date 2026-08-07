@@ -245,6 +245,19 @@ export const CLASS_START = 19;
 export const CLASS_END = 22;
 export const MAX_CREDITS = 6;
 
+/**
+ * Energy needed to sit through a class, and what sitting through it costs.
+ *
+ * These were 20 and 18. A shift plus a day on your feet lands you at the
+ * college door with about 12, so working and studying were mutually exclusive
+ * — and night school is the only way into phase 3, which made the whole
+ * mid-game a forced alternation of earning days and learning days. Coming
+ * straight from work should be hard, not impossible: you can attend on
+ * fumes now, and you will have nothing left afterwards.
+ */
+export const CLASS_MIN_ENERGY = 10;
+export const CLASS_ENERGY_COST = 12;
+
 export const CLASS_NAMES = [
   "Intro to Bookkeeping",
   "Business Communication",

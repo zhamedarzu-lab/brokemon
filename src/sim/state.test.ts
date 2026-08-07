@@ -2,7 +2,19 @@ import { describe, expect, it } from "vitest";
 import { EMPLOYMENT } from "./jobs";
 import { addItem, countOf } from "./items";
 import { appearance, outfitRank, OUTFIT_ORDER } from "./social";
-import { changeReputation, checkPostWinGoal, checkRequirements, createState, currentAppearance, earnCash, netWorth, phaseOf, setWon } from "./state";
+import {
+  REPUTATION_TIERS,
+  changeReputation,
+  checkPostWinGoal,
+  checkRequirements,
+  createState,
+  currentAppearance,
+  earnCash,
+  netWorth,
+  phaseOf,
+  reputationLabel,
+  setWon,
+} from "./state";
 
 describe("createState", () => {
   it("starts you broke, dirty and in debt", () => {
@@ -331,5 +343,49 @@ describe("changeReputation", () => {
     s.reputation = 40; // Reliable
     changeReputation(s, 3); // → 43, still Reliable
     expect(s.reputation).toBe(43);
+  });
+});
+
+describe("reputation tiers", () => {
+  it("has a crossing message for every tier, in both directions", () => {
+    // The two message tables are keyed by label. If a tier is added or renamed
+    // and a table is not updated, the notification vanishes silently — so the
+    // tables are total records and this asserts the runtime agrees.
+    for (const tier of REPUTATION_TIERS) {
+      const s = createState(1);
+      s.reputation = tier.at === -Infinity ? -100 : tier.at;
+      expect(reputationLabel(s.reputation)).toBe(tier.label);
+    }
+  });
+
+  it("announces the crossing when a delta moves you between tiers", () => {
+    const s = createState(1);
+    s.reputation = 29;
+    changeReputation(s, 5);
+    expect(reputationLabel(s.reputation)).toBe("Reliable");
+    expect(s.log.at(-1)?.text).toContain("Reliable");
+    expect(s.log.at(-1)?.tone).toBe("good");
+  });
+
+  it("announces a fall as well as a climb", () => {
+    const s = createState(1);
+    s.reputation = 31;
+    changeReputation(s, -5);
+    expect(reputationLabel(s.reputation)).toBe("Neutral");
+    expect(s.log.at(-1)?.tone).toBe("bad");
+  });
+
+  it("says nothing when the tier does not change", () => {
+    const s = createState(1);
+    s.reputation = 40;
+    const before = s.log.length;
+    changeReputation(s, 2);
+    expect(s.log).toHaveLength(before);
+  });
+
+  it("keeps the tiers ordered from the top down, floored at -Infinity", () => {
+    const thresholds = REPUTATION_TIERS.map((t) => t.at);
+    expect([...thresholds].sort((a, b) => b - a)).toEqual(thresholds);
+    expect(thresholds.at(-1)).toBe(-Infinity);
   });
 });

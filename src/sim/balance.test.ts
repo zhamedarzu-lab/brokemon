@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { markerPos, zoneAt } from "../world/map";
 import { interact } from "./actions";
-import { EMPLOYMENT, EMPLOYMENT_ORDER } from "./jobs";
+import { CLASS_COST, EMPLOYMENT, EMPLOYMENT_ORDER } from "./jobs";
 import { countOf, type ItemId } from "./items";
 import type { Choice, Prompt } from "./prompt";
 import { Rng } from "./rng";
@@ -537,5 +537,47 @@ describe("the gate on the hill", () => {
     bot.standAt(23, 13, "down");
     bot.press();
     expect(bot.state.player.pos.y).toBe(15);
+  });
+});
+
+describe("night school after a day's work", () => {
+  /** Roughly what a shift plus a day on your feet leaves you with. */
+  function afterAShift(energy: number) {
+    const bot = new Bot(1);
+    const s = bot.state;
+    s.cash = 200;
+    // Wait for the class to open first — twelve hours of clock would otherwise
+    // burn off the very energy we are trying to arrive with.
+    bot.waitUntilHour(19);
+    s.meters = { hunger: 70, thirst: 70, hygiene: 60, energy, morale: 60, health: 90 };
+    bot.standOn("college");
+    return bot;
+  }
+
+  it("lets you sit the class on fumes", () => {
+    // Night school is the only door to phase 3, and the old floor of 20 was
+    // above what any working day left you with — so earning and studying were
+    // mutually exclusive and the mid-game doubled in length.
+    const bot = afterAShift(14);
+    expect(bot.canChoose(bot.press(), "attend")).toBe(true);
+  });
+
+  it("still turns you away when there is genuinely nothing left", () => {
+    const bot = afterAShift(4);
+    expect(bot.canChoose(bot.press(), "attend")).toBe(false);
+  });
+
+  it("leaves you with nothing afterwards", () => {
+    const bot = afterAShift(14);
+    bot.drive(bot.press(), "attend");
+    expect(bot.state.education).toBe(1);
+    expect(bot.state.meters.energy).toBeLessThan(6);
+  });
+
+  it("does not make the credit free", () => {
+    const bot = afterAShift(90);
+    const before = bot.state.cash;
+    bot.drive(bot.press(), "attend");
+    expect(before - bot.state.cash).toBe(CLASS_COST);
   });
 });

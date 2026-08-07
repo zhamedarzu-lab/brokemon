@@ -3,6 +3,8 @@ import { addItem, countOf, ITEMS, removeItem, SHOP_STOCK, type ItemId } from "./
 import {
   CLASS_COST,
   CLASS_END,
+  CLASS_ENERGY_COST,
+  CLASS_MIN_ENERGY,
   CLASS_NAMES,
   CLASS_START,
   EMPLOYMENT,
@@ -697,7 +699,7 @@ const college: Venue = (ctx) => {
 
   const reasons: string[] = [];
   if (s.cash < CLASS_COST) reasons.push(`the class is $${CLASS_COST} and you have $${s.cash}`);
-  if (s.meters.energy < 20) reasons.push("you would sleep through it");
+  if (s.meters.energy < CLASS_MIN_ENERGY) reasons.push("you would sleep through it");
 
   return menu(
     "Community College — Night School",
@@ -710,15 +712,17 @@ const college: Venue = (ctx) => {
             run: () => {
               s.cash -= CLASS_COST;
               ctx.advance(180, { sheltered: true, exertion: 0.6 });
-              applyDelta(s.meters, { energy: -18, hunger: -12, thirst: -14, morale: +8 });
+              const spent = s.meters.energy <= CLASS_ENERGY_COST + 6;
+              applyDelta(s.meters, { energy: -CLASS_ENERGY_COST, hunger: -12, thirst: -14, morale: +8 });
               s.education += 1;
               pushLog(s, `Completed ${nextName}. ${s.education} credits.`, "good");
               return menu(
                 "Community College",
                 [
                   "Three hours in a room with eleven other people who came straight from work.",
+                  spent ? "You take almost none of it in. The credit counts anyway." : "",
                   `Credit earned. ${s.education}/${MAX_CREDITS}.`,
-                ],
+                ].filter(Boolean),
                 [BACK],
                 "good",
               );

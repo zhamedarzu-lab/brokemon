@@ -538,13 +538,22 @@ describe("stockTip event", () => {
 /* -------------------------------------------------------- colleagueInterview */
 
 /** Get the interview prompt, requiring a minimum number of seeds tried. */
-function getInterviewPrompt(s: GameState): Prompt | null {
+/**
+ * Fish the interview out of the encounter roller.
+ *
+ * `salt` must vary with the caller's loop counter. Without it every call
+ * started at inner seed 1, found the interview on the same iteration, and
+ * handed back a prompt whose choices were closed over an identically seeded
+ * Rng — so a four-hundred-seed sweep explored exactly one outcome and a 70%
+ * chance looked like a 0% one.
+ */
+function getInterviewPrompt(s: GameState, salt = 0): Prompt | null {
   s.flags.colleagueInterviewPending = 1;
   inZone(s, "downtown");
   for (let i = 1; i <= 500; i++) {
     delete s.flags["ev:colleagueInterview"];
     delete s.flags.colleagueInterviewDone;
-    const ctx = makeCtx(s, i);
+    const ctx = makeCtx(s, salt * 977 + i);
     const p = rollEvent(ctx);
     if (p?.title === "The interview") return p;
   }
@@ -599,7 +608,7 @@ describe("colleagueInterview event", () => {
       s.employment = null;
       s.reputation = 25; // repOk threshold
       s.meters = { hunger: 100, thirst: 100, hygiene: 80, energy: 100, morale: 80, health: 100 };
-      const p = getInterviewPrompt(s);
+      const p = getInterviewPrompt(s, i);
       if (!p) continue;
       drive(p, "confident");
       if (s.employment === "martClerk") hired = true;
@@ -614,7 +623,7 @@ describe("colleagueInterview event", () => {
       phase2(s);
       s.employment = null;
       s.meters = { hunger: 100, thirst: 100, hygiene: 80, energy: 100, morale: 80, health: 100 };
-      const p = getInterviewPrompt(s);
+      const p = getInterviewPrompt(s, i);
       if (!p) continue;
       drive(p, "honest");
       if (s.employment === "martClerk") hired = true;
@@ -659,7 +668,7 @@ describe("colleagueInterview event", () => {
         s.employment = job;
         s.reputation = 30;
         s.meters = { hunger: 100, thirst: 100, hygiene: 80, energy: 100, morale: 80, health: 100 };
-        const p = getInterviewPrompt(s);
+        const p = getInterviewPrompt(s, i);
         if (!p) continue;
         drive(p, "confident");
         // Employment must never have been downgraded to martClerk when starting higher
@@ -681,7 +690,7 @@ describe("colleagueInterview event", () => {
       s.reputation = 25;
       s.cash = 0;
       s.meters = { hunger: 100, thirst: 100, hygiene: 80, energy: 100, morale: 80, health: 100 };
-      const p = getInterviewPrompt(s);
+      const p = getInterviewPrompt(s, i);
       if (!p) continue;
       const repBefore = s.reputation;
       const cashBefore = s.cash;
@@ -750,10 +759,12 @@ describe("event recency cooldown", () => {
       inZone(sHot, "slums");
       if (rollEvent(makeCtx(sHot, seed))?.title === "Loose change") hotCount++;
     }
-    // Ratio should be close to COOLDOWN_DECAY_FACTOR (0.2); allow 2× slack.
-    const ratio = hotCount / baseCount;
-    expect(ratio).toBeLessThan(COOLDOWN_DECAY_FACTOR * 3);
-    expect(ratio).toBeGreaterThan(0); // still fires occasionally
+    // An event seen this very minute is inside the no-repeat window, so it is
+    // barred outright rather than merely discounted. Two split bin bags in a
+    // row is the repetition players actually notice.
+    expect(baseCount).toBeGreaterThan(0);
+    expect(hotCount).toBe(0);
+    expect(COOLDOWN_DECAY_FACTOR).toBeLessThan(1);
   });
 
   it("cooldown fully recovers after COOLDOWN_RECOVER_MIN minutes", () => {
@@ -807,5 +818,103 @@ describe("event recency cooldown", () => {
     // Mid-cooldown should fire less than baseline, more than full-cooldown.
     // We just verify it's strictly below baseline (partial suppression is happening).
     expect(midCount).toBeLessThan(baselineCount);
+  });
+});
+
+describe("no two encounters in a row", () => {
+  it("never shows the same event twice running", () => {
+    // The multiplier alone still let a cheap filler come up back to back, and
+    // that is the repetition a player actually registers.
+    for (const zone of ["slums", "downtown", "heights"] as const) {
+      const s = createState(31);
+      s.meters = { hunger: 100, thirst: 100, hygiene: 70, energy: 100, morale: 80, health: 100 };
+      inZone(s, zone);
+
+      let previous = "";
+      for (let i = 0; i < 300; i++) {
+        const ctx = makeCtx(s, i + 1);
+        ctx.advance(18, { exertion: 1.35 });
+        s.meters = { hunger: 100, thirst: 100, hygiene: 70, energy: 100, morale: 80, health: 100 };
+        inZone(s, zone);
+        const title = rollEvent(ctx)?.title ?? "";
+        if (title) expect(title, `repeated in ${zone} at roll ${i}`).not.toBe(previous);
+        previous = title;
+      }
+    }
+  });
+
+  it("gives each zone a spread rather than two events on a loop", () => {
+    for (const zone of ["slums", "downtown", "heights"] as const) {
+      const s = createState(17);
+      inZone(s, zone);
+      const seen = new Map<string, number>();
+      for (let i = 0; i < 400; i++) {
+        const ctx = makeCtx(s, i + 1);
+        ctx.advance(18, { exertion: 1.35 });
+        s.meters = { hunger: 100, thirst: 100, hygiene: 70, energy: 100, morale: 80, health: 100 };
+        inZone(s, zone);
+        const title = rollEvent(ctx)?.title;
+        if (title) seen.set(title, (seen.get(title) ?? 0) + 1);
+      }
+      const total = [...seen.values()].reduce((a, b) => a + b, 0);
+      const commonest = Math.max(...seen.values());
+      expect(seen.size, `${zone} has too few distinct encounters`).toBeGreaterThanOrEqual(8);
+      expect(commonest / total, `one encounter dominates ${zone}`).toBeLessThan(0.25);
+    }
+  });
+
+  it("does not put a split bin bag on a private road", () => {
+    const s = createState(5);
+    inZone(s, "heights");
+    for (let i = 0; i < 200; i++) {
+      const ctx = makeCtx(s, i + 1);
+      ctx.advance(18, { exertion: 1.35 });
+      s.meters = { hunger: 100, thirst: 100, hygiene: 70, energy: 100, morale: 80, health: 100 };
+      inZone(s, "heights");
+      expect(rollEvent(ctx)?.title).not.toBe("A split bin bag");
+    }
+  });
+});
+
+describe("the interview does not hire you into a job you cannot turn up to", () => {
+  it("warns when the dress code is beyond you", () => {
+    let warned = false;
+    for (let i = 1; i <= 400 && !warned; i++) {
+      const s = createState(i);
+      phase2(s);
+      s.employment = null;
+      s.wearing = "rags";
+      s.reputation = 25;
+      s.meters = { hunger: 100, thirst: 100, hygiene: 100, energy: 100, morale: 80, health: 100 };
+      const p = getInterviewPrompt(s, i);
+      if (!p) continue;
+      const result = drive(p, "confident");
+      if (s.employment !== "martClerk") continue;
+      // Hired in rags, which the till will not accept. Say so now, not three
+      // strikes later with the lead already spent.
+      expect(result?.lines.join(" ")).toContain("cannot work the shift");
+      warned = true;
+    }
+    expect(warned).toBe(true);
+  });
+
+  it("says nothing about clothes when you already have them", () => {
+    let checked = false;
+    for (let i = 1; i <= 400 && !checked; i++) {
+      const s = createState(i);
+      phase2(s);
+      s.employment = null;
+      s.wearing = "thrift";
+      s.wardrobe.push("thrift");
+      s.reputation = 25;
+      s.meters = { hunger: 100, thirst: 100, hygiene: 100, energy: 100, morale: 80, health: 100 };
+      const p = getInterviewPrompt(s, i);
+      if (!p) continue;
+      const result = drive(p, "confident");
+      if (s.employment !== "martClerk") continue;
+      expect(result?.lines.join(" ")).not.toContain("cannot work the shift");
+      checked = true;
+    }
+    expect(checked).toBe(true);
   });
 });

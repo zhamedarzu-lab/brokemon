@@ -361,7 +361,13 @@ function playDay(p: Player): void {
   shop(p);
   groceries(p);
   morale(p);
-  if (!worked) jobHunt(p);
+  // Check the board whether or not we have a job. Holding one is no reason to
+  // stop looking, and a bot that only looked while unemployed sat on the same
+  // rung for two hundred shifts.
+  jobHunt(p);
+  // Clear the debt while the bank is still open — the score will not climb
+  // past 600 until it is gone, and 620 is what the lease wants.
+  bank(p);
   upgradeHousing(p);
   endgame(p);
 
@@ -393,7 +399,6 @@ function playDay(p: Player): void {
     if (p.can(c, "attend")) { p.drive(c, "attend"); p.note(`CLASS ${s.education}/6`); }
     else p.note(`class blocked: ${p.lockReason(c, "attend")}`);
   }
-  bank(p);
 
   p.eat();
   p.wash();

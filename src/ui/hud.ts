@@ -16,6 +16,37 @@ const METER_COLOR: Record<MeterId, string> = {
   health: "#d95a5a",
 };
 
+/**
+ * Everything the player has outstanding, for the one line at the bottom of the
+ * screen. A lead that exists only as a flag is a lead the player forgets they
+ * have — the colleague's interview was set up, never mentioned again, and then
+ * fired as a random encounter days later.
+ */
+function openTasks(s: GameState): string[] {
+  const tasks: string[] = [];
+
+  const a = s.assignment;
+  if (a) {
+    tasks.push(
+      a.ready
+        ? `<span class="good">${a.label} — collect at the job board</span>`
+        : `${a.label} — ${a.targets.length} stop${a.targets.length === 1 ? "" : "s"} left`,
+    );
+  }
+
+  if (s.flags.colleagueInterviewPending && !s.flags.colleagueInterviewDone) {
+    tasks.push(`<span class="good">Interview lined up — keep yourself presentable</span>`);
+  } else if (s.flags.colleagueNumberGiven && !s.flags.colleagueCallDone) {
+    tasks.push(`A number to call back — they said they'd be in touch`);
+  }
+
+  if (s.won && s.postWinGoal > 0) {
+    tasks.push(`Net worth $${netWorth(s).toLocaleString()} of $${s.postWinGoal.toLocaleString()}`);
+  }
+
+  return tasks;
+}
+
 export class Hud {
   private root: HTMLElement;
   private bars = new Map<MeterId, { fill: HTMLElement; value: HTMLElement; row: HTMLElement }>();
@@ -119,12 +150,7 @@ export class Hud {
     if (s.sick) status.push(`<span class="bad">ill</span>`);
     this.statusEl.innerHTML = status.join(" · ");
 
-    const a = s.assignment;
-    this.taskEl.innerHTML = a
-      ? a.ready
-        ? `<span class="good">${a.label} — collect at the job board</span>`
-        : `${a.label} — ${a.targets.length} stop${a.targets.length === 1 ? "" : "s"} left`
-      : "";
+    this.taskEl.innerHTML = openTasks(s).join(" · ");
 
     const label = interactive ? interactionLabel(s) : null;
     this.hintEl.innerHTML = label ? `<kbd>Z</kbd> ${label}` : "";

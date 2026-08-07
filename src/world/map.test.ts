@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { glyphAt, isSolid, MAP_HEIGHT, MAP_WIDTH, markerPos, spawnPoint, TOWN, zoneAt, ZONES } from "./map";
 import { MARKERS, TILES } from "./tiles";
+import { DOOR_SIGNS } from "../sim/actions";
+import { VENUES } from "../sim/venues";
 
 describe("town map", () => {
   it("is a complete rectangle", () => {
@@ -129,5 +131,59 @@ describe("connectivity", () => {
     expect(kinds.b).toBeGreaterThan(0);
     expect(kinds["%"]).toBeGreaterThan(0);
     expect(kinds.x).toBeGreaterThan(0);
+  });
+});
+
+describe("the town is legible from the street", () => {
+  it("puts a name over every door you can walk into", () => {
+    // Every building on the map is the same brown wall. Without a sign the
+    // only way to learn which one is the hostel is to open all of them.
+    for (const id of Object.keys(VENUES)) {
+      expect(DOOR_SIGNS[id], `no sign over ${id}`).toBeTruthy();
+    }
+  });
+
+  it("keeps the signs short enough to sit over a doorway", () => {
+    for (const [id, sign] of Object.entries(DOOR_SIGNS)) {
+      expect(sign.length, `${id} sign "${sign}" is too long to read at 16px`).toBeLessThanOrEqual(11);
+      expect(sign).toBe(sign.toUpperCase());
+    }
+  });
+
+  it("only signs places that actually exist on the map", () => {
+    for (const id of Object.keys(DOOR_SIGNS)) {
+      expect(() => markerPos(id), `${id} has a sign but no marker`).not.toThrow();
+    }
+  });
+
+  it("has every marker glyph standing on ground you can walk on", () => {
+    for (const [id, pos] of Object.entries(TOWN.markers)) {
+      expect(isSolid(pos.x, pos.y), `${id} at ${pos.x},${pos.y} is inside a wall`).toBe(false);
+    }
+  });
+
+  it("leaves nothing walkable stranded except the Heights behind the gate", () => {
+    // The security gate is a solid tile you interact with, so the hill is
+    // deliberately unreachable by pathfinding. Anything else cut off from
+    // spawn is a hole somebody punched in the map by accident.
+    const start = spawnPoint();
+    const seen = new Set([`${start.x},${start.y}`]);
+    const queue = [start];
+    for (let i = 0; i < queue.length; i++) {
+      const cell = queue[i]!;
+      for (const [dx, dy] of [[0, 1], [0, -1], [1, 0], [-1, 0]] as const) {
+        const next = { x: cell.x + dx, y: cell.y + dy };
+        const key = `${next.x},${next.y}`;
+        if (seen.has(key) || isSolid(next.x, next.y)) continue;
+        seen.add(key);
+        queue.push(next);
+      }
+    }
+    for (let y = 0; y < MAP_HEIGHT; y++) {
+      for (let x = 0; x < MAP_WIDTH; x++) {
+        if (isSolid(x, y) || seen.has(`${x},${y}`)) continue;
+        expect(zoneAt(y).id, `${x},${y} is walkable but cut off from spawn`).toBe("heights");
+      }
+    }
   });
 });
