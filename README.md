@@ -28,14 +28,18 @@ needs the dev server or a build.
 ### On Replit
 
 Press **Run**. Vite serves on port 3000, which `.replit` waits for and maps to
-the webview; the game is playable there and on any device pointed at the
-`*.replit.dev` URL. `server.allowedHosts` is on because Replit proxies through
-that domain, and Vite's DNS-rebinding protection would otherwise refuse it with
-*"Blocked request. This host is not allowed."*
+`externalPort = 80` — the port the bare `*.replit.dev` URL resolves to, so the
+game answers there with no `:3000` suffix to remember on a tablet.
 
-If the webview ever comes up blank, check the port first — Vite's `port` in
-`vite.config.ts`, the workflow's `waitForPort`, and the `[[ports]]` mapping all
-have to agree on 3000.
+`server.allowedHosts` is on because Replit proxies through that domain, and
+Vite's DNS-rebinding protection would otherwise refuse it with *"Blocked
+request. This host is not allowed."*
+
+If the webview ever comes up blank, check the ports first: Vite's `port` in
+`vite.config.ts`, the workflow's `waitForPort`, and `[[ports]].localPort` all
+have to agree, and exactly one mapping should claim `externalPort = 80`. A
+mapping pointing at a port nothing listens on gives you a blank frame with a
+perfectly healthy server behind it.
 
 ### Locally
 

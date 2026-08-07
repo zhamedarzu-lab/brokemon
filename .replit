@@ -24,14 +24,9 @@ task = "shell.exec"
 args = "npm run dev"
 waitForPort = 3000
 
+# Vite serves on 3000 (see vite.config.ts). externalPort 80 is what the bare
+# *.replit.dev URL resolves to, so the game answers there with no port suffix —
+# which is what you want when opening it on a phone or tablet.
 [[ports]]
 localPort = 3000
-externalPort = 3000
-
-[[ports]]
-localPort = 5174
 externalPort = 80
-
-[[ports]]
-localPort = 8080
-externalPort = 8080
