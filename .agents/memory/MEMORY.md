@@ -1,0 +1,1 @@
+- [Vite + Replit proxy white screen](vite-replit-proxy.md) — set `hmr.clientPort: 443`; stale port mappings in .replit silently break the bare URL.
