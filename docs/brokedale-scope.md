@@ -168,9 +168,11 @@ doing both at once.
   not a missing field. `spreadToTowns` handles all three shapes — a record, a
   bare scalar, or nothing — and reputation earned before Brokedale existed is
   credited to Brokemon rather than spread across both.
-- **0b-2, the ceiling.** A deliberate balance change with its own before-and-
-  after measurement, landed separately so the numbers that move are attributable
-  to it.
+- **0b-2, the ceiling.** ✅ **DONE.** Gains shrink as your name grows and stop
+  at 100; losses land in full. The franchise payout gets its own base rather
+  than borrowing one from a number that no longer runs away. Measured
+  before-and-after: reputation goes from 546–723 to 68–83, and runs from
+  126–187 days to 138–210 — longer, but the endgame is no longer a formality.
 
 ### Phase 1 — the coach, and a stub Brokedale
 

@@ -384,12 +384,34 @@ const REP_CROSS_DOWN: Record<ReputationLabel, string> = {
 };
 
 /**
+ * How well known you can get, and how badly.
+ *
+ * The tiers stop at "Respected" (60), so every point past that was inflating
+ * numbers while meaning nothing new — and reputation only ever went up. Runs
+ * were ending at 546-723, which put the franchise on $1,000+ a day and pushed
+ * every interview past certainty, so the last third of a game had no failure
+ * mode left in it.
+ *
+ * Gains now shrink as your name gets bigger; losses land in full. Being known
+ * is easy at first and increasingly hard to improve on, which is both truer
+ * and keeps the endgame's arithmetic somewhere near the rest of the game's.
+ */
+export const REPUTATION_CEILING = 100;
+export const REPUTATION_FLOOR = -60;
+
+/**
  * Apply a reputation delta and log a message if the descriptor tier changes.
  * Use this instead of mutating s.reputation directly.
  */
 export function changeReputation(s: GameState, delta: number, town: TownId = s.player.town): void {
-  const before = reputationLabel(reputationIn(s, town));
-  s.reputation[town] = reputationIn(s, town) + delta;
+  const now = reputationIn(s, town);
+  const before = reputationLabel(now);
+  // A good turn is worth less to someone everybody already knows. Bad news
+  // travels at full speed whoever you are.
+  const headroom = Math.max(0.15, 1 - now / REPUTATION_CEILING);
+  const scaled = delta > 0 ? delta * headroom : delta;
+  // Kept whole — it is shown to the player as a number.
+  s.reputation[town] = Math.round(Math.max(REPUTATION_FLOOR, Math.min(REPUTATION_CEILING, now + scaled)));
   const after = reputationLabel(reputationIn(s, town));
   if (after !== before) {
     const msg = delta > 0 ? REP_CROSS_UP[after] : REP_CROSS_DOWN[after];

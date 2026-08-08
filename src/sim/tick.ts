@@ -209,7 +209,12 @@ function onNewDay(s: GameState, rng: Rng, day: number, out: Interrupt[]): void {
 function payPassiveIncome(s: GameState, out: Interrupt[]): void {
   const lines: string[] = [];
   if (s.businessOwned) {
-    const take = 180 + Math.round((reputationIn(s) + 40) * 1.5);
+    // Mostly the shop, partly your name. This used to be
+    // `180 + (reputation + 40) * 1.5` against an uncapped reputation, which
+    // reached $1,200 a day and made the last third of a run a formality. With
+    // reputation ceilinged the endgame needs its own base rather than
+    // borrowing one from a number that no longer runs away.
+    const take = 350 + Math.round(reputationIn(s) * 3);
     s.bank += take;
     lines.push(`The franchise cleared $${take} yesterday.`);
   }

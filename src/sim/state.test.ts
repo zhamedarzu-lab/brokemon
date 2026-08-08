@@ -4,6 +4,8 @@ import { EMPLOYMENT } from "./jobs";
 import { addItem, countOf } from "./items";
 import { appearance, outfitRank, OUTFIT_ORDER } from "./social";
 import {
+  REPUTATION_CEILING,
+  REPUTATION_FLOOR,
   REPUTATION_TIERS,
   changeReputation,
   checkPostWinGoal,
@@ -14,6 +16,7 @@ import {
   housingIn,
   netWorth,
   phaseOf,
+  reputationIn,
   reputationLabel,
   setHousing,
   setWon,
@@ -259,8 +262,10 @@ describe("changeReputation", () => {
     const s = createState(1);
     s.reputation[STARTING_TOWN] = -31; // Infamous
     const before = s.log.length;
-    changeReputation(s, 2); // → -29, now Spotty
-    expect(s.reputation[STARTING_TOWN]).toBe(-29);
+    changeReputation(s, 2);
+    // The exact landing point is a function of the diminishing-gains curve, so
+    // assert the thing the test is actually about: the tier changed.
+    expect(reputationLabel(reputationIn(s))).toBe("Spotty");
     expect(s.log.length).toBeGreaterThan(before);
     expect(s.log.at(-1)!.tone).toBe("good");
   });
@@ -269,8 +274,8 @@ describe("changeReputation", () => {
     const s = createState(1);
     s.reputation[STARTING_TOWN] = -1; // Spotty
     const before = s.log.length;
-    changeReputation(s, 2); // → 1, now Neutral
-    expect(s.reputation[STARTING_TOWN]).toBe(1);
+    changeReputation(s, 2);
+    expect(reputationLabel(reputationIn(s))).toBe("Neutral");
     expect(s.log.length).toBeGreaterThan(before);
     expect(s.log.at(-1)!.tone).toBe("good");
   });
@@ -279,8 +284,8 @@ describe("changeReputation", () => {
     const s = createState(1);
     s.reputation[STARTING_TOWN] = 29; // Neutral
     const before = s.log.length;
-    changeReputation(s, 2); // → 31, now Reliable
-    expect(s.reputation[STARTING_TOWN]).toBe(31);
+    changeReputation(s, 2);
+    expect(reputationLabel(reputationIn(s))).toBe("Reliable");
     expect(s.log.length).toBeGreaterThan(before);
     expect(s.log.at(-1)!.tone).toBe("good");
   });
@@ -289,8 +294,8 @@ describe("changeReputation", () => {
     const s = createState(1);
     s.reputation[STARTING_TOWN] = 59; // Reliable
     const before = s.log.length;
-    changeReputation(s, 2); // → 61, now Respected
-    expect(s.reputation[STARTING_TOWN]).toBe(61);
+    changeReputation(s, 2);
+    expect(reputationLabel(reputationIn(s))).toBe("Respected");
     expect(s.log.length).toBeGreaterThan(before);
     expect(s.log.at(-1)!.tone).toBe("good");
   });
@@ -344,8 +349,9 @@ describe("changeReputation", () => {
   it("correctly applies the delta even without a tier change", () => {
     const s = createState(1);
     s.reputation[STARTING_TOWN] = 40; // Reliable
-    changeReputation(s, 3); // → 43, still Reliable
-    expect(s.reputation[STARTING_TOWN]).toBe(43);
+    changeReputation(s, 3);
+    expect(reputationIn(s)).toBeGreaterThan(40);
+    expect(reputationLabel(reputationIn(s))).toBe("Reliable");
   });
 });
 
@@ -390,5 +396,63 @@ describe("reputation tiers", () => {
     const thresholds = REPUTATION_TIERS.map((t) => t.at);
     expect([...thresholds].sort((a, b) => b - a)).toEqual(thresholds);
     expect(thresholds.at(-1)).toBe(-Infinity);
+  });
+});
+
+describe("reputation has a ceiling", () => {
+  function climb(times: number, delta = 12): number {
+    const s = createState(1);
+    for (let i = 0; i < times; i++) changeReputation(s, delta);
+    return reputationIn(s);
+  }
+
+  it("never gets past the ceiling however long you keep at it", () => {
+    // Runs were ending at 546–723, which put the franchise on $1,000+ a day
+    // and pushed every interview past certainty.
+    expect(climb(500)).toBeLessThanOrEqual(REPUTATION_CEILING);
+    expect(climb(5000)).toBeLessThanOrEqual(REPUTATION_CEILING);
+  });
+
+  it("pays less for the same good turn the better known you are", () => {
+    const early = createState(1);
+    changeReputation(early, 10);
+    const earlyGain = reputationIn(early);
+
+    const known = createState(1);
+    known.reputation[STARTING_TOWN] = 80;
+    changeReputation(known, 10);
+    const lateGain = reputationIn(known) - 80;
+
+    expect(lateGain).toBeLessThan(earlyGain);
+    expect(lateGain).toBeGreaterThan(0);
+  });
+
+  it("takes a loss in full whoever you are", () => {
+    const s = createState(1);
+    s.reputation[STARTING_TOWN] = 90;
+    changeReputation(s, -20);
+    expect(reputationIn(s)).toBe(70);
+  });
+
+  it("has a floor as well", () => {
+    const s = createState(1);
+    for (let i = 0; i < 200; i++) changeReputation(s, -12);
+    expect(reputationIn(s)).toBe(REPUTATION_FLOOR);
+  });
+
+  it("stays a whole number", () => {
+    const s = createState(1);
+    for (let i = 0; i < 20; i++) changeReputation(s, 7);
+    expect(Number.isInteger(reputationIn(s))).toBe(true);
+  });
+
+  it("still lets an interview fail once you are well known", () => {
+    // `+ reputation / 200` on the hire roll meant that past about 150 every
+    // interview succeeded, so the last third of a run had no failure mode.
+    const s = createState(1);
+    s.reputation[STARTING_TOWN] = REPUTATION_CEILING;
+    const bestOdds = 0.25 + 1 + reputationIn(s) / 200;
+    expect(Math.min(0.95, bestOdds)).toBeLessThan(1);
+    expect(reputationIn(s) / 200).toBeLessThan(0.6);
   });
 });
