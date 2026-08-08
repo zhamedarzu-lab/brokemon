@@ -63,7 +63,7 @@ export const TILES: Record<Glyph, TileDef> = {
   "=": { name: "road", solid: false, color: "#3b3b40", accent: "#c9c05a", detail: "road", outdoor: true },
   c: { name: "crosswalk", solid: false, color: "#3b3b40", accent: "#d8d8d0", detail: "crosswalk", outdoor: true },
   _: { name: "pavement", solid: false, color: "#6d6b66", accent: "#7c7a74", detail: "pavement", outdoor: true },
-  M: { name: "marble", solid: false, color: "#a9a8a2", accent: "#bcbbb4", detail: "marble", outdoor: true },
+  M: { name: "marble", solid: false, color: "#72706b", accent: "#7e7c76", detail: "marble", outdoor: true },
   s: { name: "dirt path", solid: false, color: "#7a6647", accent: "#8a7452", detail: "gravel", outdoor: true },
   r: { name: "gravel", solid: false, color: "#615c54", accent: "#6f6960", detail: "gravel", outdoor: true },
   "~": { name: "water", solid: true, color: "#2b5578", accent: "#3d7099", detail: "water", interaction: "water", outdoor: true },

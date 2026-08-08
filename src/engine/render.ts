@@ -471,7 +471,7 @@ function drawWeather(ctx: CanvasRenderingContext2D, s: GameState, t: number): vo
  * to walk into all of them.
  */
 function drawDoorSigns(ctx: CanvasRenderingContext2D, cam: Camera): void {
-  ctx.font = "6px 'Courier New', monospace";
+  ctx.font = "bold 8px monospace";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
 

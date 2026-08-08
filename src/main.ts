@@ -68,9 +68,11 @@ class Game {
     this.input = new Input();
 
     const canvas = document.querySelector<HTMLCanvasElement>("#screen")!;
-    canvas.width = CANVAS_W;
-    canvas.height = CANVAS_H;
+    const dpr = Math.round(window.devicePixelRatio || 1);
+    canvas.width = CANVAS_W * dpr;
+    canvas.height = CANVAS_H * dpr;
     this.ctx2d = canvas.getContext("2d", { alpha: false })!;
+    this.ctx2d.scale(dpr, dpr);
 
     this.hud = new Hud(document.querySelector<HTMLElement>("#hud")!);
     this.dialogue = new Dialogue(document.querySelector<HTMLElement>("#dialogue")!, () => this.input.clearHeld());
