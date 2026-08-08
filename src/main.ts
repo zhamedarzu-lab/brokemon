@@ -258,7 +258,7 @@ class Game {
 
     if (this.stepsSinceEvent >= EVENT_STEP_INTERVAL) {
       this.stepsSinceEvent = 0;
-      if (this.rng.chance(0.4)) {
+      if (this.rng.chance(0.28)) {
         this.enqueue(rollEvent(this.actionCtx()));
         this.openNext();
       }

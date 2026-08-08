@@ -1663,10 +1663,1522 @@ const EVENTS: EventDef[] = [
       );
     },
   },
+
+  /* --------------------------------------------------------- fire barrel */
+  {
+    id: "fireBarrel",
+    weight: (s, z) => (z === "slums" && (s.weather === "cold" || hourOf(s.time) < 7 || hourOf(s.time) >= 21) ? 4 : 0),
+    build: (ctx) => {
+      const s = ctx.state;
+      return menu(
+        "A barrel fire in the lot",
+        ["Three men and a woman standing around a cut oil drum, doing the maths on how cold it is.", "Nobody invited you. Nobody didn't."],
+        [
+          {
+            label: "Join them",
+            hint: "30 min",
+            run: () => {
+              ctx.advance(30);
+              applyDelta(s.meters, { morale: +16, energy: +8, health: +4 });
+              pushLog(s, "Stood around a fire with strangers.", "good");
+              return menu("A barrel fire in the lot", ["You stand with your hands out and say nothing for half an hour.", "Neither does anyone else. That is the whole thing."], [close], "good");
+            },
+          },
+          { label: "Keep walking", run: () => null },
+        ],
+      );
+    },
+  },
+
+  /* -------------------------------------------------------- church meal */
+  {
+    id: "churchMeal",
+    weight: (s, z) => (z === "slums" && phaseOf(s) <= 2 && hourOf(s.time) >= 12 && hourOf(s.time) <= 14 ? 3 : 0),
+    build: (ctx) => {
+      const s = ctx.state;
+      return menu(
+        "A sign: HOT LUNCH, FREE, ALL WELCOME",
+        ["A Baptist church with the doors propped open and the smell of mashed potato coming out.", "No forms. No sermon. Just food."],
+        [
+          {
+            label: "Go in",
+            hint: "30 min, free",
+            run: () => {
+              ctx.advance(30, { sheltered: true });
+              applyDelta(s.meters, { hunger: +48, thirst: +20, morale: +14, energy: +8 });
+              addItem(s.inventory, "sandwich", 1);
+              pushLog(s, "Hot lunch at the church hall. Free and no questions.", "good");
+              return menu("A sign: HOT LUNCH, FREE, ALL WELCOME", ["Mash, beef gravy, green beans from a tin, tea, a slice of white bread.", "The woman who serves you calls you love and means it.", "A sandwich for later, wrapped in foil."], [close], "good");
+            },
+          },
+          { label: "Not today", run: () => null },
+        ],
+      );
+    },
+  },
+
+  /* ------------------------------------------------ transit card found */
+  {
+    id: "foundTransitCard",
+    weight: (s, z) => ((z === "downtown" || z === "slums") && !s.flags.foundTransitDone ? 2 : 0),
+    once: true,
+    build: (ctx) => {
+      const s = ctx.state;
+      s.flags.foundTransitDone = 1;
+      const credit = ctx.rng.int(8, 28);
+      return menu(
+        "A transit card on the pavement",
+        ["Tapped out of someone's pocket. The balance display reads when you hold it under the reader."],
+        [
+          {
+            label: `Keep it — $${credit} credit on there`,
+            hint: `$${credit} equivalent`,
+            run: () => {
+              earnCash(s, credit);
+              applyDelta(s.meters, { morale: +6 });
+              pushLog(s, `Found a transit card with $${credit} credit.`, "money");
+              return menu("A transit card on the pavement", [`$${credit} of someone else's commute, now yours.`, "You ride for free until it runs out."], [close], "money");
+            },
+          },
+          {
+            label: "Hand it in to the station",
+            hint: "reputation",
+            run: () => {
+              ctx.advance(20);
+              changeReputation(s, 6);
+              applyDelta(s.meters, { morale: +10 });
+              pushLog(s, "Handed in a found transit card.", "good");
+              return menu("A transit card on the pavement", ["The man at the desk looks at you like you have done something unusual.", "You have."], [close], "good");
+            },
+          },
+        ],
+      );
+    },
+  },
+
+  /* --------------------------------------------------- lost dog reunite */
+  {
+    id: "lostDog",
+    weight: (_s, z) => (z === "slums" || z === "downtown" ? 2 : 0),
+    build: (ctx) => {
+      const s = ctx.state;
+      return menu(
+        "A dog without a person",
+        ["Collar on, lead trailing, looking at you like you might be the one."],
+        [
+          {
+            label: "Catch it and find the owner",
+            hint: "25 min",
+            run: () => {
+              ctx.advance(25, { exertion: 1.3 });
+              applyDelta(s.meters, { energy: -6, morale: +18 });
+              if (ctx.rng.chance(0.7)) {
+                const reward = ctx.rng.int(10, 35);
+                earnCash(s, reward);
+                changeReputation(s, 4);
+                pushLog(s, `Returned a lost dog — $${reward} reward.`, "money");
+                return menu("A dog without a person", ["The owner is half a street away in a panic.", `They press $${reward} on you and you take it.`, '"She does this every time," they say, not to you, to the dog.'], [close], "money");
+              }
+              changeReputation(s, 4);
+              pushLog(s, "Returned a lost dog.", "good");
+              return menu("A dog without a person", ["You find a woman on the next street calling a name.", '"God. Thank you."', "No money. The thank-you is real."], [close], "good");
+            },
+          },
+          { label: "Leave it — it knows where it lives", run: () => menu("A dog without a person", ["It watches you go. You watch it back.", "Someone else's problem and someone else's dog."], [close]) },
+        ],
+      );
+    },
+  },
+
+  /* ---------------------------------------------------- alley shortcut */
+  {
+    id: "alleyShortcut",
+    weight: (s, z) => (z === "slums" && phaseOf(s) <= 2 ? 2 : 0),
+    build: (ctx) => {
+      const s = ctx.state;
+      return menu(
+        "A cut-through",
+        ["A gap between two buildings you've never gone down. Probably saves five minutes. Probably."],
+        [
+          {
+            label: "Take it",
+            run: () => {
+              if (ctx.rng.chance(0.7)) {
+                applyDelta(s.meters, { energy: +4, morale: +6 });
+                return menu("A cut-through", ["It goes straight through. There's a mural on one wall you've never seen before.", "Five minutes saved and something new in your day."], [close], "good");
+              }
+              const lost = Math.min(s.cash, ctx.rng.int(5, 20));
+              s.cash -= lost;
+              applyDelta(s.meters, { morale: -14, energy: -8 });
+              if (lost > 0) pushLog(s, `Lost $${lost} in a bad shortcut.`, "bad");
+              return menu("A cut-through", [lost > 0 ? `Two of them. $${lost} lighter.` : "Two of them. Nothing to take.", "You get out the other end and keep moving."], [close], "bad");
+            },
+          },
+          { label: "Go around", run: () => null },
+        ],
+      );
+    },
+  },
+
+  /* ---------------------------------------------------- food truck sample */
+  {
+    id: "foodTruckSample",
+    weight: (s, z) => (z === "downtown" && hourOf(s.time) >= 11 && hourOf(s.time) <= 15 ? 3 : 0),
+    build: (ctx) => {
+      const s = ctx.state;
+      applyDelta(s.meters, { hunger: +14, morale: +8 });
+      return menu(
+        "Free samples",
+        ["A food truck is doing a launch. The lad out front has a tray and no pride left."],
+        [
+          {
+            label: "Take one. Take two.",
+            run: () => {
+              applyDelta(s.meters, { hunger: +10, morale: +4 });
+              return menu("Free samples", ["He doesn't even clock you. You are just someone with a hand out.", "That is the whole pitch."], [close], "good");
+            },
+          },
+          { label: "Take one, move on", run: () => menu("Free samples", ["A small square of something. It's good. Doesn't matter what it is."], [close], "good") },
+        ],
+      );
+    },
+  },
+
+  /* -------------------------------------------------- hold a sign */
+  {
+    id: "holdSign",
+    weight: (s, z) => (z === "downtown" && phaseOf(s) <= 2 ? 2 : 0),
+    build: (ctx) => {
+      const s = ctx.state;
+      const pay = ctx.rng.int(10, 18);
+      return menu(
+        "A man with a sandwich board",
+        ['"I need someone for an hour. Cash now."', `$${pay} to stand outside a shop with a sign. He does not look like he has a plan B.`],
+        [
+          {
+            label: `Take it — $${pay}, 1h`,
+            hint: `1h, $${pay}`,
+            run: () => {
+              ctx.advance(60, { exertion: 0.7 });
+              applyDelta(s.meters, { energy: -4, morale: -6 });
+              earnCash(s, pay);
+              pushLog(s, `An hour holding a sign — $${pay}.`, "money");
+              return menu("A man with a sandwich board", [`Sixty minutes of holding a board and being looked through.`, `$${pay} cash, no receipt.`, '"Same time next week?" You say sure, knowing you will not be there.'], [close], "money");
+            },
+          },
+          { label: "Pass", run: () => null },
+        ],
+      );
+    },
+  },
+
+  /* --------------------------------------------------- street chess */
+  {
+    id: "chessTable",
+    weight: (s, z) => (z === "downtown" && hourOf(s.time) >= 9 && hourOf(s.time) <= 18 ? 2 : 0),
+    build: (ctx) => {
+      const s = ctx.state;
+      return menu(
+        "The chess tables",
+        ["An old man is sitting alone at the permanent board with the pieces already out.", "He looks up."],
+        [
+          {
+            label: "Sit across from him",
+            hint: "45 min",
+            run: () => {
+              ctx.advance(45, { sheltered: false, exertion: 0.3 });
+              applyDelta(s.meters, { morale: +14, energy: +4 });
+              if (ctx.rng.chance(0.4)) {
+                earnCash(s, 5);
+                pushLog(s, "Won $5 at the chess table.", "money");
+                return menu("The chess tables", ["He plays fast and says nothing.", "You win by attrition. He puts a five-dollar note on the board.", '"Tomorrow," he says. It means he will be here. It means you could be too.'], [close], "money");
+              }
+              return menu("The chess tables", ["He takes you apart in thirty moves without looking particularly interested.", '"Again?"', "He means it as a compliment."], [close]);
+            },
+          },
+          { label: "Not today", run: () => null },
+        ],
+      );
+    },
+  },
+
+  /* --------------------------------------------------- paper bag on bench */
+  {
+    id: "paperBagBench",
+    weight: (s, z) => ((z === "slums" || z === "downtown") && phaseOf(s) <= 2 ? 2 : 0),
+    build: (ctx) => {
+      const s = ctx.state;
+      addItem(s.inventory, "sandwich", 2);
+      applyDelta(s.meters, { morale: +10 });
+      pushLog(s, "Food left on a bench — 'for anyone'.", "good");
+      return menu(
+        "A paper bag on the bench",
+        ["A brown paper bag with a folded note on top.", '"For anyone who needs it."', "Two sandwiches, a packet of crisps, a small orange juice. Still cold."],
+        [close],
+        "good",
+      );
+    },
+  },
+
+  /* ----------------------------------------------- shared umbrella */
+  {
+    id: "umbrellaShare",
+    weight: (s) => (s.weather === "rain" || s.weather === "storm" ? 3 : 0),
+    build: (ctx) => {
+      const s = ctx.state;
+      return menu(
+        "Caught in it",
+        ["A woman under a large umbrella at the bus stop tilts it sideways without being asked."],
+        [
+          {
+            label: "Step under",
+            hint: "5 min",
+            run: () => {
+              ctx.advance(5, { sheltered: true });
+              applyDelta(s.meters, { morale: +16 });
+              return menu("Caught in it", ["You stand just close enough not to be wet.", "Neither of you says anything. The bus comes. She goes. That's all it was."], [close], "good");
+            },
+          },
+          { label: "Walk on in the rain", run: () => { applyDelta(s.meters, { hygiene: -8, morale: -6 }); return menu("Caught in it", ["You're wet before the end of the road."], [close], "bad"); } },
+        ],
+      );
+    },
+  },
+
+  /* ----------------------------------------------- window washing offer */
+  {
+    id: "windowWashing",
+    weight: (s, z) => (z === "downtown" && phaseOf(s) <= 2 && hourOf(s.time) >= 8 && hourOf(s.time) <= 11 ? 2 : 0),
+    build: (ctx) => {
+      const s = ctx.state;
+      const pay = ctx.rng.int(12, 22);
+      return menu(
+        "A shop owner with a bucket",
+        ['"I\'ve got three storefronts and a bad back. Twenty minutes a window."', `He names $${pay} for all three like it's an opening offer.`],
+        [
+          {
+            label: `Take it — $${pay}, ~1h`,
+            hint: `$${pay}`,
+            run: () => {
+              ctx.advance(55, { exertion: 1.6 });
+              applyDelta(s.meters, { energy: -10, hygiene: -6, morale: +6 });
+              earnCash(s, pay);
+              pushLog(s, `Window washing — $${pay}.`, "money");
+              return menu("A shop owner with a bucket", [`Three windows, squeegee and a chamois, $${pay} cash.`, '"Same deal Fridays, if you want."'], [close], "money");
+            },
+          },
+          { label: "Pass", run: () => null },
+        ],
+      );
+    },
+  },
+
+  /* ------------------------------------------- bus driver waves you on */
+  {
+    id: "busDriverKind",
+    weight: (s, z) => ((z === "slums" || z === "downtown") && phaseOf(s) <= 2 && !s.flags.busDriverDone ? 2 : 0),
+    once: true,
+    build: (ctx) => {
+      const s = ctx.state;
+      s.flags.busDriverDone = 1;
+      applyDelta(s.meters, { morale: +18, energy: +12 });
+      pushLog(s, "Bus driver waved you on without paying.", "good");
+      return menu(
+        "The number nine",
+        ["You step on and start explaining.", "He waves his hand at the machine.", '"Sit down, mate."', "You take a seat. You ride for forty minutes. Nobody says anything."],
+        [close],
+        "good",
+      );
+    },
+  },
+
+  /* --------------------------------------------- marathon / charity run */
+  {
+    id: "marathonRoute",
+    weight: (_s, z) => (z === "downtown" && !_s.flags.marathonDone ? 1 : 0),
+    once: true,
+    build: (ctx) => {
+      const s = ctx.state;
+      s.flags.marathonDone = 1;
+      return menu(
+        "Road closed",
+        ["The square is blocked off with barriers. A charity run is coming through.", "Volunteers at a table have too many bananas and isotonic drinks."],
+        [
+          {
+            label: "Grab a drink and a banana",
+            run: () => {
+              applyDelta(s.meters, { hunger: +20, thirst: +28, morale: +10 });
+              addItem(s.inventory, "waterBottle", 1);
+              return menu("Road closed", ["They're giving it to every jogger who passes.", "You are not jogging.", "Nobody checks."], [close], "good");
+            },
+          },
+          {
+            label: "Volunteer for an hour",
+            hint: "1h",
+            run: () => {
+              ctx.advance(60, { exertion: 0.8, sheltered: false });
+              applyDelta(s.meters, { morale: +22, thirst: +15, hunger: +15 });
+              changeReputation(s, 4);
+              addItem(s.inventory, "sandwich", 1);
+              pushLog(s, "Volunteered at a charity run.", "good");
+              return menu("Road closed", ["You hand out cups for an hour.", "At the end the team lead gives you a lunch box and says you were great.", "You were. You handed out cups perfectly."], [close], "good");
+            },
+          },
+          { label: "Find a way around", run: () => null },
+        ],
+      );
+    },
+  },
+
+  /* -------------------------------------------- free health screening */
+  {
+    id: "popupClinic",
+    weight: (s, z) => (z === "downtown" && (s.sick || s.meters.health < 70) ? 4 : 0),
+    build: (ctx) => {
+      const s = ctx.state;
+      return menu(
+        "Free health screening",
+        ["A folding table outside the pharmacy. A nurse with a blood pressure cuff and a stack of leaflets.", '"No appointment. Two minutes."'],
+        [
+          {
+            label: "Stop",
+            hint: "15 min, free",
+            run: () => {
+              ctx.advance(15, { sheltered: false });
+              s.sick = false;
+              applyDelta(s.meters, { health: +18, morale: +10 });
+              pushLog(s, "Free health screening on the street.", "good");
+              return menu("Free health screening", ['"Blood pressure\'s a bit up. Drink more water, eat if you can."', "She gives you a leaflet and a bottle of water from under the table.", "You walk away knowing slightly more about your body than you did."], [close], "good");
+            },
+          },
+          { label: "Keep walking", run: () => null },
+        ],
+      );
+    },
+  },
+
+  /* ----------------------------------------------- refused entry café */
+  {
+    id: "cafeRefusal",
+    weight: (s, z) => (z === "downtown" && currentAppearance(s) < 35 && phaseOf(s) <= 2 ? 3 : 0),
+    build: (ctx) => {
+      const s = ctx.state;
+      applyDelta(s.meters, { morale: -12 });
+      return menu(
+        "The café",
+        ['"Sorry — customers only."', "You are not carrying a drink. You have not sat down. You are standing in the doorway out of the cold.", "He means it."],
+        [
+          {
+            label: "Go",
+            run: () => menu("The café", ["You go.", "You stand in the doorway for one more second, which is the wrong call, and then you go."], [close], "bad"),
+          },
+          {
+            label: '"I was just checking the menu."',
+            run: () => {
+              applyDelta(s.meters, { morale: +6 });
+              return menu("The café", ['"The menu\'s outside."', "He's right. You take the small victory anyway."], [close]);
+            },
+          },
+        ],
+        "bad",
+      );
+    },
+  },
+
+  /* ---------------------------------------------- protest passes through */
+  {
+    id: "protestPasses",
+    weight: (_s, z) => (z === "downtown" ? 2 : 0),
+    build: (ctx) => {
+      const s = ctx.state;
+      return menu(
+        "A march coming down the road",
+        ["Two hundred people, a sound system on a flatbed, banners about housing and rents.", "They fill the whole road. Cars stopped. People watching from windows."],
+        [
+          {
+            label: "Join in for a few blocks",
+            hint: "20 min",
+            run: () => {
+              ctx.advance(20, { exertion: 1.1 });
+              applyDelta(s.meters, { morale: +20, energy: -8 });
+              changeReputation(s, 3);
+              pushLog(s, "Marched with the housing protest.", "good");
+              return menu("A march coming down the road", ["You fall in at the back.", "Someone gives you a banner to carry.", "It says HOMES NOT PROFITS.", "You carry it for twenty minutes and mean it."], [close], "good");
+            },
+          },
+          {
+            label: "Watch from the pavement",
+            run: () => {
+              applyDelta(s.meters, { morale: +8 });
+              return menu("A march coming down the road", ["You stand and watch it go by.", "It is the noisiest thing that happens all week."], [close]);
+            },
+          },
+          { label: "Cross the road when there's a gap", run: () => null },
+        ],
+      );
+    },
+  },
+
+  /* ---------------------------------------------- busker you recognize */
+  {
+    id: "buskerRequest",
+    weight: (_s, z) => (z === "downtown" ? 2 : 1),
+    build: (ctx) => {
+      const s = ctx.state;
+      return menu(
+        "A woman with a violin",
+        ["She's outside the post office with the case open.", "She looks up and says she'll play anything you want."],
+        [
+          {
+            label: "Name something",
+            hint: "5 min",
+            run: () => {
+              ctx.advance(5);
+              applyDelta(s.meters, { morale: +20 });
+              return menu("A woman with a violin", ["She plays it.", "You did not expect her to actually know it.", "You stand there the whole way through and people walk around you."], [close], "good");
+            },
+          },
+          {
+            label: "Drop whatever you have",
+            hint: s.cash >= 2 ? "$2" : "nothing",
+            run: () => {
+              const gave = Math.min(s.cash, 2);
+              s.cash -= gave;
+              applyDelta(s.meters, { morale: +12 });
+              return menu("A woman with a violin", ["She nods without stopping.", "It costs you what it costs you."], [close]);
+            },
+          },
+          { label: "Keep walking", run: () => null },
+        ],
+      );
+    },
+  },
+
+  /* ----------------------------------------- giveDirections to stranger */
+  {
+    id: "giveDirections",
+    weight: (s, z) => (z !== "heights" && currentAppearance(s) >= 25 ? 2 : 0),
+    build: (ctx) => {
+      const s = ctx.state;
+      const tip = ctx.rng.int(2, 6);
+      return menu(
+        "Excuse me",
+        ['"Do you know where the bus station is?"', "They've asked you. They've chosen you."],
+        [
+          {
+            label: "Point them right",
+            run: () => {
+              applyDelta(s.meters, { morale: +10 });
+              if (ctx.rng.chance(0.4)) {
+                earnCash(s, tip);
+                pushLog(s, `Gave directions, got a $${tip} thank-you.`, "money");
+                return menu("Excuse me", ["They thank you and press some change into your hand before you can say anything.", `$${tip}.`, '"You sure? Take it."', "You take it."], [close], "money");
+              }
+              return menu("Excuse me", ['"Thank you so much."', "They go. You watch them get it right.", "Small thing. Right thing."], [close], "good");
+            },
+          },
+          { label: "Tell them you don't know", run: () => menu("Excuse me", ["They smile and try the next person.", "You know where it is."], [close]) },
+        ],
+      );
+    },
+  },
+
+  /* ---------------------------------------------- half-finished coffee */
+  {
+    id: "halfCoffee",
+    weight: (s, z) => (z === "downtown" && phaseOf(s) <= 2 ? 2 : 0),
+    build: (ctx) => {
+      const s = ctx.state;
+      return menu(
+        "A coffee cup on a wall",
+        ["A takeaway cup, still steaming, left balanced on a low wall.", "Somebody's name on it in marker. Not yours."],
+        [
+          {
+            label: "Drink it",
+            run: () => {
+              applyDelta(s.meters, { thirst: +18, morale: +10, energy: +10 });
+              return menu("A coffee cup on a wall", ["Flat white, one sugar. Still hot.", "Somebody had good taste and somewhere to be."], [close], "good");
+            },
+          },
+          { label: "Leave it", run: () => menu("A coffee cup on a wall", ["You walk past it.", "It takes something."], [close]) },
+        ],
+      );
+    },
+  },
+
+  /* ----------------------------------------------- scratch card found */
+  {
+    id: "scratchCard",
+    weight: (s, z) => ((z === "slums" || z === "downtown") && phaseOf(s) <= 3 ? 2 : 0),
+    build: (ctx) => {
+      const s = ctx.state;
+      return menu(
+        "A scratch card on the ground",
+        ["Face-down, unscratched. One of the two-dollar ones from the newsagent."],
+        [
+          {
+            label: "Scratch it",
+            run: () => {
+              const roll = ctx.rng.next();
+              if (roll < 0.1) {
+                const win = ctx.rng.int(20, 80);
+                earnCash(s, win);
+                applyDelta(s.meters, { morale: +20 });
+                pushLog(s, `Scratch card — won $${win}.`, "money");
+                return menu("A scratch card on the ground", [`$${win}.`, "You check it twice. You check it a third time.", "It does not change."], [close], "money");
+              }
+              if (roll < 0.45) {
+                earnCash(s, 2);
+                applyDelta(s.meters, { morale: +8 });
+                pushLog(s, "Scratch card — won $2.", "money");
+                return menu("A scratch card on the ground", ["$2. Breakeven.", "You are oddly pleased."], [close], "money");
+              }
+              applyDelta(s.meters, { morale: -4 });
+              return menu("A scratch card on the ground", ["Nothing.", "It never had anything on it. You knew that."], [close]);
+            },
+          },
+          { label: "Leave it", run: () => null },
+        ],
+      );
+    },
+  },
+
+  /* ------------------------------------------ free newspaper on a wall */
+  {
+    id: "freeNewspaper",
+    weight: (s, z) => (z === "downtown" && phaseOf(s) <= 2 ? 2 : 0),
+    build: (ctx) => {
+      const s = ctx.state;
+      ctx.advance(20, { sheltered: false, exertion: 0.3 });
+      applyDelta(s.meters, { morale: +8, energy: +4 });
+      return menu(
+        "Today's paper, left on a wall",
+        ["Folded neatly like a gift.", "You sit on the kerb and read the whole thing, cover to cover, adverts and all.", "For twenty minutes you are just someone reading the news."],
+        [close],
+      );
+    },
+  },
+
+  /* -------------------------------------------- film crew on the street */
+  {
+    id: "movieShoot",
+    weight: (_s, z) => (z === "downtown" && !_s.flags.movieShootDone ? 1 : 0),
+    once: true,
+    build: (ctx) => {
+      const s = ctx.state;
+      s.flags.movieShootDone = 1;
+      return menu(
+        "Lights and a camera rig",
+        ["A film crew has taken over half the square.", "A runner with a clipboard asks if you want to be a background extra. Twenty dollars for two hours."],
+        [
+          {
+            label: "Say yes",
+            hint: "2h, $20",
+            run: () => {
+              ctx.advance(120, { sheltered: true, exertion: 0.5 });
+              applyDelta(s.meters, { energy: +6, morale: +22 });
+              earnCash(s, 20);
+              changeReputation(s, 2);
+              pushLog(s, "Background extra on a film shoot — $20.", "money");
+              return menu("Lights and a camera rig", ["They put you in a jacket and tell you to walk past the camera like you live here.", "You do.", "Twenty dollars and craft services. You eat three of the small pastries.", "Somewhere in a film nobody will see, you are crossing a road."], [close], "money");
+            },
+          },
+          { label: "Ignore it", run: () => null },
+        ],
+      );
+    },
+  },
+
+  /* ----------------------------------------- bus stop tea share */
+  {
+    id: "busStopTea",
+    weight: (s, z) => ((z === "slums" || z === "downtown") && (s.weather === "cold" || s.weather === "rain") ? 3 : 0),
+    build: (ctx) => {
+      const s = ctx.state;
+      return menu(
+        "The bus shelter",
+        ["A man about seventy with a thermos flask and no bus to wait for.", '"Have a cup. It\'s no trouble."'],
+        [
+          {
+            label: "Sit with him",
+            hint: "15 min",
+            run: () => {
+              ctx.advance(15, { sheltered: true });
+              applyDelta(s.meters, { thirst: +20, morale: +18, energy: +6 });
+              return menu("The bus shelter", ["Strong tea, powdered milk, one sugar.", "He talks about the road when it was unpaved.", "You listen. It costs nothing. He needed to tell someone."], [close], "good");
+            },
+          },
+          {
+            label: "Take a cup and move on",
+            run: () => {
+              applyDelta(s.meters, { thirst: +14, morale: +10 });
+              return menu("The bus shelter", ['"Take it warm."', "You do."], [close], "good");
+            },
+          },
+        ],
+      );
+    },
+  },
+
+  /* ------------------------------------------- package at wrong address */
+  {
+    id: "packageWrongDoor",
+    weight: (s, z) => (z === "heights" && !s.flags.packageDone ? 2 : 0),
+    once: true,
+    build: (ctx) => {
+      const s = ctx.state;
+      s.flags.packageDone = 1;
+      return menu(
+        "A parcel on the wrong step",
+        ["Number 14, addressed to number 41.", "Nobody home at either. You're the only one who's noticed."],
+        [
+          {
+            label: "Move it to the right address",
+            hint: "reputation",
+            run: () => {
+              ctx.advance(15);
+              changeReputation(s, 8);
+              applyDelta(s.meters, { morale: +12 });
+              pushLog(s, "Moved a misdelivered parcel to the right house.", "good");
+              return menu("A parcel on the wrong step", ["Nobody sees you do it.", "That's not why you do it."], [close], "good");
+            },
+          },
+          { label: "None of your business", run: () => menu("A parcel on the wrong step", ["You keep walking.", "It will sort itself out. They always do."], [close]) },
+        ],
+      );
+    },
+  },
+
+  /* ----------------------------------------- dog walker needs extra hand */
+  {
+    id: "dogWalkExtra",
+    weight: (_s, z) => (z === "heights" ? 3 : 0),
+    build: (ctx) => {
+      const s = ctx.state;
+      const pay = ctx.rng.int(14, 28);
+      return menu(
+        "Five dogs and one woman",
+        ["She has a lead in each hand and one round her wrist and she is losing.", '"I just need someone to take two of them to the park. It\'s five minutes."'],
+        [
+          {
+            label: `Do it — $${pay}`,
+            hint: `$${pay}`,
+            run: () => {
+              ctx.advance(30, { exertion: 1.2 });
+              applyDelta(s.meters, { morale: +16, energy: -6 });
+              earnCash(s, pay);
+              pushLog(s, `Walked two dogs in the Heights — $${pay}.`, "money");
+              return menu("Five dogs and one woman", ["Two large labradors who want to go in different directions.", `$${pay} and she asks if you can do Tuesdays.`], [close], "money");
+            },
+          },
+          { label: "No thanks", run: () => null },
+        ],
+      );
+    },
+  },
+
+  /* -------------------------------------------- estate agent / for sale */
+  {
+    id: "estateAgentBoard",
+    weight: (s, z) => (z === "heights" && phaseOf(s) <= 2 ? 3 : 0),
+    build: (ctx) => {
+      const s = ctx.state;
+      applyDelta(s.meters, { morale: -6 });
+      return menu(
+        "FOR SALE",
+        ["Seven bedrooms. Gravel drive.", "A number in the window with more digits than you've seen in one place.", "There is a picture of the kitchen on the sign."],
+        [
+          {
+            label: "Look at it",
+            run: () => {
+              applyDelta(s.meters, { morale: -4 });
+              return menu("FOR SALE", ["You look at it for a long time.", "The kitchen has an island and a wine rack and a door to a garden.", "You've eaten out of bins this week.", "Both of those things are true at the same time."], [close], "bad");
+            },
+          },
+          {
+            label: "Walk on fast",
+            run: () => menu("FOR SALE", ["You don't look at it.", "You still know what it said."], [close]),
+          },
+        ],
+      );
+    },
+  },
+
+  /* ---------------------------------------------- rainbow after storm */
+  {
+    id: "rainbowAfterRain",
+    weight: (s) => (s.weather === "rain" || s.weather === "storm" ? 2 : 0),
+    build: (ctx) => {
+      const s = ctx.state;
+      applyDelta(s.meters, { morale: +14 });
+      return menu(
+        "The sky after",
+        ["The rain stops mid-step.", "You look up and there is a full rainbow, one end over the estate, the other end out past the slums.", "For about thirty seconds everyone on the street is doing the same thing."],
+        [close],
+        "good",
+      );
+    },
+  },
+
+  /* ------------------------------------------------- pigeon steals food */
+  {
+    id: "pigeonFood",
+    weight: (s, z) => ((z === "downtown" || z === "slums") && Object.values(s.inventory).some(v => (v ?? 0) > 0) ? 2 : 0),
+    build: (ctx) => {
+      const s = ctx.state;
+      if (s.inventory.trashFood && s.inventory.trashFood > 0) {
+        s.inventory.trashFood -= 1;
+      } else if (s.inventory.sandwich && s.inventory.sandwich > 0) {
+        s.inventory.sandwich -= 1;
+      }
+      applyDelta(s.meters, { morale: -10 });
+      pushLog(s, "A pigeon took your food.", "bad");
+      return menu(
+        "A pigeon",
+        ["It comes from nowhere.", "You were holding it for two seconds.", "You blink and it's gone and the pigeon is already on a bin."],
+        [close],
+        "bad",
+      );
+    },
+  },
+
+  /* ------------------------------------------------- night star visible */
+  {
+    id: "nightStar",
+    weight: (s) => (hourOf(s.time) >= 22 || hourOf(s.time) <= 4 ? 2 : 0),
+    build: (ctx) => {
+      const s = ctx.state;
+      applyDelta(s.meters, { morale: +10 });
+      return menu(
+        "One star",
+        ["The light pollution takes most of them.", "But there's one, right overhead, getting through.", "You stop and look at it for a moment before you remember where you are."],
+        [close],
+      );
+    },
+  },
+
+  /* ----------------------------------------- street preacher */
+  {
+    id: "streetPreacher",
+    weight: (_s, z) => (z === "downtown" ? 2 : 0),
+    build: (ctx) => {
+      const s = ctx.state;
+      return menu(
+        "A man with a sign",
+        ['"THE ANSWER IS LOVE," it says, in red paint.', "He is not aggressive about it. He is just standing there with his sign, which is the whole argument."],
+        [
+          {
+            label: '"Agree to disagree."',
+            run: () => {
+              applyDelta(s.meters, { morale: +6 });
+              return menu("A man with a sign", ["He smiles. You smile back.", '"God bless you."', "He means it. You walk on."], [close]);
+            },
+          },
+          {
+            label: "Stop and talk",
+            hint: "15 min",
+            run: () => {
+              ctx.advance(15);
+              applyDelta(s.meters, { morale: +14 });
+              return menu("A man with a sign", ["He talks about forgiveness for twenty minutes.", "Not fire. Not blame. Just the possibility that things can be set right.", "You don't believe everything he says.", "You believe the part about things being set right."], [close], "good");
+            },
+          },
+          { label: "Keep walking", run: () => null },
+        ],
+      );
+    },
+  },
+
+  /* ---------------------------------------- graffiti moment */
+  {
+    id: "graffiti",
+    weight: (_s, z) => (z === "slums" ? 3 : z === "downtown" ? 1 : 0),
+    build: (ctx) => {
+      const s = ctx.state;
+      const texts = [
+        "YOU ARE HERE.",
+        "THIS TOO SHALL PASS",
+        "RENT IS THEFT",
+        "WAKE UP",
+        "IT'S OK TO NOT BE OK",
+      ];
+      const text = texts[ctx.rng.int(0, texts.length - 1)]!;
+      applyDelta(s.meters, { morale: +8 });
+      return menu(
+        "On the wall",
+        [`"${text}"`, "Whoever wrote it is not here. The words still are."],
+        [close],
+      );
+    },
+  },
+
+  /* --------------------------------------- automatic door ignores you */
+  {
+    id: "automaticDoor",
+    weight: (s, z) => (z === "downtown" && currentAppearance(s) < 40 ? 2 : 0),
+    build: (ctx) => {
+      const s = ctx.state;
+      applyDelta(s.meters, { morale: -8 });
+      return menu(
+        "The sensor",
+        ["You step toward the automatic door. It does not open.", "You step back. You step forward. It opens for the woman behind you.", "You follow her through, which is a different thing from being let in."],
+        [close],
+        "bad",
+      );
+    },
+  },
+
+  /* ------------------------------------------ deep puddle */
+  {
+    id: "deepPuddle",
+    weight: (s) => (s.weather === "rain" || s.weather === "storm" ? 3 : 0),
+    build: (ctx) => {
+      const s = ctx.state;
+      applyDelta(s.meters, { hygiene: -10, morale: -8, health: -3 });
+      pushLog(s, "Soaked by a passing car — deep puddle.", "bad");
+      return menu(
+        "A car that doesn't slow",
+        ["It is the size of the puddle that gets you.", "You hear the water before you see it.", "There is nothing to do. You are completely soaked from the knee down.", "The car does not stop."],
+        [close],
+        "bad",
+      );
+    },
+  },
+
+  /* ----------------------------------------- cyclist near miss */
+  {
+    id: "cyclistNearMiss",
+    weight: (_s, z) => (z === "downtown" ? 2 : 0),
+    build: (ctx) => {
+      const s = ctx.state;
+      return menu(
+        "On the pavement",
+        ["A cyclist doing about twenty, on the pavement, looking at their phone.", "They swerve at the last second."],
+        [
+          {
+            label: '"Oi!"',
+            run: () => {
+              applyDelta(s.meters, { morale: -4 });
+              return menu("On the pavement", ["They do not look back.", "You stand in the middle of the pavement with your heart going.", "Nothing happened. Something nearly did."], [close], "bad");
+            },
+          },
+          { label: "Don't react", run: () => { applyDelta(s.meters, { morale: -6 }); return menu("On the pavement", ["You let it go.", "You let everything go eventually."], [close]); } },
+        ],
+      );
+    },
+  },
+
+  /* ------------------------------------------ road works detour */
+  {
+    id: "roadWorksDetour",
+    weight: (_s, z) => (z === "downtown" ? 2 : 0),
+    build: (ctx) => {
+      const s = ctx.state;
+      ctx.advance(15, { exertion: 1.0 });
+      applyDelta(s.meters, { energy: -4, morale: -4 });
+      return menu(
+        "ROAD CLOSED",
+        ["They've dug up the whole pavement with no notice.", "The detour adds fifteen minutes and goes through the worst-smelling street on this side of town."],
+        [close],
+      );
+    },
+  },
+
+  /* ---------------------------------------- skip full of stuff */
+  {
+    id: "skipTreasure",
+    weight: (s, z) => ((z === "downtown" || z === "slums") && phaseOf(s) <= 2 ? 2 : 0),
+    build: (ctx) => {
+      const s = ctx.state;
+      return menu(
+        "A skip outside a flat",
+        ["Someone is clearing out. The skip is full and some of it is still good.", "A duvet. A chair. A box of kitchen stuff."],
+        [
+          {
+            label: "Have a look",
+            hint: "10 min",
+            run: () => {
+              ctx.advance(10, { exertion: 1.2 });
+              applyDelta(s.meters, { hygiene: -4 });
+              if (ctx.rng.chance(0.6)) {
+                const cash = ctx.rng.int(5, 22);
+                earnCash(s, cash);
+                addItem(s.inventory, "recyclables", 2);
+                pushLog(s, `Skip find — sold for $${cash}.`, "money");
+                return menu("A skip outside a flat", [`A small lamp, some tools, a jacket in decent condition.`, `You take what you can carry and sell the rest for $${cash}.`], [close], "money");
+              }
+              addItem(s.inventory, "recyclables", 2);
+              applyDelta(s.meters, { morale: -4 });
+              return menu("A skip outside a flat", ["A lot of damp cardboard and broken flatpack.", "Two recyclables worth keeping.", "You take them."], [close]);
+            },
+          },
+          { label: "Keep moving", run: () => null },
+        ],
+      );
+    },
+  },
+
+  /* ----------------------------------------- birthday party on the street */
+  {
+    id: "birthdayParty",
+    weight: (s, z) => ((z === "slums" || z === "downtown") && hourOf(s.time) >= 14 && hourOf(s.time) <= 18 ? 2 : 0),
+    build: (ctx) => {
+      const s = ctx.state;
+      return menu(
+        "Balloons on a lamp post",
+        ["A kid's birthday in the front garden, spilling onto the pavement.", "A table of food, a paddling pool, someone's mum with too much cake."],
+        [
+          {
+            label: "Walk through — they won't mind",
+            run: () => {
+              applyDelta(s.meters, { morale: +12, hunger: +10 });
+              return menu("Balloons on a lamp post", ["Nobody minds. Someone\'s gran pushes a slice of cake into your hand.", '"Go on, there\'s loads."', "There is loads. It is good cake."], [close], "good");
+            },
+          },
+          { label: "Go around", run: () => null },
+        ],
+      );
+    },
+  },
+
+  /* ----------------------------------------- payphone still works */
+  {
+    id: "payphone",
+    weight: (s, z) => ((z === "downtown" || z === "slums") && !s.flags.payphoneDone ? 2 : 0),
+    once: true,
+    build: (ctx) => {
+      const s = ctx.state;
+      s.flags.payphoneDone = 1;
+      return menu(
+        "A phone box",
+        ["Still working. The light is on.", "You cannot remember the last time you saw one of these that worked."],
+        [
+          {
+            label: "Pick it up",
+            run: () => {
+              applyDelta(s.meters, { morale: +6 });
+              return menu("A phone box", ["The dial tone.", "You hold it for a moment.", "You can call anyone. You do not call anyone.", "You hang it back up and walk out."], [close]);
+            },
+          },
+          {
+            label: "Call someone",
+            hint: "free",
+            run: () => {
+              applyDelta(s.meters, { morale: +16 });
+              return menu("A phone box", ["You think of someone and you call them.", "It rings four times and goes to voicemail.", '"Hey, it\'s me. I\'m okay. Just wanted to say."', "You hang up. That was enough."], [close], "good");
+            },
+          },
+        ],
+      );
+    },
+  },
+
+  /* ---------------------------------------- watching someone else refused */
+  {
+    id: "witnessRefusal",
+    weight: (s, z) => (z === "downtown" && phaseOf(s) >= 2 ? 2 : 0),
+    build: (ctx) => {
+      const s = ctx.state;
+      return menu(
+        "In the queue",
+        ["The man at the counter looks at the person in front of you, then at the machine, then back.", '"I need to ask you to step aside."', "The person steps aside.", "You know that look. You have been that person."],
+        [
+          {
+            label: "Say nothing",
+            run: () => {
+              applyDelta(s.meters, { morale: -10 });
+              return menu("In the queue", ["You say nothing.", "They take your order. You walk out with it.", "You think about it for the rest of the afternoon."], [close], "bad");
+            },
+          },
+          {
+            label: "Offer to buy them something",
+            hint: "$8",
+            locked: s.cash < 8 ? "You don't have it" : undefined,
+            run: () => {
+              s.cash -= 8;
+              applyDelta(s.meters, { morale: +16 });
+              changeReputation(s, 5);
+              pushLog(s, "Bought something for a stranger who was turned away.", "good");
+              return menu("In the queue", ['"I\'ll get one for both of us."', "They look at you. You look at the menu.", "You know exactly what it's like to be them. That is the whole reason."], [close], "good");
+            },
+          },
+        ],
+      );
+    },
+  },
+
+  /* ------------------------------------------- coworker sympathy */
+  {
+    id: "coworkerSympathy",
+    weight: (s) => (s.employment !== null && s.employment !== undefined && phaseOf(s) >= 2 ? 2 : 0),
+    build: (ctx) => {
+      const s = ctx.state;
+      return menu(
+        "After the shift",
+        ["A coworker you barely know stops you on the way out.", '"Hey — you doing alright? You seem like you\'ve got a lot on."'],
+        [
+          {
+            label: "Tell them a bit",
+            run: () => {
+              applyDelta(s.meters, { morale: +14 });
+              changeReputation(s, 3);
+              return menu("After the shift", ["You say enough.", "They listen properly — no phone, no nodding off into the distance.", '"That\'s a lot. Let me know if you need anything."', "They mean it. Maybe they can't deliver it. They mean it."], [close], "good");
+            },
+          },
+          {
+            label: '"I\'m fine, thanks."',
+            run: () => {
+              applyDelta(s.meters, { morale: +4 });
+              return menu("After the shift", ['"Sure. See you tomorrow."', "You meant to say more.", "Tomorrow."], [close]);
+            },
+          },
+        ],
+      );
+    },
+  },
+
+  /* -------------------------------------------- watching the city wake up */
+  {
+    id: "cityWakingUp",
+    weight: (s) => (hourOf(s.time) >= 5 && hourOf(s.time) <= 7 ? 3 : 0),
+    build: (ctx) => {
+      const s = ctx.state;
+      ctx.advance(10, { exertion: 0.2 });
+      applyDelta(s.meters, { morale: +12, energy: +4 });
+      return menu(
+        "First light",
+        ["The street is yours for another twenty minutes.", "A fox crosses the road without hurrying.", "The first bus goes past with two people in it.", "A bakery somewhere has its extractor on.", "This is the only time the day feels like it might be fair."],
+        [close],
+        "good",
+      );
+    },
+  },
+
+  /* -------------------------------------------- someone drops groceries */
+  {
+    id: "droppedGroceries",
+    weight: (_s, z) => (z !== "heights" ? 2 : 0),
+    build: (ctx) => {
+      const s = ctx.state;
+      return menu(
+        "Bag splits",
+        ["A woman with too many bags. The bottom goes and it all goes.", "Tins rolling into the road. An egg situation developing."],
+        [
+          {
+            label: "Help her",
+            hint: "5 min",
+            run: () => {
+              ctx.advance(5);
+              applyDelta(s.meters, { morale: +12 });
+              if (ctx.rng.chance(0.4)) {
+                addItem(s.inventory, "trashFood", 1);
+                return menu("Bag splits", ['"God, you\'re a lifesaver."', "She presses a tin of soup on you. You take it.", '"I got three of them, I don\'t need three."', "You do need three. One of you does."], [close], "good");
+              }
+              changeReputation(s, 2);
+              return menu("Bag splits", ['"Thank you so much."', "You get it all back into the bag.", "She goes. You go.", "There was an egg. It survived."], [close], "good");
+            },
+          },
+          { label: "Keep walking", run: () => null },
+        ],
+      );
+    },
+  },
+
+  /* ---------------------------------------- landlord notice in your area */
+  {
+    id: "rentIncrease",
+    weight: (s, z) => (z === "slums" && phaseOf(s) <= 2 ? 2 : 0),
+    build: (ctx) => {
+      const s = ctx.state;
+      applyDelta(s.meters, { morale: -10 });
+      return menu(
+        "A notice in a window",
+        ["RENT REVIEW IN PROGRESS.", "Every window on the street has one.", "You do not live here, but the people who do are standing on the pavement reading them."],
+        [
+          {
+            label: "Read one",
+            run: () => {
+              applyDelta(s.meters, { morale: -6 });
+              return menu("A notice in a window", ["Forty percent.", "In six months.", "Two weeks to respond.", "You are looking at this notice from the street because you could not afford to be inside one of these rooms.", "The people inside them are looking at it from the window."], [close], "bad");
+            },
+          },
+          { label: "Walk past", run: () => menu("A notice in a window", ["You walk past it.", "The people standing outside are still reading theirs."], [close]) },
+        ],
+      );
+    },
+  },
+
+  /* ----------------------------------------- early morning bin lorry */
+  {
+    id: "binLorry",
+    weight: (s) => (hourOf(s.time) >= 6 && hourOf(s.time) <= 9 ? 3 : 0),
+    build: (ctx) => {
+      const s = ctx.state;
+      return menu(
+        "The bin lorry",
+        ["It turns the corner and you are the only other person on the street.", "Two men on the back, fluorescent jackets, moving faster than you'd think.", "One of them nods at you."],
+        [
+          {
+            label: "Nod back",
+            run: () => {
+              applyDelta(s.meters, { morale: +10 });
+              return menu("The bin lorry", ["You nod back.", "That was it.", "It was enough."], [close]);
+            },
+          },
+          { label: "Keep your head down", run: () => null },
+        ],
+      );
+    },
+  },
+
+  /* ----------------------------------------- shop offers cash for help */
+  {
+    id: "shopHelp",
+    weight: (s, z) => (z === "downtown" && phaseOf(s) <= 3 ? 2 : 0),
+    build: (ctx) => {
+      const s = ctx.state;
+      const pay = ctx.rng.int(10, 20);
+      return menu(
+        "A delivery arrived",
+        ['"Whoever you are — I need someone to shift boxes for half an hour."', `The shop owner is blocking the pavement with pallets. $${pay}.`],
+        [
+          {
+            label: `Do it — $${pay}`,
+            hint: `30 min, $${pay}`,
+            run: () => {
+              ctx.advance(30, { exertion: 1.8 });
+              applyDelta(s.meters, { energy: -8, hygiene: -4, morale: +8 });
+              earnCash(s, pay);
+              pushLog(s, `Shifted boxes for a shop — $${pay}.`, "money");
+              return menu("A delivery arrived", [`Thirty minutes, eighteen boxes.`, `$${pay} cash and a bottle of water.`, '"You free tomorrow?" You say you\'ll see.'], [close], "money");
+            },
+          },
+          { label: "Not now", run: () => null },
+        ],
+      );
+    },
+  },
+
+  /* ----------------------------------------- overheard argument - useful info */
+  {
+    id: "overheardArgument",
+    weight: (s, z) => (z === "downtown" && phaseOf(s) >= 2 ? 2 : 0),
+    build: (ctx) => {
+      const s = ctx.state;
+      const gain = ctx.rng.int(8, 20);
+      return menu(
+        "Two men outside a café",
+        ["They're arguing about the rent on a unit above the laundromat.", "One of them doesn\'t want it.", '"It\'s going begging," the other one says.', "You file it away."],
+        [
+          {
+            label: "Go ask about it",
+            hint: "might lead somewhere",
+            run: () => {
+              ctx.advance(20);
+              if (ctx.rng.chance(0.5)) {
+                earnCash(s, gain);
+                changeReputation(s, 4);
+                pushLog(s, `Overheard lead — paid off $${gain}.`, "money");
+                return menu("Two men outside a café", ["The man is still there.", "You introduce yourself and he shakes your hand.", `One thing leads to another. $${gain} changes hands, and so does a contact.`], [close], "money");
+              }
+              applyDelta(s.meters, { morale: -4 });
+              return menu("Two men outside a café", ["He's already gone.", "The other one looks at you.", '"Private conversation, mate."', "You go."], [close]);
+            },
+          },
+          { label: "Keep it to yourself", run: () => null },
+        ],
+      );
+    },
+  },
+
+  /* ---------------------------------------- security camera follows you */
+  {
+    id: "cameraFollows",
+    weight: (s, z) => ((z === "heights" || z === "downtown") && currentAppearance(s) < 45 ? 3 : 0),
+    build: (ctx) => {
+      const s = ctx.state;
+      applyDelta(s.meters, { morale: -10 });
+      return menu(
+        "The camera",
+        ["You look up.", "The council camera on the lamp post is pointing at you.", "You didn't do anything.", "It doesn't care."],
+        [
+          {
+            label: "Walk on normally",
+            run: () => menu("The camera", ["You walk on.", "It turns to follow you.", "You walk faster."], [close], "bad"),
+          },
+          {
+            label: "Look right at it",
+            run: () => {
+              applyDelta(s.meters, { morale: +8 });
+              return menu("The camera", ["You stop and look directly into it for five seconds.", "Then you go.", "It cannot make anything of that."], [close]);
+            },
+          },
+        ],
+      );
+    },
+  },
+
+  /* ---------------------------------------- someone's cooking outside */
+  {
+    id: "outdoorGrill",
+    weight: (s, z) => (z === "slums" && hourOf(s.time) >= 16 && hourOf(s.time) <= 20 ? 3 : 0),
+    build: (ctx) => {
+      const s = ctx.state;
+      return menu(
+        "Someone grilling in the lot",
+        ["A man with a portable grill and a folding table has claimed the corner of the lot.", "He is cooking chicken and he is not being quiet about it."],
+        [
+          {
+            label: "Ask if he\'s selling",
+            run: () => {
+              if (ctx.rng.chance(0.5)) {
+                const cost = 4;
+                if (s.cash >= cost) {
+                  s.cash -= cost;
+                  applyDelta(s.meters, { hunger: +40, morale: +18 });
+                  pushLog(s, `$${cost} for a plate of chicken.`, "money");
+                  return menu("Someone grilling in the lot", ['"Four dollars, one plate."', "Jerk chicken, rice, coleslaw from a plastic tub.", "It\'s the best thing you\'ve eaten all week and it was four dollars."], [close], "good");
+                }
+                applyDelta(s.meters, { morale: -8 });
+                return menu("Someone grilling in the lot", ['"Four dollars."', "You don\'t have four dollars.", "You walk away from the smell."], [close], "bad");
+              }
+              applyDelta(s.meters, { hunger: +24, morale: +16 });
+              pushLog(s, "Given food from a grill in the lot.", "good");
+              return menu("Someone grilling in the lot", ['"Nah, just go. Have a plate."', "He loads one up and hands it over without making eye contact.", "You eat it standing up. It\'s perfect."], [close], "good");
+            },
+          },
+          { label: "Keep moving", run: () => { applyDelta(s.meters, { morale: -4 }); return menu("Someone grilling in the lot", ["You walk past it.", "The smell follows you for three streets."], [close]); } },
+        ],
+      );
+    },
+  },
+
+  /* ----------------------------------------- water from a standpipe */
+  {
+    id: "outdoorSpigot",
+    weight: (s, z) => (z === "slums" && s.meters.thirst < 50 ? 3 : 0),
+    build: (ctx) => {
+      const s = ctx.state;
+      return menu(
+        "An outside tap",
+        ["On the side of a building. The kind attached to a garden around back.", "Unlocked. Running cold."],
+        [
+          {
+            label: "Drink",
+            hint: "free",
+            run: () => {
+              applyDelta(s.meters, { thirst: +38, hygiene: +4 });
+              return menu("An outside tap", ["Cold and clean and free.", "You drink until it hurts and then a bit more."], [close], "good");
+            },
+          },
+          {
+            label: "Drink and wash your hands",
+            hint: "5 min",
+            run: () => {
+              ctx.advance(5);
+              applyDelta(s.meters, { thirst: +38, hygiene: +14, morale: +6 });
+              return menu("An outside tap", ["Cold and clean.", "Your hands are warmer after than before, which makes no sense and is true anyway."], [close], "good");
+            },
+          },
+        ],
+      );
+    },
+  },
+
+  /* ----------------------------------------- photo of you requested */
+  {
+    id: "photographerAsk",
+    weight: (s, z) => (z === "downtown" && phaseOf(s) <= 2 && !s.flags.photographerDone ? 1 : 0),
+    once: true,
+    build: (ctx) => {
+      const s = ctx.state;
+      s.flags.photographerDone = 1;
+      return menu(
+        "A photographer",
+        [`"I'm doing a project on the neighbourhood. Could I take your portrait?"`, "She has a proper camera. She's already looked at you properly, which is different from being looked at."],
+        [
+          {
+            label: "Yes",
+            run: () => {
+              ctx.advance(15);
+              applyDelta(s.meters, { morale: +18 });
+              changeReputation(s, 4);
+              pushLog(s, "Had your portrait taken for a photography project.", "good");
+              return menu("A photographer", ["She takes three shots.", '"Can I get your first name?"', "You tell her.", '"Thank you. Really."', "Somewhere you exist in a photograph taken by someone who asked your name first."], [close], "good");
+            },
+          },
+          {
+            label: "No",
+            run: () => {
+              applyDelta(s.meters, { morale: -4 });
+              return menu("A photographer", ['"Of course. No worries."', "She moves on. You watch her ask someone else.", "Some days you do not want to be documented. This is one of them."], [close]);
+            },
+          },
+        ],
+      );
+    },
+  },
+
+  /* ------------------------------------------ found a library card */
+  {
+    id: "foundLibraryCard",
+    weight: (s, z) => (z === "downtown" && !s.flags.libraryCardDone ? 1 : 0),
+    once: true,
+    build: (ctx) => {
+      const s = ctx.state;
+      s.flags.libraryCardDone = 1;
+      return menu(
+        "A library card on the pavement",
+        ["It has a name on it.", "You could hand it in, or you could use it — the library doesn\'t check photo ID for the computers."],
+        [
+          {
+            label: "Use it at the library",
+            run: () => {
+              ctx.advance(60, { sheltered: true, exertion: 0.4 });
+              applyDelta(s.meters, { morale: +14, energy: +10 });
+              changeReputation(s, 2);
+              pushLog(s, "An hour in the library on a borrowed card.", "good");
+              return menu("A library card on the pavement", ["An hour of warm and free internet.", "Three job applications and a news article you actually finish.", "You put the card back on the desk on your way out."], [close], "good");
+            },
+          },
+          {
+            label: "Hand it in",
+            hint: "reputation",
+            run: () => {
+              changeReputation(s, 5);
+              applyDelta(s.meters, { morale: +8 });
+              pushLog(s, "Handed in a lost library card.", "good");
+              return menu("A library card on the pavement", ["The librarian notes it down and smiles.", '"That was kind of you."', "It was. You needed to do something kind today."], [close], "good");
+            },
+          },
+        ],
+      );
+    },
+  },
+
+  /* ----------------------------------------- job board tip from stranger */
+  {
+    id: "strangerJobTip",
+    weight: (s, z) => (z !== "heights" && phaseOf(s) <= 2 && !s.flags.strangerJobTipDone ? 2 : 0),
+    once: true,
+    build: (ctx) => {
+      const s = ctx.state;
+      s.flags.strangerJobTipDone = 1;
+      return menu(
+        "A tip",
+        ['"The recycling depot is taking people on. Cash, no questions, seven till noon."', "A man you have never met, saying it to you like he\'s been asked to pass it on."],
+        [
+          {
+            label: "Thank him and note it",
+            run: () => {
+              changeReputation(s, 3);
+              applyDelta(s.meters, { morale: +12 });
+              pushLog(s, "A stranger passed on a work tip.", "good");
+              return menu("A tip", ["He nods and goes. You\'ve got somewhere to be in the morning.", "That is not a small thing."], [close], "good");
+            },
+          },
+          { label: "Nod and move on", run: () => menu("A tip", ["You take it in.", "You\'ll see if it pans out."], [close]) },
+        ],
+      );
+    },
+  },
+
+  /* ---------------------------------------- charity collection dispute */
+  {
+    id: "charityDisp",
+    weight: (s, z) => (z === "downtown" && phaseOf(s) >= 3 ? 2 : 0),
+    build: (ctx) => {
+      const s = ctx.state;
+      return menu(
+        "A collection box",
+        ["A young woman rattling a tin outside the community centre.", '"Anything helps."', "She\'s been there four hours. You can tell."],
+        [
+          {
+            label: "Put in $5",
+            hint: "$5",
+            locked: s.cash < 5 ? "You can\'t cover it" : undefined,
+            run: () => {
+              s.cash -= 5;
+              applyDelta(s.meters, { morale: +14 });
+              changeReputation(s, 3);
+              pushLog(s, "Donated $5 to a street collection.", "good");
+              return menu("A collection box", ['"Thank you so much."', "She looks at you like you\'ve solved something.", "You haven\'t. Five dollars.", "It still counts."], [close], "good");
+            },
+          },
+          {
+            label: '"I\'ve been where you\'re collecting for."',
+            run: () => {
+              applyDelta(s.meters, { morale: +10 });
+              changeReputation(s, 2);
+              return menu("A collection box", ["She stops rattling the tin.", '"Oh."', "She looks at you properly.", '"I didn\'t know — thank you for telling me that."', "You don\'t give money. You give it the weight it deserves."], [close], "good");
+            },
+          },
+          { label: "Walk past", run: () => null },
+        ],
+      );
+    },
+  },
+
+  /* ---------------------------------------- overheard: a room going free */
+  {
+    id: "overheardRoom",
+    weight: (s, z) => (z === "slums" && phaseOf(s) === 1 && !s.flags.overheardRoomDone ? 2 : 0),
+    once: true,
+    build: (ctx) => {
+      const s = ctx.state;
+      s.flags.overheardRoomDone = 1;
+      return menu(
+        "Two women at a gate",
+        ["One of them says the bloke in the top flat has done a runner.", '"Landlord doesn\'t know yet. It\'ll be up Friday."', "She says it to her friend but she\'s looking at you."],
+        [
+          {
+            label: "Ask about it",
+            run: () => {
+              applyDelta(s.meters, { morale: +14 });
+              changeReputation(s, 4);
+              pushLog(s, "Got a tip on a room going free.", "good");
+              return menu("Two women at a gate", ["The first woman gives you the landlord\'s name.", '"He\'s alright. Not the worst."', "You have a name. That\'s more than you had."], [close], "good");
+            },
+          },
+          { label: "Say nothing", run: () => null },
+        ],
+      );
+    },
+  },
+
+  /* ----------------------------------------- cat in a window */
+  {
+    id: "catInWindow",
+    weight: (_s, z) => (z === "heights" ? 3 : 1),
+    build: (ctx) => {
+      const s = ctx.state;
+      applyDelta(s.meters, { morale: +8 });
+      return menu(
+        "A cat",
+        ["On a windowsill. Watching you.", "You stop. It doesn\'t move.", "You\'ve had a harder morning than a cat on a windowsill in a warm house.", "It blinks at you. Slowly. That means something, with cats."],
+        [close],
+      );
+    },
+  },
+
+  /* ---------------------------------------- power cut on the street */
+  {
+    id: "powerCut",
+    weight: (_s, z) => (z === "downtown" ? 1 : 0),
+    build: (ctx) => {
+      const s = ctx.state;
+      applyDelta(s.meters, { morale: +10 });
+      return menu(
+        "The lights go out",
+        ["The whole block loses power at once.", "Every shop front dark, every till stopped.", "People come outside looking at their phones like phones will explain it.", "For about four minutes, everybody is standing around with the same amount of information as everybody else.", "It feels briefly and absurdly fair."],
+        [close],
+      );
+    },
+  },
 ];
 
 /** Steps between encounter rolls. */
-export const EVENT_STEP_INTERVAL = 26;
+export const EVENT_STEP_INTERVAL = 40;
 
 /**
  * Recency-cooldown constants.
