@@ -3,7 +3,8 @@ import { Rng } from "./rng";
 import { createState } from "./state";
 import { advance, policeCheck } from "./tick";
 import { markerPos } from "../world/map";
-import { sleep as sleepIn, workShift } from "./work";
+import { consume, sleep as sleepIn, workShift } from "./work";
+import { HOUSING } from "./social";
 import { minutesUntilHour } from "./time";
 
 const HOUR = 60;
@@ -299,5 +300,114 @@ describe("policeCheck", () => {
     s.player.pos = { ...heightsTile };
     s.lastPoliceCheck = s.time;
     expect(policeCheck(s, new Rng(3))).toBeNull();
+  });
+});
+
+describe("caffeine", () => {
+  function drink(cups: number) {
+    const s = fed();
+    s.meters.energy = 20;
+    const rng = new Rng(1);
+    const ctx = {
+      state: s,
+      rng,
+      advance: (m: number, o?: Parameters<typeof advance>[2]) => void advance(s, rng, { ...o, minutes: m }),
+      teleport: () => {},
+    };
+    for (let i = 0; i < cups; i++) {
+      s.inventory.coffee = 1;
+      s.meters.energy = 20; // isolate the cup's own contribution
+      consume(ctx, "coffee");
+    }
+    return s;
+  }
+
+  it("gives a full lift on the first cup", () => {
+    expect(drink(1).meters.energy - 20).toBeGreaterThan(10);
+  });
+
+  it("gives less each time", () => {
+    const gains: number[] = [];
+    const s = fed();
+    const rng = new Rng(1);
+    const ctx = {
+      state: s,
+      rng,
+      advance: (m: number, o?: Parameters<typeof advance>[2]) => void advance(s, rng, { ...o, minutes: m }),
+      teleport: () => {},
+    };
+    for (let i = 0; i < 5; i++) {
+      s.inventory.coffee = 1;
+      s.meters.energy = 20;
+      consume(ctx, "coffee");
+      gains.push(s.meters.energy - 20);
+    }
+    for (let i = 1; i < gains.length; i++) {
+      expect(gains[i]!, `cup ${i + 1} did not do less than cup ${i}`).toBeLessThanOrEqual(gains[i - 1]!);
+    }
+    expect(gains[4]!).toBeLessThan(gains[0]! / 3);
+  });
+
+  it("cannot replace a night's sleep", () => {
+    // Seven cups used to be $21 and 35 minutes for a hostel cot's 75 energy,
+    // which meant that once you had an income you could simply stop sleeping.
+    const s = fed();
+    const rng = new Rng(1);
+    const ctx = {
+      state: s,
+      rng,
+      advance: (m: number, o?: Parameters<typeof advance>[2]) => void advance(s, rng, { ...o, minutes: m }),
+      teleport: () => {},
+    };
+    s.meters.energy = 0;
+    for (let i = 0; i < 8; i++) {
+      s.inventory.coffee = 1;
+      consume(ctx, "coffee");
+    }
+    expect(s.meters.energy).toBeLessThan(HOUSING.hostel.restQuality * 100);
+  });
+
+  it("costs you more health the deeper in you are", () => {
+    expect(drink(6).meters.health).toBeLessThan(drink(2).meters.health);
+  });
+
+  it("makes a night on top of it a worse night", () => {
+    const rested = fed();
+    const wired = fed();
+    wired.caffeine = 6;
+    for (const s of [rested, wired]) {
+      s.time = 22 * 60;
+      s.meters.energy = 10;
+      const rng = new Rng(1);
+      sleepIn(
+        {
+          state: s,
+          rng,
+          advance: (m: number, o?: Parameters<typeof advance>[2]) => void advance(s, rng, { ...o, minutes: m }),
+          teleport: () => {},
+        },
+        "hostel",
+        7,
+      );
+    }
+    expect(wired.meters.energy).toBeLessThan(rested.meters.energy);
+  });
+
+  it("clears the debt once you have slept", () => {
+    const s = fed();
+    s.caffeine = 5;
+    s.time = 22 * 60;
+    const rng = new Rng(1);
+    sleepIn(
+      {
+        state: s,
+        rng,
+        advance: (m: number, o?: Parameters<typeof advance>[2]) => void advance(s, rng, { ...o, minutes: m }),
+        teleport: () => {},
+      },
+      "hostel",
+      7,
+    );
+    expect(s.caffeine).toBe(0);
   });
 });

@@ -248,7 +248,6 @@ someone who knows the city offering to show you where the free showers are.
 
 ## 10. Recommended order
 
-Open findings #1 (coffee) and #3 (reputation) get harder to reason about once
-there are two economies. #3 is folded into Phase 0b above. **#1 is worth doing
-before any of this starts** — it is an afternoon's work now and a much larger
-one later.
+Coffee is **done** — it was the old finding #1 and is now fixed. Reputation's
+missing ceiling is folded into Phase 0b, since every call site is being touched
+there anyway. Nothing else on the open list blocks this work.

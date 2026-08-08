@@ -43,6 +43,14 @@ All in `4b44b36`.
 | 14 | A pending interview existed only as a flag | Set up, never mentioned again, then fired days later as a random encounter. It sits in the HUD task line now | UI only, no test |
 | 15 | `repDescriptor` in `main.ts` duplicated `reputationLabel` | Two copies of the same thresholds. One source of truth, and the crossing-message tables are total records so a new tier cannot compile without its lines | `state` — has a crossing message for every tier; plus the compiler |
 
+### Third pass
+
+| # | Fault | Effect | Guarded by |
+|---|---|---|---|
+| 16 | Test rigs wrote tile coordinates down | The town grew 48x50 → 72x72 and two rigs silently walked to tiles where scenery used to be, reporting healthy runs that never scavenged, drank or slept. `world/landmarks.ts` finds scenery by what it is | `map` — the scenery a phase-1 day needs |
+| 17 | All free water was one lake in downtown | A 52–58 tile round trip from spawn and the hostel, for a meter that empties three times a day. A standpipe in the outskirts took it to 11–18; collapses went to zero and seed 11 came back from 320 days to 187 | `map` — puts free water within reach of the outskirts |
+| 18 | Coffee had no ceiling | Not a price problem — at $3 for +12 it is dearer per point than a bed. The hole was that nothing capped it: seven cups was $21 and 35 minutes and bought back a night worth $88–680 of shift time, so once employed you could stop sleeping. Each cup now does less than the last, and a night on top of a stack of them is not a proper night | `tick` — cannot replace a night's sleep |
+
 ### Already done, if a follow-up task says otherwise
 
 Two items came back round as fresh tasks after they had been fixed. Both are
@@ -67,24 +75,7 @@ closed by `4b44b36`:
 
 ## Open — ranked by how much they cost the player
 
-### 1. Coffee is the cheapest energy in the game, and unlimited
-
-| Source | Cost | Energy | Time |
-|---|---|---|---|
-| Gas-station coffee | $2 | +22 | 5 min |
-| Hostel cot | $9 | +75 | ~9 h |
-
-$0.09 per point against $0.12, and no time cost worth the name. No cap, no
-tolerance, no crash. Once you have income the sleep economy stops binding.
-
-This was previously entangled with the night-school squeeze — coffee was the
-only thing making class attendance possible on a working day. That is fixed, so
-coffee can now be balanced on its own merits.
-
-Options: diminishing returns per day; a crash that borrows against tomorrow; a
-health cost that scales with count.
-
-### 2. Every career job is worked inside the gated zone
+### 1. Every career job is worked inside the gated zone
 
 Field Technician, Office Administrator and Regional Director all clock in at the
 Corporate Plaza — which sits at row 10, above the hedge, behind the one security
@@ -102,7 +93,7 @@ Options: a staff badge item that passes the gate; a side/service entrance;
 lowering the gate for anyone with a tier-3 employer; or moving one tier-3 job
 down into Market Square so the tier is not all-or-nothing.
 
-### 3. Reputation has no ceiling, and the endgame scales off it
+### 2. Reputation has no ceiling, and the endgame scales off it
 
 `franchise payout = 180 + (reputation + 40) × 1.5`, and reputation only ever
 goes up — every ten shifts, every wallet returned, every election.
@@ -120,7 +111,7 @@ run has no failure mode left.
 Options: cap reputation; decay it; or make the franchise payout a flat figure
 with reputation affecting something social instead.
 
-### 4. The mid-game is one day on a loop
+### 3. The mid-game is one day on a loop
 
 From the moment you hold a tier-3 job to the moment you can afford the
 franchise, every day is identical: wake, wash, walk, eight-hour shift, walk,
@@ -131,7 +122,7 @@ Options: weekly events; a rent/bills rhythm that forces decisions; relationships
 or a named NPC with a thread; workplace incidents; something to spend money on
 between $200 and $12,000.
 
-### 5. Walking still dominates the day, and the town just doubled
+### 4. Walking still dominates the day, and the town just doubled
 
 The map went from 48x50 to 72x72 — 2.16x the area. Average walking went from
 90–100 minutes a day to **154–173**, time actually on shift fell, and one seed
@@ -153,7 +144,7 @@ What is left:
 Options: a second free wash in the outskirts; make the bicycle discoverable
 (see below) since it halves every walk; more bus stops.
 
-### 6. Strikes fire for conditions that lapse on their own
+### 5. Strikes fire for conditions that lapse on their own
 
 Grounds Crew wants energy 35 at the door, Overnight Stocker 30. Energy bottoms
 out near zero on most working days. Turning up tired is a disciplinary strike,
@@ -166,7 +157,7 @@ Options: separate "sent home" from "written up"; let a strike decay after a
 clean week; warn at two; or drop energy from the door check and let a tired
 shift just pay less.
 
-### 7. Smaller items
+### 6. Smaller items
 
 - **The trailer is never worth renting.** $70/week is $10/night against the
   hostel's $9, with eviction risk and a rent clock attached. Its real advantages

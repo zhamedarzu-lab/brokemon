@@ -70,6 +70,12 @@ export interface GameState {
   strikes: number;
   lastShiftDay: number;
 
+  /**
+   * Cups of coffee since you last slept. Each one is worth less than the last,
+   * and a night on top of a stack of them is not a proper night.
+   */
+  caffeine: number;
+
   education: number;
   reputation: number;
 
@@ -148,6 +154,8 @@ export function createState(seed = Date.now() >>> 0): GameState {
     employmentPayOverride: {},
     strikes: 0,
     lastShiftDay: 0,
+
+    caffeine: 0,
 
     education: 0,
     reputation: 0,

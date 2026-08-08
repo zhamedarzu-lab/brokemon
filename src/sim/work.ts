@@ -1,5 +1,5 @@
 import { EMPLOYMENT, GIGS, type EmploymentId, type GigId } from "./jobs";
-import { applyDelta } from "./meters";
+import { applyDelta, type MeterDelta } from "./meters";
 import { menu, say, type Choice, type Prompt } from "./prompt";
 import type { Rng } from "./rng";
 import { HOUSING, type HousingId } from "./social";
@@ -312,8 +312,13 @@ export function sleep(ctx: ActionCtx, where: HousingId, untilHour = 7): Prompt {
   // Rest is paid by the hour. Without this, lying down at 7:00 for the half
   // hour the clock had left handed back a whole night's energy, over and over.
   const share = Math.min(1, minutes / FULL_NIGHT);
-  const restored = Math.round(100 * def.restQuality * share * (s.sick ? 0.7 : 1));
+  // Coffee is the other half of this. A night on top of five cups is not a
+  // night — otherwise you could stay wired all day and sleep it off for free.
+  const wired = clamp01(1 - s.caffeine * 0.08, 0.55);
+  const restored = Math.round(100 * def.restQuality * share * wired * (s.sick ? 0.7 : 1));
   s.meters.energy = Math.min(100, s.meters.energy + restored);
+  if (s.caffeine >= 4) lines.push("You lie there wide awake for a long time with your heart going.");
+  s.caffeine = 0;
   s.meters.morale = Math.min(100, s.meters.morale + (def.restQuality >= 0.7 ? 10 : 2) * share);
   if (def.hasShower) s.meters.hygiene = Math.min(100, s.meters.hygiene + 8 * share);
 
@@ -370,6 +375,15 @@ export function consume(ctx: ActionCtx, id: ItemId): Prompt | null {
   if (!removeItem(s.inventory, id, 1)) return null;
 
   ctx.advance(def.minutes ?? 5, { sheltered: true });
+
+  if (id === "coffee") {
+    const cup = caffeineCup(s);
+    applyDelta(s.meters, cup.delta);
+    s.caffeine += 1;
+    pushLog(s, `Used ${def.name}.`);
+    return say(def.name, cup.flavor);
+  }
+
   if (def.effect) applyDelta(s.meters, def.effect);
 
   // Medicine specifically breaks the fever; the clinic does the same but costs money.
@@ -380,6 +394,38 @@ export function consume(ctx: ActionCtx, id: ItemId): Prompt | null {
 
   pushLog(s, `Used ${def.name}.`);
   return def.flavor ? say(def.name, def.flavor) : null;
+}
+
+/**
+ * What the next cup is actually worth.
+ *
+ * Coffee is priced fine — dearer per point of energy than a hostel cot. The
+ * hole was that nothing capped it: seven cups is $21 and thirty-five minutes,
+ * and it bought back a night worth several hundred dollars of an executive's
+ * time. You could simply stop sleeping.
+ *
+ * So each cup does less than the one before, and none of it is free. Six cups
+ * come to about 29 energy against a bed's 75, which makes coffee what it
+ * should be — the thing that gets you through this evening, not a substitute
+ * for the night.
+ */
+export function caffeineCup(s: GameState): { delta: MeterDelta; flavor: string } {
+  const n = s.caffeine;
+  const energy = Math.max(1, Math.round(12 * Math.pow(0.6, n)));
+  // The first is a small pleasure. The fourth is maintenance.
+  const morale = n === 0 ? +10 : n <= 2 ? +3 : -2;
+  const health = n <= 1 ? 0 : -(n - 1);
+
+  const flavor =
+    n === 0
+      ? "Small pleasure. It counts."
+      : n <= 2
+        ? "Your hands stop shaking. That is either the coffee or the caffeine debt."
+        : n <= 4
+          ? "It is not doing much now. You drink it for something to hold."
+          : "You cannot taste it any more and your heart is going like a bird's.";
+
+  return { delta: { energy, morale, health, thirst: +30 }, flavor };
 }
 
 /* ------------------------------------------------------------------ helpers */
@@ -409,8 +455,8 @@ export function cap(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-function clamp01(v: number): number {
-  return v < 0 ? 0 : v > 1 ? 1 : v;
+function clamp01(v: number, lo = 0): number {
+  return v < lo ? lo : v > 1 ? 1 : v;
 }
 
 function describeCoins(n: number): string {
