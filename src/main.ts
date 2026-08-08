@@ -137,7 +137,11 @@ class Game {
 
     const busy = this.paused();
     this.hud.update(this.state, !busy && this.state.player.moveFrom === null);
-    this.setPadHidden(busy);
+    // Hide the pad only while the journal is open (it's full-screen and the
+    // pad would sit on top of scrollable content). During dialogue the pad
+    // stays visible — up/down/A already route to dialogue.move/confirm, and
+    // hiding it leaves the player with no visible controls.
+    this.setPadHidden(this.journal.isOpen());
     render(this.ctx2d, this.state, now);
 
     this.sinceAutosave += dt;
