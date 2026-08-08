@@ -470,11 +470,66 @@ function drawWeather(ctx: CanvasRenderingContext2D, s: GameState, t: number): vo
  * identical brown buildings and the only way to learn which is the hostel is
  * to walk into all of them.
  */
-function drawDoorSigns(ctx: CanvasRenderingContext2D, cam: Camera): void {
-  ctx.font = "bold 8px monospace";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
+// ---------------------------------------------------------------------------
+// 3×5 pixel bitmap font — drawn entirely with fillRect, zero antialiasing.
+// Each entry is 5 row masks; bit2=left col, bit1=mid col, bit0=right col.
+// ---------------------------------------------------------------------------
+const BITMAP_FONT: Record<string, number[]> = {
+  A: [2, 5, 7, 5, 5],
+  B: [6, 5, 6, 5, 6],
+  C: [3, 4, 4, 4, 3],
+  D: [6, 5, 5, 5, 6],
+  E: [7, 4, 6, 4, 7],
+  F: [7, 4, 6, 4, 4],
+  G: [3, 4, 5, 5, 3],
+  H: [5, 5, 7, 5, 5],
+  I: [7, 2, 2, 2, 7],
+  J: [7, 1, 1, 5, 2],
+  K: [5, 6, 4, 6, 5],
+  L: [4, 4, 4, 4, 7],
+  M: [5, 7, 5, 5, 5],
+  N: [6, 5, 5, 5, 5],
+  O: [2, 5, 5, 5, 2],
+  P: [6, 5, 6, 4, 4],
+  Q: [2, 5, 5, 7, 3],
+  R: [6, 5, 6, 5, 5],
+  S: [3, 4, 2, 1, 6],
+  T: [7, 2, 2, 2, 2],
+  U: [5, 5, 5, 5, 2],
+  V: [5, 5, 5, 2, 2],
+  W: [5, 5, 7, 7, 5],
+  X: [5, 5, 2, 5, 5],
+  Y: [5, 5, 2, 2, 2],
+  Z: [7, 1, 2, 4, 7],
+  " ": [0, 0, 0, 0, 0],
+};
 
+/** Draw a string using the bitmap font. fillStyle must be set by caller. */
+function drawBitmapText(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+): void {
+  let cx = x;
+  for (const ch of text) {
+    const rows: number[] = BITMAP_FONT[ch] ?? BITMAP_FONT[" "] ?? [];
+    for (let row = 0; row < 5; row++) {
+      const bits = rows[row] ?? 0;
+      if (bits & 4) ctx.fillRect(cx,     y + row, 1, 1);
+      if (bits & 2) ctx.fillRect(cx + 1, y + row, 1, 1);
+      if (bits & 1) ctx.fillRect(cx + 2, y + row, 1, 1);
+    }
+    cx += 4; // 3px glyph + 1px gap
+  }
+}
+
+/** Width of a string in the bitmap font (pixels). */
+function bitmapTextWidth(text: string): number {
+  return text.length * 4 - 1; // no trailing gap
+}
+
+function drawDoorSigns(ctx: CanvasRenderingContext2D, cam: Camera): void {
   for (const [id, pos] of Object.entries(TOWN.markers)) {
     const sign = DOOR_SIGNS[id];
     if (!sign) continue;
@@ -484,15 +539,18 @@ function drawDoorSigns(ctx: CanvasRenderingContext2D, cam: Camera): void {
     const cy = pos.y * TILE - cam.py - 4;
     if (cx < -40 || cy < -8 || cx > CANVAS_W + 40 || cy > CANVAS_H + 8) continue;
 
-    const w = ctx.measureText(sign).width + 4;
-    ctx.fillStyle = "rgba(16,16,20,0.82)";
-    ctx.fillRect(Math.round(cx - w / 2), cy - 4, Math.round(w), 8);
-    ctx.fillStyle = "rgba(240,232,200,0.94)";
-    ctx.fillText(sign, Math.round(cx), cy);
-  }
+    const tw = bitmapTextWidth(sign);
+    const x = Math.round(cx - tw / 2);
+    const y = Math.round(cy - 2); // vertically centre the 5-tall glyph in the 8px band
 
-  ctx.textAlign = "start";
-  ctx.textBaseline = "alphabetic";
+    // Dark backing pill
+    ctx.fillStyle = "rgba(16,16,20,0.85)";
+    ctx.fillRect(x - 2, y - 1, tw + 4, 7);
+
+    // Crisp bitmap text — pure fillRect, no antialiasing
+    ctx.fillStyle = "rgba(240,232,200,0.95)";
+    drawBitmapText(ctx, sign, x, y);
+  }
 }
 
 function drawAssignmentMarkers(ctx: CanvasRenderingContext2D, s: GameState, cam: Camera, t: number): void {
