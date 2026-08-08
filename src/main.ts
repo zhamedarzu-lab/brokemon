@@ -9,7 +9,7 @@ import { menu, say, type Prompt } from "./sim/prompt";
 import { EMPLOYMENT } from "./sim/jobs";
 import { Rng } from "./sim/rng";
 import { clearSave, hasSave, loadGame, saveGame } from "./sim/save";
-import { createState, netWorth, pushLog, reputationLabel, type GameState } from "./sim/state";
+import { createState, netWorth, pushLog, reputationLabel, townOf, type GameState } from "./sim/state";
 import { advance, escortDestination, policeCheck, type Interrupt, type TickOptions } from "./sim/tick";
 import { MS_PER_MINUTE } from "./sim/time";
 import { cap, consume, type ActionCtx } from "./sim/work";
@@ -237,7 +237,7 @@ class Game {
     const d = dir === "up" ? [0, -1] : dir === "down" ? [0, 1] : dir === "left" ? [-1, 0] : [1, 0];
     const nx = p.pos.x + d[0]!;
     const ny = p.pos.y + d[1]!;
-    if (isSolid(nx, ny)) return;
+    if (isSolid(townOf(s), nx, ny)) return;
 
     p.moveFrom = { ...p.pos };
     p.pos = { x: nx, y: ny };
@@ -346,7 +346,7 @@ class Game {
 function interruptPrompt(i: Interrupt, ctx: ActionCtx): Prompt | null {
   switch (i.kind) {
     case "collapse": {
-      const cc = markerPos("communityCenter");
+      const cc = markerPos(townOf(ctx.state), "communityCenter");
       ctx.teleport(cc.x, cc.y);
       return menu(
         "The clinic",

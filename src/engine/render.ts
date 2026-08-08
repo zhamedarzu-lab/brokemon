@@ -1,8 +1,8 @@
-import { glyphAt, MAP_HEIGHT, MAP_WIDTH, TOWN } from "../world/map";
+import { glyphAt, type Town } from "../world/map";
 import { tileAt } from "../world/tiles";
 import { daylight } from "../sim/time";
 import { WEATHER } from "../sim/weather";
-import type { GameState } from "../sim/state";
+import { townOf, type GameState } from "../sim/state";
 import { OUTFITS } from "../sim/social";
 import { assignmentStopAt, DOOR_SIGNS, facingTile } from "../sim/actions";
 
@@ -26,6 +26,7 @@ export interface Camera {
 }
 
 export function cameraFor(state: GameState): Camera {
+  const town = townOf(state);
   const p = state.player;
   let wx = p.pos.x * TILE;
   let wy = p.pos.y * TILE;
@@ -34,8 +35,8 @@ export function cameraFor(state: GameState): Camera {
     wx = (p.moveFrom.x + (p.pos.x - p.moveFrom.x) * t) * TILE;
     wy = (p.moveFrom.y + (p.pos.y - p.moveFrom.y) * t) * TILE;
   }
-  const px = clamp(Math.round(wx + TILE / 2 - CANVAS_W / 2), 0, MAP_WIDTH * TILE - CANVAS_W);
-  const py = clamp(Math.round(wy + TILE / 2 - CANVAS_H / 2), 0, MAP_HEIGHT * TILE - CANVAS_H);
+  const px = clamp(Math.round(wx + TILE / 2 - CANVAS_W / 2), 0, Math.max(0, town.width * TILE - CANVAS_W));
+  const py = clamp(Math.round(wy + TILE / 2 - CANVAS_H / 2), 0, Math.max(0, town.height * TILE - CANVAS_H));
   return { px, py };
 }
 
@@ -44,6 +45,7 @@ function clamp(v: number, lo: number, hi: number): number {
 }
 
 export function render(ctx: CanvasRenderingContext2D, state: GameState, timeMs: number): void {
+  const town = townOf(state);
   const cam = cameraFor(state);
   ctx.imageSmoothingEnabled = false;
   ctx.fillStyle = "#101014";
@@ -56,11 +58,11 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState, timeMs: 
     for (let x = x0; x <= x0 + VIEW_W; x++) {
       const sx = x * TILE - cam.px;
       const sy = y * TILE - cam.py;
-      drawTile(ctx, x, y, sx, sy, timeMs);
+      drawTile(ctx, town, x, y, sx, sy, timeMs);
     }
   }
 
-  drawDoorSigns(ctx, cam);
+  drawDoorSigns(ctx, town, cam);
   drawAssignmentMarkers(ctx, state, cam, timeMs);
   drawPlayer(ctx, state, cam, timeMs);
   drawLighting(ctx, state, cam);
@@ -70,8 +72,8 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState, timeMs: 
 
 /* ------------------------------------------------------------------ tiles */
 
-function drawTile(ctx: CanvasRenderingContext2D, x: number, y: number, sx: number, sy: number, t: number): void {
-  const glyph = glyphAt(x, y);
+function drawTile(ctx: CanvasRenderingContext2D, town: Town, x: number, y: number, sx: number, sy: number, t: number): void {
+  const glyph = glyphAt(town, x, y);
   if (glyph === undefined) {
     ctx.fillStyle = "#0b0b0f";
     ctx.fillRect(sx, sy, TILE, TILE);
@@ -419,7 +421,7 @@ function drawLighting(ctx: CanvasRenderingContext2D, s: GameState, cam: Camera):
       const y0 = Math.floor(cam.py / TILE) - 1;
       for (let y = y0; y <= y0 + VIEW_H + 2; y++) {
         for (let x = x0; x <= x0 + VIEW_W + 2; x++) {
-          if (glyphAt(x, y) !== "L") continue;
+          if (glyphAt(townOf(s), x, y) !== "L") continue;
           const cx = x * TILE - cam.px + 8;
           const cy = y * TILE - cam.py + 3;
           const g = ctx.createRadialGradient(cx, cy, 2, cx, cy, 46);
@@ -529,8 +531,8 @@ function bitmapTextWidth(text: string): number {
   return text.length * 4 - 1; // no trailing gap
 }
 
-function drawDoorSigns(ctx: CanvasRenderingContext2D, cam: Camera): void {
-  for (const [id, pos] of Object.entries(TOWN.markers)) {
+function drawDoorSigns(ctx: CanvasRenderingContext2D, town: Town, cam: Camera): void {
+  for (const [id, pos] of Object.entries(town.markers)) {
     const sign = DOOR_SIGNS[id];
     if (!sign) continue;
 

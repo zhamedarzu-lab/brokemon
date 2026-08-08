@@ -14,7 +14,7 @@
  * is.
  */
 
-import { glyphAt, isSolid, MAP_HEIGHT, MAP_WIDTH, zoneAt, type Vec2 } from "./map";
+import { glyphAt, isSolid, zoneAt, type Town, type Vec2 } from "./map";
 import { tileAt, type TileDef } from "./tiles";
 
 export type Interaction = NonNullable<TileDef["interaction"]>;
@@ -31,11 +31,11 @@ export interface Approach {
   facing: Direction;
 }
 
-export function tilesWithInteraction(kind: Interaction): Vec2[] {
+export function tilesWithInteraction(town: Town, kind: Interaction): Vec2[] {
   const found: Vec2[] = [];
-  for (let y = 0; y < MAP_HEIGHT; y++) {
-    for (let x = 0; x < MAP_WIDTH; x++) {
-      const glyph = glyphAt(x, y);
+  for (let y = 0; y < town.height; y++) {
+    for (let x = 0; x < town.width; x++) {
+      const glyph = glyphAt(town, x, y);
       if (glyph !== undefined && tileAt(glyph).interaction === kind) found.push({ x, y });
     }
   }
@@ -50,19 +50,19 @@ const NEIGHBOURS: Array<[number, number, Direction]> = [
 ];
 
 /** A walkable tile beside `target`, and the way to face from it. Null if it is walled in. */
-export function approachTo(target: Vec2): Approach | null {
+export function approachTo(town: Town, target: Vec2): Approach | null {
   for (const [dx, dy, facing] of NEIGHBOURS) {
     const pos = { x: target.x + dx, y: target.y + dy };
-    if (!isSolid(pos.x, pos.y)) return { target, pos, facing };
+    if (!isSolid(town, pos.x, pos.y)) return { target, pos, facing };
   }
   return null;
 }
 
 /** Every usable piece of scenery of a kind, optionally restricted to a zone. */
-export function approaches(kind: Interaction, inZone?: string): Approach[] {
-  return tilesWithInteraction(kind)
-    .filter((t) => inZone === undefined || zoneAt(t.y).id === inZone)
-    .map(approachTo)
+export function approaches(town: Town, kind: Interaction, inZone?: string): Approach[] {
+  return tilesWithInteraction(town, kind)
+    .filter((t) => inZone === undefined || zoneAt(town, t.y).id === inZone)
+    .map((t) => approachTo(town, t))
     .filter((a): a is Approach => a !== null);
 }
 
@@ -70,9 +70,9 @@ export function approaches(kind: Interaction, inZone?: string): Approach[] {
  * Benches you are allowed to sleep on. Downtown and the Heights both carry an
  * overnight camping ordinance, so only the zone that does not fine you counts.
  */
-export function sleepableBenches(): Approach[] {
-  return tilesWithInteraction("bench")
-    .filter((t) => zoneAt(t.y).fineScale === 0)
-    .map(approachTo)
+export function sleepableBenches(town: Town): Approach[] {
+  return tilesWithInteraction(town, "bench")
+    .filter((t) => zoneAt(town, t.y).fineScale === 0)
+    .map((t) => approachTo(town, t))
     .filter((a): a is Approach => a !== null);
 }

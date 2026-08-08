@@ -25,6 +25,7 @@ import {
   phaseOf,
   pushLog,
   setWon,
+  townOf,
   type GameState,
 } from "./state";
 import { withinHours } from "./time";
@@ -1110,7 +1111,7 @@ const jobBoard: Venue = (ctx) => {
             hint: `1 stop, $${GIGS.yardWork.basePay}`,
             run: () => {
               const spot = ctx.rng.pick(yardSpotsFor(s));
-              const p = markerPos(spot.marker);
+              const p = markerPos(townOf(s), spot.marker);
               return startAssignment(ctx, "yardWork", [{ x: p.x + spot.dx, y: p.y + spot.dy }], `Yard work — ${spot.name}`);
             },
           }
@@ -1165,7 +1166,7 @@ function flyerRoute(ctx: ActionCtx): { x: number; y: number }[] {
     .shuffled(doors)
     .slice(0, 4)
     .map((id) => {
-      const p = markerPos(id);
+      const p = markerPos(townOf(ctx.state), id);
       return { x: p.x, y: p.y + 1 };
     });
 }
@@ -1183,7 +1184,7 @@ const busStop: Venue = (ctx) => {
       hint: "you're here",
       locked: "You are already at this stop",
     },
-    makeRide(ctx, "The Outskirts", markerPos("outskirtsBusStop"), hasPass, fare),
+    makeRide(ctx, "The Outskirts", markerPos(townOf(s), "outskirtsBusStop"), hasPass, fare),
     makeRide(ctx, "The Heights gate", { x: 23, y: 15 }, hasPass, fare),
     {
       label: "Wait",
@@ -1290,7 +1291,7 @@ const outskirtsBusStop: Venue = (ctx) => {
       hint: "you're here",
       locked: "You are already at this stop",
     },
-    makeRide(ctx, "Market Square", markerPos("busStop"), hasPass, fare),
+    makeRide(ctx, "Market Square", markerPos(townOf(s), "busStop"), hasPass, fare),
     {
       label: "Wait",
       run: () => {

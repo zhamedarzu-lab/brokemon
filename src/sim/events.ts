@@ -3,7 +3,7 @@ import { addItem } from "./items";
 import { EMPLOYMENT } from "./jobs";
 import { applyDelta } from "./meters";
 import { menu, type Choice, type Prompt } from "./prompt";
-import { changeReputation, checkRequirements, currentAppearance, earnCash, phaseOf, pushLog, type GameState } from "./state";
+import { changeReputation, checkRequirements, currentAppearance, earnCash, phaseOf, pushLog, townOf, type GameState } from "./state";
 import { hourOf } from "./time";
 import type { ActionCtx } from "./work";
 
@@ -1722,7 +1722,7 @@ function recentIds(s: GameState, n: number): string[] {
 
 export function rollEvent(ctx: ActionCtx): Prompt | null {
   const s = ctx.state;
-  const zone = zoneAt(s.player.pos.y).id;
+  const zone = zoneAt(townOf(s), s.player.pos.y).id;
   const fired: Record<string, number> = s.flags;
 
   const available = EVENTS.filter((e) => !(e.once && fired[`ev:${e.id}`]));

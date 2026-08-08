@@ -1,25 +1,35 @@
-import { glyphAt, TOWN, zoneAt, type Vec2 } from "../world/map";
+import { glyphAt, zoneAt, type Town, type Vec2 } from "../world/map";
 import { tileAt } from "../world/tiles";
 import { applyDelta } from "./meters";
 import { menu, say, type Choice, type Prompt } from "./prompt";
-import { currentAppearance, pushLog, type GameState } from "./state";
+import { currentAppearance, pushLog, townOf, type GameState } from "./state";
 import { HEIGHTS_GATE_LOOK, HOUSING } from "./social";
 import { VENUES } from "./venues";
 import { panhandle, scavenge, sleep, workAssignmentStop, type ActionCtx } from "./work";
 
 const BACK: Choice = { label: "Leave" };
 
-/** position key -> marker id, for O(1) "what is this tile" lookups. */
-const MARKER_AT: Map<string, string> = new Map(
-  Object.entries(TOWN.markers).map(([id, p]) => [key(p.x, p.y), id]),
-);
+/**
+ * position key -> marker id, for O(1) "what is this tile" lookups. Built once
+ * per town the first time that town is asked about.
+ */
+const MARKER_AT = new Map<string, Map<string, string>>();
+
+function markerIndex(town: Town): Map<string, string> {
+  let index = MARKER_AT.get(town.id);
+  if (!index) {
+    index = new Map(Object.entries(town.markers).map(([id, p]) => [key(p.x, p.y), id]));
+    MARKER_AT.set(town.id, index);
+  }
+  return index;
+}
 
 function key(x: number, y: number): string {
   return `${x},${y}`;
 }
 
-export function markerAt(x: number, y: number): string | undefined {
-  return MARKER_AT.get(key(x, y));
+export function markerAt(town: Town, x: number, y: number): string | undefined {
+  return markerIndex(town).get(key(x, y));
 }
 
 export function facingTile(s: GameState): Vec2 {
@@ -43,7 +53,7 @@ export function interact(ctx: ActionCtx): Prompt | null {
   }
 
   for (const cell of [here, there]) {
-    const marker = markerAt(cell.x, cell.y);
+    const marker = markerAt(townOf(s), cell.x, cell.y);
     if (marker) {
       const prompt = markerAction(ctx, marker);
       if (prompt) return prompt;
@@ -69,7 +79,7 @@ function markerAction(ctx: ActionCtx, marker: string): Prompt | null {
 
 function panhandleSpot(ctx: ActionCtx): Prompt {
   const s = ctx.state;
-  const zone = zoneAt(s.player.pos.y);
+  const zone = zoneAt(townOf(s), s.player.pos.y);
   return menu(
     "The corner",
     [
@@ -85,7 +95,7 @@ function panhandleSpot(ctx: ActionCtx): Prompt {
 
 function tileAction(ctx: ActionCtx, cell: Vec2): Prompt | null {
   const s = ctx.state;
-  const glyph = glyphAt(cell.x, cell.y);
+  const glyph = glyphAt(townOf(s), cell.x, cell.y);
   const tile = tileAt(glyph);
 
   switch (tile.interaction) {
@@ -99,7 +109,7 @@ function tileAction(ctx: ActionCtx, cell: Vec2): Prompt | null {
       return recycleBin(ctx);
 
     case "sign":
-      return say("Sign", zoneAt(cell.y).sign);
+      return say("Sign", zoneAt(townOf(s), cell.y).sign);
 
     case "water":
       return menu(
@@ -142,7 +152,7 @@ function tileAction(ctx: ActionCtx, cell: Vec2): Prompt | null {
 
 function benchPrompt(ctx: ActionCtx): Prompt {
   const s = ctx.state;
-  const zone = zoneAt(s.player.pos.y);
+  const zone = zoneAt(townOf(s), s.player.pos.y);
   const lines = ["Three slats and an armrest in the middle so you cannot lie flat."];
   const choices: Choice[] = [
     {
@@ -230,10 +240,10 @@ export function interactionLabel(s: GameState): string | null {
     if (assignmentStopAt(s, cell) >= 0) return s.assignment?.gig === "yardWork" ? "Start work" : "Deliver";
   }
   for (const cell of [here, there]) {
-    const marker = markerAt(cell.x, cell.y);
+    const marker = markerAt(townOf(s), cell.x, cell.y);
     if (marker && (VENUES[marker] || marker === "panhandleSpot")) return VENUE_LABELS[marker] ?? "Enter";
   }
-  const tile = tileAt(glyphAt(there.x, there.y));
+  const tile = tileAt(glyphAt(townOf(s), there.x, there.y));
   switch (tile.interaction) {
     case "bench":
       return "Bench";

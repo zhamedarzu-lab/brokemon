@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 import { Rng } from "./rng";
 import { createState } from "./state";
 import { advance, policeCheck } from "./tick";
-import { markerPos } from "../world/map";
+import { markerPos, STARTING_TOWN, townById } from "../world/map";
+/** These bots only ever walk Brokemon Town. */
+const TOWN = townById(STARTING_TOWN);
+
 import { consume, sleep as sleepIn, workShift } from "./work";
 import { HOUSING } from "./social";
 import { minutesUntilHour } from "./time";
@@ -262,7 +265,7 @@ describe("policeCheck", () => {
   it("ignores you in the outskirts however you look", () => {
     const s = createState(1);
     s.meters.hygiene = 0;
-    s.player.pos = { ...markerPos("spawn") };
+    s.player.pos = { ...markerPos(TOWN, "spawn") };
     for (let i = 0; i < 20; i++) {
       s.lastPoliceCheck = -10_000;
       expect(policeCheck(s, new Rng(i))).toBeNull();

@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { markerPos } from "../world/map";
+import { STARTING_TOWN, markerPos, townById } from "../world/map";
+/** These bots only ever walk Brokemon Town. */
+const TOWN = townById(STARTING_TOWN);
+
 import { interact } from "./actions";
 import { countOf } from "./items";
 import type { Choice, Prompt } from "./prompt";
@@ -26,7 +29,7 @@ class Player {
   }
 
   goto(marker: string) {
-    const p = markerPos(marker);
+    const p = markerPos(TOWN, marker);
     this.s.player.pos = { x: p.x, y: p.y };
   }
 
@@ -169,7 +172,7 @@ describe("outskirts bus stop", () => {
     bot.s.cash = 10;
     bot.goto("outskirtsBusStop");
     bot.drive(bot.press(), "market square");
-    const busPos = markerPos("busStop");
+    const busPos = markerPos(TOWN, "busStop");
     expect(bot.s.player.pos.x).toBe(busPos.x);
     expect(bot.s.player.pos.y).toBe(busPos.y);
     expect(bot.s.cash).toBe(7); // 10 - 3
@@ -199,7 +202,7 @@ describe("outskirts bus stop", () => {
     bot.s.cash = 10;
     bot.goto("busStop");
     bot.drive(bot.press(), "the outskirts");
-    const stopPos = markerPos("outskirtsBusStop");
+    const stopPos = markerPos(TOWN, "outskirtsBusStop");
     expect(bot.s.player.pos.x).toBe(stopPos.x);
     expect(bot.s.player.pos.y).toBe(stopPos.y);
   });
@@ -250,10 +253,10 @@ describe("bus pass expiry", () => {
   });
 
   it("diner marker exists on the map", () => {
-    expect(() => markerPos("diner")).not.toThrow();
+    expect(() => markerPos(TOWN, "diner")).not.toThrow();
   });
 
   it("outskirtsBusStop marker exists on the map", () => {
-    expect(() => markerPos("outskirtsBusStop")).not.toThrow();
+    expect(() => markerPos(TOWN, "outskirtsBusStop")).not.toThrow();
   });
 });

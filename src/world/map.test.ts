@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { glyphAt, isSolid, MAP_HEIGHT, MAP_WIDTH, markerPos, spawnPoint, TOWN, zoneAt, ZONES } from "./map";
+import { glyphAt, isSolid, markerPos, spawnPoint, STARTING_TOWN, townById, zoneAt } from "./map";
+
+/** Everything in here is about Brokemon Town specifically. */
+const TOWN = townById(STARTING_TOWN);
+const { width: MAP_WIDTH, height: MAP_HEIGHT, zones: ZONES } = TOWN;
 import { MARKERS, TILES } from "./tiles";
 import { approaches, sleepableBenches } from "./landmarks";
 import { DOOR_SIGNS } from "../sim/actions";
@@ -28,23 +32,23 @@ describe("town map", () => {
 
   it("is walled in on every edge", () => {
     for (let x = 0; x < MAP_WIDTH; x++) {
-      expect(isSolid(x, 0), `top ${x}`).toBe(true);
-      expect(isSolid(x, MAP_HEIGHT - 1), `bottom ${x}`).toBe(true);
+      expect(isSolid(TOWN, x, 0), `top ${x}`).toBe(true);
+      expect(isSolid(TOWN, x, MAP_HEIGHT - 1), `bottom ${x}`).toBe(true);
     }
     for (let y = 0; y < MAP_HEIGHT; y++) {
-      expect(isSolid(0, y), `left ${y}`).toBe(true);
-      expect(isSolid(MAP_WIDTH - 1, y), `right ${y}`).toBe(true);
+      expect(isSolid(TOWN, 0, y), `left ${y}`).toBe(true);
+      expect(isSolid(TOWN, MAP_WIDTH - 1, y), `right ${y}`).toBe(true);
     }
   });
 
   it("spawns the player on a walkable tile", () => {
     const spawn = spawnPoint();
-    expect(isSolid(spawn.x, spawn.y)).toBe(false);
+    expect(isSolid(TOWN, spawn.x, spawn.y)).toBe(false);
   });
 
   it("puts every marker on a walkable tile", () => {
     for (const [id, p] of Object.entries(TOWN.markers)) {
-      expect(isSolid(p.x, p.y), `${id} at ${p.x},${p.y}`).toBe(false);
+      expect(isSolid(TOWN, p.x, p.y), `${id} at ${p.x},${p.y}`).toBe(false);
     }
   });
 
@@ -52,7 +56,7 @@ describe("town map", () => {
     for (let y = 0; y < MAP_HEIGHT; y++) {
       const matches = ZONES.filter((z) => y >= z.from && y <= z.to);
       expect(matches, `row ${y}`).toHaveLength(1);
-      expect(zoneAt(y)).toBe(matches[0]);
+      expect(zoneAt(TOWN, y)).toBe(matches[0]);
     }
   });
 });
@@ -81,17 +85,17 @@ function reachableFromSpawn(): Set<string> {
       if (seen.has(key)) continue;
       if (nx < 0 || ny < 0 || nx >= MAP_WIDTH || ny >= MAP_HEIGHT) continue;
       // The gate is solid, but interacting with it moves you to the far side.
-      if (glyphAt(nx, ny) === "G") {
+      if (glyphAt(TOWN, nx, ny) === "G") {
         seen.add(key);
         const beyondY = ny + Math.sign(ny - cur.y);
         const beyond = `${nx},${beyondY}`;
-        if (!seen.has(beyond) && !isSolid(nx, beyondY)) {
+        if (!seen.has(beyond) && !isSolid(TOWN, nx, beyondY)) {
           seen.add(beyond);
           queue.push({ x: nx, y: beyondY });
         }
         continue;
       }
-      if (isSolid(nx, ny)) continue;
+      if (isSolid(TOWN, nx, ny)) continue;
       seen.add(key);
       queue.push({ x: nx, y: ny });
     }
@@ -103,7 +107,7 @@ describe("connectivity", () => {
   const reachable = reachableFromSpawn();
 
   it.each(Object.values(MARKERS).filter((id) => id !== "spawn"))("can walk from the park to %s", (id) => {
-    const p = markerPos(id);
+    const p = markerPos(TOWN, id);
     expect(reachable.has(`${p.x},${p.y}`)).toBe(true);
   });
 
@@ -125,7 +129,7 @@ describe("connectivity", () => {
         [-1, 0],
         [1, 0],
       ] as const) {
-        const g = glyphAt(x + dx, y + dy);
+        const g = glyphAt(TOWN, x + dx, y + dy);
         if (g === "b" || g === "%" || g === "x") kinds[g] += 1;
       }
     }
@@ -153,13 +157,13 @@ describe("the town is legible from the street", () => {
 
   it("only signs places that actually exist on the map", () => {
     for (const id of Object.keys(DOOR_SIGNS)) {
-      expect(() => markerPos(id), `${id} has a sign but no marker`).not.toThrow();
+      expect(() => markerPos(TOWN, id), `${id} has a sign but no marker`).not.toThrow();
     }
   });
 
   it("has every marker glyph standing on ground you can walk on", () => {
     for (const [id, pos] of Object.entries(TOWN.markers)) {
-      expect(isSolid(pos.x, pos.y), `${id} at ${pos.x},${pos.y} is inside a wall`).toBe(false);
+      expect(isSolid(TOWN, pos.x, pos.y), `${id} at ${pos.x},${pos.y} is inside a wall`).toBe(false);
     }
   });
 
@@ -175,15 +179,15 @@ describe("the town is legible from the street", () => {
       for (const [dx, dy] of [[0, 1], [0, -1], [1, 0], [-1, 0]] as const) {
         const next = { x: cell.x + dx, y: cell.y + dy };
         const key = `${next.x},${next.y}`;
-        if (seen.has(key) || isSolid(next.x, next.y)) continue;
+        if (seen.has(key) || isSolid(TOWN, next.x, next.y)) continue;
         seen.add(key);
         queue.push(next);
       }
     }
     for (let y = 0; y < MAP_HEIGHT; y++) {
       for (let x = 0; x < MAP_WIDTH; x++) {
-        if (isSolid(x, y) || seen.has(`${x},${y}`)) continue;
-        expect(zoneAt(y).id, `${x},${y} is walkable but cut off from spawn`).toBe("heights");
+        if (isSolid(TOWN, x, y) || seen.has(`${x},${y}`)) continue;
+        expect(zoneAt(TOWN, y).id, `${x},${y} is walkable but cut off from spawn`).toBe("heights");
       }
     }
   });
@@ -195,9 +199,9 @@ describe("the scenery a phase-1 day needs", () => {
     // Twice now a map change has left the test rigs walking to a tile where a
     // dumpster used to be, getting a null prompt, and reporting a healthy run
     // in which nothing had been scavenged. Assert the town still has them.
-    expect(approaches("water").length, "nowhere to drink for free").toBeGreaterThan(0);
-    expect(approaches("dumpster").length, "nothing to scavenge").toBeGreaterThan(0);
-    expect(sleepableBenches().length, "nowhere to sleep rough without a fine").toBeGreaterThan(0);
+    expect(approaches(TOWN, "water").length, "nowhere to drink for free").toBeGreaterThan(0);
+    expect(approaches(TOWN, "dumpster").length, "nothing to scavenge").toBeGreaterThan(0);
+    expect(sleepableBenches(TOWN).length, "nowhere to sleep rough without a fine").toBeGreaterThan(0);
   });
 
   it("puts free water within reach of the outskirts, not only downtown", () => {
@@ -205,13 +209,13 @@ describe("the scenery a phase-1 day needs", () => {
     // sleep and scavenge. An ornamental lake on the far side of downtown is a
     // two-hour round trip for a meter you empty three times a day.
     const outskirts = ZONES.find((z) => z.fineScale === 0)!;
-    const nearby = approaches("water").filter((a) => zoneAt(a.target.y).id === outskirts.id);
+    const nearby = approaches(TOWN, "water").filter((a) => zoneAt(TOWN, a.target.y).id === outskirts.id);
     expect(nearby.length, `no free water in ${outskirts.name}`).toBeGreaterThan(0);
   });
 
   it("only counts benches you would not be fined for sleeping on", () => {
-    for (const bench of sleepableBenches()) {
-      expect(zoneAt(bench.target.y).fineScale).toBe(0);
+    for (const bench of sleepableBenches(TOWN)) {
+      expect(zoneAt(TOWN, bench.target.y).fineScale).toBe(0);
     }
   });
 
@@ -224,15 +228,15 @@ describe("the scenery a phase-1 day needs", () => {
       for (const [dx, dy] of [[0, 1], [0, -1], [1, 0], [-1, 0]] as const) {
         const next = { x: cell.x + dx, y: cell.y + dy };
         const key = `${next.x},${next.y}`;
-        if (seen.has(key) || isSolid(next.x, next.y)) continue;
+        if (seen.has(key) || isSolid(TOWN, next.x, next.y)) continue;
         seen.add(key);
         queue.push(next);
       }
     }
     const reachable = (list: ReturnType<typeof approaches>) =>
       list.filter((a) => seen.has(`${a.pos.x},${a.pos.y}`)).length;
-    expect(reachable(approaches("water")), "all the water is behind the gate").toBeGreaterThan(0);
-    expect(reachable(approaches("dumpster")), "all the dumpsters are behind the gate").toBeGreaterThan(0);
-    expect(reachable(sleepableBenches()), "every sleepable bench is behind the gate").toBeGreaterThan(0);
+    expect(reachable(approaches(TOWN, "water")), "all the water is behind the gate").toBeGreaterThan(0);
+    expect(reachable(approaches(TOWN, "dumpster")), "all the dumpsters are behind the gate").toBeGreaterThan(0);
+    expect(reachable(sleepableBenches(TOWN)), "every sleepable bench is behind the gate").toBeGreaterThan(0);
   });
 });

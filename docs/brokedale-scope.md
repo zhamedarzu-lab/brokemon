@@ -3,7 +3,7 @@
 A second place, reachable by coach. Dense, well supplied, and expensive in
 every way that matters.
 
-This is a plan, not work in progress. Nothing here is implemented.
+Phase 0 is done and merged. Everything from Phase 0b on is still a plan.
 
 ---
 
@@ -99,11 +99,18 @@ Knock-on effects worth knowing before starting:
   pick one, which is a good moment to fix open finding #3 (runaway reputation)
   rather than duplicating it.
 
-**Save migration stays free.** `loadGame` merges over a fresh state, so
-defaulting `town: "brokemon"`, `housing: { brokemon: <old value>, brokedale:
-"street" }` and `reputation: { brokemon: <old>, brokedale: 0 }` loads every
-existing save correctly. Keep the `brokemon.save.v1` key; write the migration
-in `loadGame` where the bus-pass one already lives.
+**Save migration is nearly free, but not quite — and Phase 0 proved it.** The
+claim was that `loadGame` merging over a fresh state handles everything. It
+does not: the spread is *shallow*, so a stored `player` object replaces the
+fresh one whole, and a save written before `player.town` existed came back with
+it `undefined` — every map lookup then asking for a town that is not there. The
+fix is a per-object merge plus a sanity check, now in `loadGame` beside the
+bus-pass migration and covered by `save.test.ts`.
+
+Phase 0b will hit the same shape twice more, with `housing` and `reputation`
+going from scalars to records. Those are worse: a stored scalar is not merely
+missing a field, it is the wrong *type*, so the merge has to detect and convert
+rather than fill in. Budget for it.
 
 ---
 
@@ -124,7 +131,7 @@ of it, and it must land before any content.
 
 ## 6. Phases
 
-### Phase 0 — make the world plural, change no gameplay
+### Phase 0 — make the world plural, change no gameplay ✅ DONE
 
 - A `Town` record: id, display name, grid, markers, zones, dimensions.
 - `TOWNS: Record<TownId, Town>` with `brokemon` the only entry.
@@ -133,8 +140,10 @@ of it, and it must land before any content.
 - `player.town` added to state and save.
 - Renderer, landmarks and both rigs made town-aware.
 
-**Gate: all 238 tests pass and `npm run playtest` prints identical numbers.**
-If Phase 0 changes any result, something is wrong. Merge it on its own.
+**Gate passed.** 248 tests (up from 244 — four new save-migration tests) and
+playtest output byte-identical to a baseline captured beforehand.
+`world/town.ts` holds the type and the queries, `world/towns/brokemon.ts` holds
+the grid, and `world/map.ts` is the registry. Zones live inside a town.
 
 ### Phase 0b — pluralise the player, still no new content
 

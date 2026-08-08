@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { markerPos, zoneAt } from "../world/map";
+import { markerPos, STARTING_TOWN, townById, zoneAt } from "../world/map";
+/** These bots only ever walk Brokemon Town. */
+const TOWN = townById(STARTING_TOWN);
+
 import { approaches, sleepableBenches, type Approach } from "../world/landmarks";
 import { interact } from "./actions";
 import { CLASS_COST, EMPLOYMENT, EMPLOYMENT_ORDER } from "./jobs";
@@ -44,7 +47,7 @@ class Bot {
   }
 
   standOn(marker: string): void {
-    const p = markerPos(marker);
+    const p = markerPos(TOWN, marker);
     this.state.player.pos = { x: p.x, y: p.y };
   }
 
@@ -115,9 +118,9 @@ class Bot {
 }
 
 // Read off the map rather than written down — see world/landmarks.ts for why.
-const FOUNTAIN = approaches("water")[0]!;
-const DUMPSTERS = approaches("dumpster");
-const BENCH = sleepableBenches()[0]!;
+const FOUNTAIN = approaches(TOWN, "water")[0]!;
+const DUMPSTERS = approaches(TOWN, "dumpster");
+const BENCH = sleepableBenches(TOWN)[0]!;
 
 function scavengeRound(bot: Bot): void {
   for (const d of DUMPSTERS) {
@@ -442,7 +445,7 @@ describe("jobs the town can actually deliver on", () => {
       bot.standOn("jobBoard");
       bot.drive(bot.press(), "Yard work", "Take the job");
       const job = takeAssignment(s);
-      expect(zoneAt(job.targets[0]!.y).id, `sent to ${job.label}`).not.toBe("heights");
+      expect(zoneAt(TOWN, job.targets[0]!.y).id, `sent to ${job.label}`).not.toBe("heights");
     }
   });
 
@@ -459,7 +462,7 @@ describe("jobs the town can actually deliver on", () => {
       s.gigsToday = {};
       bot.standOn("jobBoard");
       bot.drive(bot.press(), "Yard work", "Take the job");
-      sawTheHill = zoneAt(takeAssignment(s).targets[0]!.y).id === "heights";
+      sawTheHill = zoneAt(TOWN, takeAssignment(s).targets[0]!.y).id === "heights";
     }
     expect(sawTheHill).toBe(true);
   });

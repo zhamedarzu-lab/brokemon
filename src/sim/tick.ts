@@ -1,4 +1,5 @@
 import { isOutdoors, zoneAt, type Zone } from "../world/map";
+import { townOf } from "./state";
 import { changeReputation, checkPostWinGoal, hasItem, phaseOf, pushLog, setWon, type GameState, type Phase } from "./state";
 import { decay, WARN_THRESHOLDS, type MeterId } from "./meters";
 import { dayOf, minuteOfDay, MINUTES_PER_DAY } from "./time";
@@ -49,7 +50,7 @@ export function advance(s: GameState, rng: Rng, opts: TickOptions): Interrupt[] 
     s.time += step;
     const dayAfter = dayOf(s.time);
 
-    const outdoors = !opts.sheltered && !asleep && isOutdoors(s.player.pos.x, s.player.pos.y);
+    const outdoors = !opts.sheltered && !asleep && isOutdoors(townOf(s), s.player.pos.x, s.player.pos.y);
     const weather = WEATHER[s.weather];
     const soaked = outdoors && weather.wet && !hasItem(s, "poncho");
 
@@ -288,9 +289,9 @@ const LOITER_IDLE_MINUTES = 30;
  * triggers a loitering warning.
  */
 export function policeCheck(s: GameState, rng: Rng): Interrupt | null {
-  const zone = zoneAt(s.player.pos.y);
+  const zone = zoneAt(townOf(s), s.player.pos.y);
   if (zone.fineScale === 0) return null;
-  if (!isOutdoors(s.player.pos.x, s.player.pos.y)) return null;
+  if (!isOutdoors(townOf(s), s.player.pos.x, s.player.pos.y)) return null;
   if (s.time - s.lastMovedTime < LOITER_IDLE_MINUTES) return null;
   if (s.time - s.lastPoliceCheck < 45) return null;
 

@@ -1,4 +1,4 @@
-import { spawnPoint, type Vec2 } from "../world/map";
+import { spawnPoint, STARTING_TOWN, townById, type Town, type TownId, type Vec2 } from "../world/map";
 import type { EmploymentId, GigId, JobId, Requirements } from "./jobs";
 import { EMPLOYMENT, GIGS } from "./jobs";
 import { countOf, type Inventory, type ItemId } from "./items";
@@ -27,6 +27,8 @@ export interface Assignment {
 }
 
 export interface Player {
+  /** Which town the body is in. Positions mean nothing without it. */
+  town: TownId;
   pos: Vec2;
   facing: Facing;
   /** Sub-tile progress 0..1 while stepping between cells. */
@@ -131,7 +133,7 @@ export function createState(seed = Date.now() >>> 0): GameState {
   return {
     time: 7 * 60,
     seed,
-    player: { pos: { ...spawn }, facing: "down", moveProgress: 0, moveFrom: null },
+    player: { town: STARTING_TOWN, pos: { ...spawn }, facing: "down", moveProgress: 0, moveFrom: null },
     meters: { hunger: 42, thirst: 38, hygiene: 22, energy: 55, morale: 40, health: 72 },
 
     cash: 3,
@@ -190,6 +192,11 @@ export function createState(seed = Date.now() >>> 0): GameState {
     totalEarned: 0,
     postWinGoal: 0,
   };
+}
+
+/** The town the player is standing in. Every map query needs one. */
+export function townOf(s: GameState): Town {
+  return townById(s.player.town);
 }
 
 export function netWorth(s: GameState): number {

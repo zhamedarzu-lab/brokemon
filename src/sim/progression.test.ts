@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { markerPos } from "../world/map";
+import { markerPos, STARTING_TOWN, townById } from "../world/map";
+/** These bots only ever walk Brokemon Town. */
+const TOWN = townById(STARTING_TOWN);
+
 import { approaches, sleepableBenches, type Approach } from "../world/landmarks";
 import { interact } from "./actions";
 import { countOf, type ItemId } from "./items";
@@ -31,7 +34,7 @@ class Player {
 
   /** Walking across town costs real time; don't let the bot cheat it. */
   goto(marker: string): void {
-    const p = markerPos(marker);
+    const p = markerPos(TOWN, marker);
     this.ctx.advance(10, { exertion: 1.35 });
     this.s.player.pos = { x: p.x, y: p.y };
   }
@@ -110,9 +113,9 @@ class Player {
 }
 
 // Read off the map rather than written down — see world/landmarks.ts for why.
-const FOUNTAIN = approaches("water")[0]!;
-const DUMPSTERS = approaches("dumpster");
-const BENCH = sleepableBenches()[0]!;
+const FOUNTAIN = approaches(TOWN, "water")[0]!;
+const DUMPSTERS = approaches(TOWN, "dumpster");
+const BENCH = sleepableBenches(TOWN)[0]!;
 
 function scavenge(p: Player): void {
   for (const d of DUMPSTERS) {

@@ -13,7 +13,7 @@
 /** Declared rather than typed in: this file runs under vite-node, not the app. */
 declare const process: { argv: string[] };
 
-import { isSolid, MAP_HEIGHT, MAP_WIDTH, markerPos, type Vec2 } from "../world/map";
+import { isSolid, markerPos, townById, STARTING_TOWN, type Town, type Vec2 } from "../world/map";
 import { approaches, sleepableBenches, type Approach } from "../world/landmarks";
 import { interact } from "./actions";
 import { EVENT_STEP_INTERVAL, rollEvent } from "./events";
@@ -21,7 +21,7 @@ import { countOf, type ItemId } from "./items";
 import { EMPLOYMENT, EMPLOYMENT_ORDER, type EmploymentId } from "./jobs";
 import type { Choice, Prompt } from "./prompt";
 import { Rng } from "./rng";
-import { createState, currentAppearance, phaseOf, type Facing, type GameState } from "./state";
+import { createState, currentAppearance, phaseOf, townOf, type Facing, type GameState } from "./state";
 import { advance, policeCheck } from "./tick";
 import { dayOf, formatClock, hourOf, minuteOfDay } from "./time";
 import { consume, shiftWindow, type ActionCtx } from "./work";
@@ -32,7 +32,10 @@ const STEP_MS = 180;
 const BIKE_STEP_MS = 95;
 const MS_PER_MINUTE = 260;
 
-/** BFS from a tile to every reachable tile. Cached — the map never changes. */
+/** The town the rig walks. Phase 1 will make this follow the player. */
+const TOWN: Town = townById(STARTING_TOWN);
+
+/** BFS from a tile to every reachable tile. Cached — the grid never changes. */
 const pathCache = new Map<string, number[][]>();
 
 function distanceField(from: Vec2): number[][] {
@@ -40,7 +43,7 @@ function distanceField(from: Vec2): number[][] {
   const hit = pathCache.get(k);
   if (hit) return hit;
 
-  const dist: number[][] = Array.from({ length: MAP_HEIGHT }, () => new Array<number>(MAP_WIDTH).fill(-1));
+  const dist: number[][] = Array.from({ length: TOWN.height }, () => new Array<number>(TOWN.width).fill(-1));
   const queue: Vec2[] = [from];
   dist[from.y]![from.x] = 0;
   for (let head = 0; head < queue.length; head++) {
@@ -49,9 +52,9 @@ function distanceField(from: Vec2): number[][] {
     for (const [dx, dy] of [[0, -1], [0, 1], [-1, 0], [1, 0]] as const) {
       const nx = cur.x + dx;
       const ny = cur.y + dy;
-      if (nx < 0 || ny < 0 || nx >= MAP_WIDTH || ny >= MAP_HEIGHT) continue;
+      if (nx < 0 || ny < 0 || nx >= TOWN.width || ny >= TOWN.height) continue;
       if (dist[ny]![nx] !== -1) continue;
-      if (isSolid(nx, ny)) continue;
+      if (isSolid(TOWN, nx, ny)) continue;
       dist[ny]![nx] = d + 1;
       queue.push({ x: nx, y: ny });
     }
@@ -62,7 +65,7 @@ function distanceField(from: Vec2): number[][] {
 
 /** Tiles between two walkable cells, or -1 if there is no route at all. */
 export function tileDistance(a: Vec2, b: Vec2): number {
-  if (isSolid(a.x, a.y) || isSolid(b.x, b.y)) return -1;
+  if (isSolid(TOWN, a.x, a.y) || isSolid(TOWN, b.x, b.y)) return -1;
   return distanceField(a)[b.y]![b.x]!;
 }
 
@@ -169,7 +172,7 @@ class Player {
   }
 
   goto(marker: string): void {
-    this.walkTo(markerPos(marker));
+    this.walkTo(markerPos(townOf(this.s), marker));
   }
 
   standAt(x: number, y: number, f: Facing): void {
@@ -270,9 +273,9 @@ class Player {
 
 /* --------------------------------------------------------- day routines */
 
-const FOUNTAINS = approaches("water");
-const DUMPSTERS = approaches("dumpster");
-const LEGAL_BENCHES = sleepableBenches();
+const FOUNTAINS = approaches(TOWN, "water");
+const DUMPSTERS = approaches(TOWN, "dumpster");
+const LEGAL_BENCHES = sleepableBenches(TOWN);
 
 for (const [what, found] of [["water", FOUNTAINS], ["dumpsters", DUMPSTERS], ["a sleepable bench", LEGAL_BENCHES]] as const) {
   if (found.length === 0) throw new Error(`the map has no ${what} — the playtest cannot model a phase-1 day without it`);

@@ -1,7 +1,7 @@
 import { zoneAt } from "../world/map";
 import { interactionLabel } from "../sim/actions";
 import { METER_LABEL, METER_ORDER, type MeterId } from "../sim/meters";
-import { currentAppearance, netWorth, phaseOf, PHASE_NAMES, type GameState } from "../sim/state";
+import { currentAppearance, netWorth, phaseOf, PHASE_NAMES, townOf, type GameState } from "../sim/state";
 import { dayOf, dayPart, formatClock } from "../sim/time";
 import { WEATHER } from "../sim/weather";
 import { EMPLOYMENT } from "../sim/jobs";
@@ -131,7 +131,7 @@ export class Hud {
     this.clockEl.dataset.part = dayPart(s.time);
     this.weatherEl.textContent = WEATHER[s.weather].name;
     this.weatherEl.classList.toggle("wet", WEATHER[s.weather].wet);
-    this.zoneEl.textContent = zoneAt(s.player.pos.y).name;
+    this.zoneEl.textContent = zoneAt(townOf(s), s.player.pos.y).name;
 
     this.cashEl.textContent = `$${s.cash.toLocaleString()}`;
     const ledger: string[] = [];
