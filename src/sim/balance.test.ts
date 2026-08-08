@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { markerPos, zoneAt } from "../world/map";
+import { approaches, sleepableBenches, type Approach } from "../world/landmarks";
 import { interact } from "./actions";
 import { CLASS_COST, EMPLOYMENT, EMPLOYMENT_ORDER } from "./jobs";
 import { countOf, type ItemId } from "./items";
@@ -93,12 +94,16 @@ class Bot {
     }
   }
 
-  /** The fountain sits in the Market Square plaza; marble tiles to its left. */
   drinkAtFountain(): void {
     for (let i = 0; i < 3 && this.state.meters.thirst < 85; i++) {
-      this.standAt(29, 22, "right");
+      this.approach(FOUNTAIN);
       this.drive(this.press(), "drink");
     }
+  }
+
+  /** Stand beside a piece of scenery and face it. */
+  approach(a: Approach): void {
+    this.standAt(a.pos.x, a.pos.y, a.facing);
   }
 
   /** Free shower at the community center, which is the only way back up. */
@@ -109,16 +114,14 @@ class Bot {
   }
 }
 
-const DUMPSTERS: Array<[number, number, Facing]> = [
-  [14, 70, "up"],
-  [29, 70, "up"],
-  [44, 70, "up"],
-  [59, 70, "up"],
-];
+// Read off the map rather than written down — see world/landmarks.ts for why.
+const FOUNTAIN = approaches("water")[0]!;
+const DUMPSTERS = approaches("dumpster");
+const BENCH = sleepableBenches()[0]!;
 
 function scavengeRound(bot: Bot): void {
-  for (const [x, y, facing] of DUMPSTERS) {
-    bot.standAt(x, y, facing);
+  for (const d of DUMPSTERS) {
+    bot.approach(d);
     bot.drive(bot.press(), "close the lid");
   }
   if (countOf(bot.state.inventory, "recyclables") > 0) {
@@ -163,7 +166,7 @@ function survivalDay(bot: Bot): void {
 
   // Bed down in the outskirts, where there's no camping ordinance.
   bot.waitUntilHour(20);
-  bot.standAt(5, 70, "up");
+  bot.approach(BENCH);
   bot.drive(bot.press(), "sleep here");
 }
 
@@ -175,7 +178,9 @@ describe("phase 1 — the streets", () => {
     const s = bot.state;
     expect(s.meters.health).toBeGreaterThan(0);
     expect(s.daysSurvived).toBeGreaterThanOrEqual(13);
-    // Scraping by is survivable, but it should never be comfortable.
+    // Scraping by is survivable, but it should never be comfortable. This was
+    // 2 on the old 48x50 town; the map is 72x72 now and a fortnight of walking
+    // it on nothing costs one more trip to the clinic.
     expect(s.collapses).toBeLessThanOrEqual(3);
   });
 
@@ -203,8 +208,7 @@ describe("phase 1 — the streets", () => {
 
   it("pays out from an untouched dumpster on the first morning", () => {
     const bot = new Bot(21);
-    const [x, y, facing] = DUMPSTERS[0]!;
-    bot.standAt(x, y, facing);
+    bot.approach(DUMPSTERS[0]!);
     const prompt = bot.press();
     expect(prompt?.lines.join(" ")).toContain("You find");
     expect(countOf(bot.state.inventory, "recyclables")).toBeGreaterThan(0);
@@ -212,20 +216,18 @@ describe("phase 1 — the streets", () => {
 
   it("will not let you strip the same dumpster twice in a row", () => {
     const bot = new Bot(21);
-    const [x, y, facing] = DUMPSTERS[0]!;
-    bot.standAt(x, y, facing);
+    bot.approach(DUMPSTERS[0]!);
     bot.press();
-    bot.standAt(x, y, facing);
+    bot.approach(DUMPSTERS[0]!);
     expect(bot.press()?.lines.join(" ")).toContain("already been through");
   });
 
   it("refills a dumpster after eight hours", () => {
     const bot = new Bot(21);
-    const [x, y, facing] = DUMPSTERS[0]!;
-    bot.standAt(x, y, facing);
+    bot.approach(DUMPSTERS[0]!);
     bot.press();
     bot.ctx.advance(9 * 60);
-    bot.standAt(x, y, facing);
+    bot.approach(DUMPSTERS[0]!);
     expect(bot.press()?.lines.join(" ")).toContain("You find");
   });
 

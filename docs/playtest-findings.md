@@ -131,18 +131,27 @@ Options: weekly events; a rent/bills rhythm that forces decisions; relationships
 or a named NPC with a thread; workplace incidents; something to spend money on
 between $200 and $12,000.
 
-### 5. Two upkeep chores dominate the walking
+### 5. Walking still dominates the day, and the town just doubled
 
-Thirst decays 120 points a day and there is exactly **one** free water source on
-the map (the fountain at 26,32). Hygiene decays 46+/day and there is exactly
-**one** free wash (the community center at 7,24) — at the opposite corner.
+The map went from 48x50 to 72x72 — 2.16x the area. Average walking went from
+90–100 minutes a day to **154–173**, time actually on shift fell, and one seed
+went from 126 days to 320. The whole suite passed throughout; only the walking
+rig could see it.
 
-Average 90–100 minutes a day is spent walking, much of it between those two
-points. It reads as tedium rather than hardship.
+Adding a standpipe to the outskirts (water was a 52–58 tile round trip from
+spawn and the hostel; now 11–18) recovered most of it — collapses across three
+seeds went to zero, fines fell by up to 90%, and the 320-day seed came back to
+187. Walking is still ~160 minutes a day, which is inherent to a map this size.
 
-Options: a second fountain in the Outskirts; a standpipe near the hostel; make
-bottled water cheap enough to be the obvious buy; let the trailer's shower count
-for more.
+What is left:
+- The community center is still the **only** free wash, 50 tiles from spawn.
+  The hostel's $2 shower and the trailer are the paid alternatives.
+- The college is 87 tiles from spawn (~60 minutes each way) and night class is
+  mandatory for phase 3. This self-corrects once you hold the apartment at
+  (62,52), which is close to it — arguably good design, but brutal before then.
+
+Options: a second free wash in the outskirts; make the bicycle discoverable
+(see below) since it halves every walk; more bus stops.
 
 ### 6. Strikes fire for conditions that lapse on their own
 

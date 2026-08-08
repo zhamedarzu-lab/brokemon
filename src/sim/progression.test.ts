@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { markerPos } from "../world/map";
+import { approaches, sleepableBenches, type Approach } from "../world/landmarks";
 import { interact } from "./actions";
 import { countOf, type ItemId } from "./items";
 import type { Choice, Prompt } from "./prompt";
@@ -87,9 +88,14 @@ class Player {
 
   drink(): void {
     for (let i = 0; i < 3 && this.s.meters.thirst < 85; i++) {
-      this.standAt(25, 32, "right");
+      this.approach(FOUNTAIN);
       this.drive(this.press(), "drink");
     }
+  }
+
+  /** Stand beside a piece of scenery and face it. */
+  approach(a: Approach): void {
+    this.standAt(a.pos.x, a.pos.y, a.facing);
   }
 
   wash(): void {
@@ -103,13 +109,14 @@ class Player {
   }
 }
 
-const DUMPSTERS: Array<[number, number, Facing]> = [
-  [14, 26, "up"], [29, 26, "up"], [24, 43, "up"], [35, 43, "up"],
-];
+// Read off the map rather than written down — see world/landmarks.ts for why.
+const FOUNTAIN = approaches("water")[0]!;
+const DUMPSTERS = approaches("dumpster");
+const BENCH = sleepableBenches()[0]!;
 
 function scavenge(p: Player): void {
-  for (const [x, y, f] of DUMPSTERS) {
-    p.standAt(x, y, f);
+  for (const d of DUMPSTERS) {
+    p.approach(d);
     p.drive(p.press(), "close the lid");
   }
   if (countOf(p.s.inventory, "recyclables") > 0) {
@@ -307,7 +314,7 @@ function sleep(p: Player): void {
     p.goto("hostel");
     if (p.drive(p.press(), "pay for a cot")) return;
   }
-  p.standAt(27, 42, "up");
+  p.approach(BENCH);
   if (!p.drive(p.press(), "sleep here")) {
     // Ordinance zone or no bench: ride it out on the street.
     p.ctx.advance(minutesUntilHour(p.s.time, 7), { asleep: true });

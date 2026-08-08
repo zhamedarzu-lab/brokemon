@@ -14,6 +14,7 @@
 declare const process: { argv: string[] };
 
 import { isSolid, MAP_HEIGHT, MAP_WIDTH, markerPos, type Vec2 } from "../world/map";
+import { approaches, sleepableBenches, type Approach } from "../world/landmarks";
 import { interact } from "./actions";
 import { EVENT_STEP_INTERVAL, rollEvent } from "./events";
 import { countOf, type ItemId } from "./items";
@@ -176,14 +177,9 @@ class Player {
     this.s.player.facing = f;
   }
 
-  /** Walk to a tile adjacent to a solid feature and face it. */
-  faceSolid(x: number, y: number): void {
-    for (const [dx, dy, f] of [[0, 1, "up"], [0, -1, "down"], [1, 0, "left"], [-1, 0, "right"]] as const) {
-      if (!isSolid(x + dx, y + dy)) {
-        this.standAt(x + dx, y + dy, f);
-        return;
-      }
-    }
+  /** Walk to the tile beside a piece of scenery and face it. */
+  approach(a: Approach): void {
+    this.standAt(a.pos.x, a.pos.y, a.facing);
   }
 
   /* ---- prompts --------------------------------------------------------- */
@@ -274,16 +270,33 @@ class Player {
 
 /* --------------------------------------------------------- day routines */
 
-const FOUNTAIN = { x: 25, y: 32 };
-const DUMPSTERS: Vec2[] = [
-  { x: 14, y: 25 }, { x: 28, y: 25 }, { x: 24, y: 42 }, { x: 35, y: 42 },
-];
+const FOUNTAINS = approaches("water");
+const DUMPSTERS = approaches("dumpster");
+const LEGAL_BENCHES = sleepableBenches();
+
+for (const [what, found] of [["water", FOUNTAINS], ["dumpsters", DUMPSTERS], ["a sleepable bench", LEGAL_BENCHES]] as const) {
+  if (found.length === 0) throw new Error(`the map has no ${what} — the playtest cannot model a phase-1 day without it`);
+}
 
 function drink(p: Player): void {
   for (let i = 0; i < 3 && p.s.meters.thirst < 85; i++) {
-    p.standAt(FOUNTAIN.x, FOUNTAIN.y, "right");
+    p.approach(nearest(p.s.player.pos, FOUNTAINS));
     if (!p.took(p.press(), "drink")) break;
   }
+}
+
+/** Whichever of these is fewest tiles away on foot. */
+function nearest(from: Vec2, options: Approach[]): Approach {
+  let best = options[0]!;
+  let bestDist = Infinity;
+  for (const option of options) {
+    const d = tileDistance(from, option.pos);
+    if (d >= 0 && d < bestDist) {
+      bestDist = d;
+      best = option;
+    }
+  }
+  return best;
 }
 
 function wash(p: Player, target = 65): void {
@@ -302,7 +315,7 @@ function wash(p: Player, target = 65): void {
 
 function scavenge(p: Player): void {
   for (const d of DUMPSTERS) {
-    p.faceSolid(d.x, d.y);
+    p.approach(d);
     p.drive(p.press(), "close the lid");
   }
   if (countOf(p.s.inventory, "recyclables") > 0) {
@@ -525,7 +538,7 @@ function sleep(p: Player): void {
     if (p.took(p.press(), "take a bed", "get up")) return;
   }
   // Last resort: a bench in the outskirts, where camping is not an offence.
-  p.faceSolid(27, 41);
+  p.approach(nearest(s.player.pos, LEGAL_BENCHES));
   if (p.took(p.press(), "sleep here", "get up")) return;
   p.note("NOWHERE TO SLEEP");
   p.ctx.advance(60 * 8, { asleep: true });

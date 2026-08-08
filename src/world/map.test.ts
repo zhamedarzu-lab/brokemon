@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { glyphAt, isSolid, MAP_HEIGHT, MAP_WIDTH, markerPos, spawnPoint, TOWN, zoneAt, ZONES } from "./map";
 import { MARKERS, TILES } from "./tiles";
+import { approaches, sleepableBenches } from "./landmarks";
 import { DOOR_SIGNS } from "../sim/actions";
 import { VENUES } from "../sim/venues";
 
@@ -185,5 +186,53 @@ describe("the town is legible from the street", () => {
         expect(zoneAt(y).id, `${x},${y} is walkable but cut off from spawn`).toBe("heights");
       }
     }
+  });
+});
+
+describe("the scenery a phase-1 day needs", () => {
+  it("has water, dumpsters and somewhere legal to sleep", () => {
+    // These are terrain, not named markers, so nothing points at them by name.
+    // Twice now a map change has left the test rigs walking to a tile where a
+    // dumpster used to be, getting a null prompt, and reporting a healthy run
+    // in which nothing had been scavenged. Assert the town still has them.
+    expect(approaches("water").length, "nowhere to drink for free").toBeGreaterThan(0);
+    expect(approaches("dumpster").length, "nothing to scavenge").toBeGreaterThan(0);
+    expect(sleepableBenches().length, "nowhere to sleep rough without a fine").toBeGreaterThan(0);
+  });
+
+  it("puts free water within reach of the outskirts, not only downtown", () => {
+    // Thirst drains 120 points a day and the outskirts are where you start,
+    // sleep and scavenge. An ornamental lake on the far side of downtown is a
+    // two-hour round trip for a meter you empty three times a day.
+    const outskirts = ZONES.find((z) => z.fineScale === 0)!;
+    const nearby = approaches("water").filter((a) => zoneAt(a.target.y).id === outskirts.id);
+    expect(nearby.length, `no free water in ${outskirts.name}`).toBeGreaterThan(0);
+  });
+
+  it("only counts benches you would not be fined for sleeping on", () => {
+    for (const bench of sleepableBenches()) {
+      expect(zoneAt(bench.target.y).fineScale).toBe(0);
+    }
+  });
+
+  it("can reach its scenery on foot without going through the gate", () => {
+    const start = spawnPoint();
+    const seen = new Set([`${start.x},${start.y}`]);
+    const queue = [start];
+    for (let i = 0; i < queue.length; i++) {
+      const cell = queue[i]!;
+      for (const [dx, dy] of [[0, 1], [0, -1], [1, 0], [-1, 0]] as const) {
+        const next = { x: cell.x + dx, y: cell.y + dy };
+        const key = `${next.x},${next.y}`;
+        if (seen.has(key) || isSolid(next.x, next.y)) continue;
+        seen.add(key);
+        queue.push(next);
+      }
+    }
+    const reachable = (list: ReturnType<typeof approaches>) =>
+      list.filter((a) => seen.has(`${a.pos.x},${a.pos.y}`)).length;
+    expect(reachable(approaches("water")), "all the water is behind the gate").toBeGreaterThan(0);
+    expect(reachable(approaches("dumpster")), "all the dumpsters are behind the gate").toBeGreaterThan(0);
+    expect(reachable(sleepableBenches()), "every sleepable bench is behind the gate").toBeGreaterThan(0);
   });
 });
