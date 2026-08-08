@@ -293,5 +293,6 @@ export const DOOR_SIGNS: Record<string, string> = {
   busStop: "BUS",
   outskirtsBusStop: "BUS",
   jobBoard: "JOBS",
+  bikeShop: "BIKES",
 };
 

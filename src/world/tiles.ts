@@ -97,6 +97,7 @@ export const MARKERS: Record<Glyph, string> = {
   "@": "spawn",
   D: "diner",
   A: "outskirtsBusStop",
+  B: "bikeShop",
 };
 
 /**
@@ -121,6 +122,7 @@ export const MARKER_FLOOR: Record<Glyph, Glyph> = {
   "@": "_",
   D: "I",
   A: "r",
+  B: "I",
 };
 
 export function tileAt(glyph: Glyph | undefined): TileDef {

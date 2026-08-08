@@ -1324,6 +1324,52 @@ function makeRide(ctx: ActionCtx, name: string, dest: { x: number; y: number }, 
   };
 }
 
+/* ---------------------------------------------------------------- bikeShop */
+
+const bikeShop: Venue = (ctx) => {
+  const s = ctx.state;
+  const owned = (s.inventory.bicycle ?? 0) > 0;
+  const price = ITEMS.bicycle?.price ?? 70;
+
+  if (owned) {
+    return menu(
+      "Bob's Bikes",
+      ["Your bicycle is locked outside. Wheels look fine — plenty of miles left in it."],
+      [BACK],
+    );
+  }
+
+  const canAfford = s.cash >= price;
+  return menu(
+    "Bob's Bikes",
+    [
+      "A row of second-hand bikes in various states of repair.",
+      `A hand-written tag on the nearest one: MOUNTAIN BIKE — $${price}. Halves every walk.`,
+    ],
+    [
+      canAfford
+        ? {
+            label: `Buy the bicycle — $${price}`,
+            run: () => {
+              s.cash -= price;
+              addItem(s.inventory, "bicycle", 1);
+              pushLog(
+                s,
+                "You wheel a battered mountain bike out of the shop. Every walk just got shorter.",
+                "good",
+              );
+              return null;
+            },
+          }
+        : {
+            label: `Mountain bike — $${price}`,
+            locked: `Need $${price - s.cash} more`,
+          },
+      BACK,
+    ],
+  );
+};
+
 /* --------------------------------------------------------------- registry */
 
 export const VENUES: Record<string, Venue> = {
@@ -1342,4 +1388,5 @@ export const VENUES: Record<string, Venue> = {
   busStop,
   diner,
   outskirtsBusStop,
+  bikeShop,
 };

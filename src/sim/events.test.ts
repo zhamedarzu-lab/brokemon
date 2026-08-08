@@ -23,7 +23,7 @@ function makeCtx(s: GameState, seed = 1): ActionCtx {
 
 /** Place the player in a named zone by moving them to a representative y. */
 function inZone(s: GameState, zone: "slums" | "downtown" | "heights") {
-  if (zone === "slums") s.player.pos = { x: 10, y: 42 };
+  if (zone === "slums") s.player.pos = { x: 10, y: 58 };
   else if (zone === "downtown") s.player.pos = { x: 20, y: 20 };
   else s.player.pos = { x: 20, y: 8 };
 }
