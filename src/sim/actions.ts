@@ -145,6 +145,9 @@ function tileAction(ctx: ActionCtx, cell: Vec2): Prompt | null {
     case "gate":
       return heightsGate(ctx, cell);
 
+    case "street":
+      return streetPanhandle(ctx, cell);
+
     default:
       return null;
   }
@@ -186,6 +189,36 @@ function benchPrompt(ctx: ActionCtx): Prompt {
 
   choices.push(BACK);
   return menu("Bench", lines, choices);
+}
+
+function streetPanhandle(ctx: ActionCtx, cell: Vec2): Prompt {
+  const s = ctx.state;
+  const zone = zoneAt(townOf(s), cell.y);
+  const onCrossing = glyphAt(townOf(s), cell.x, cell.y) === "c";
+
+  const lines = onCrossing
+    ? ["The crossing gives you a steady stream on every cycle."]
+    : ["Cars slow for the light. Pedestrians step around you."];
+
+  const locked = zone.fineScale >= 3 ? "Soliciting is prohibited in this zone" : undefined;
+
+  if (zone.fineScale > 0 && !locked) {
+    lines.push("There is a no-soliciting notice on the lamp post.");
+  }
+
+  return menu(
+    "The street",
+    lines,
+    [
+      {
+        label: "Sit with a cup",
+        hint: "30 min",
+        locked,
+        run: () => panhandle(ctx),
+      },
+      BACK,
+    ],
+  );
 }
 
 function recycleBin(ctx: ActionCtx): Prompt {
@@ -257,6 +290,8 @@ export function interactionLabel(s: GameState): string | null {
       return "Fountain";
     case "gate":
       return "Gate";
+    case "street":
+      return "Panhandle";
     default:
       return null;
   }
