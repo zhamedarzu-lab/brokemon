@@ -1,7 +1,7 @@
 import { zoneAt } from "../world/map";
 import { interactionLabel } from "../sim/actions";
 import { METER_LABEL, METER_ORDER, type MeterId } from "../sim/meters";
-import { currentAppearance, netWorth, phaseOf, PHASE_NAMES, townOf, type GameState } from "../sim/state";
+import { currentAppearance, housingIn, netWorth, phaseOf, PHASE_NAMES, townOf, type GameState } from "../sim/state";
 import { dayOf, dayPart, formatClock } from "../sim/time";
 import { WEATHER } from "../sim/weather";
 import { EMPLOYMENT } from "../sim/jobs";
@@ -144,7 +144,7 @@ export class Hud {
     const phase = phaseOf(s);
     this.phaseEl.textContent = `Phase ${phase} — ${PHASE_NAMES[phase]}`;
 
-    const status: string[] = [HOUSING[s.housing].name];
+    const status: string[] = [HOUSING[housingIn(s)].name];
     status.push(s.employment ? EMPLOYMENT[s.employment].name : "Unemployed");
     status.push(`look ${currentAppearance(s)}`);
     if (s.sick) status.push(`<span class="bad">ill</span>`);

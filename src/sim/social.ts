@@ -76,6 +76,18 @@ export function appearance(hygiene: number, outfit: OutfitId): number {
 
 export type HousingId = "street" | "bench" | "hostel" | "trailer" | "apartment" | "estate";
 
+/**
+ * Worst address to best. Once you can hold a room in more than one town, the
+ * phase you are in is set by the best one you have anywhere — so the ordering
+ * has to be explicit rather than inferred from rest quality, where the
+ * apartment and the estate tie.
+ */
+export const HOUSING_ORDER: HousingId[] = ["street", "bench", "hostel", "trailer", "apartment", "estate"];
+
+export function housingRank(id: HousingId): number {
+  return HOUSING_ORDER.indexOf(id);
+}
+
 export interface HousingDef {
   id: HousingId;
   name: string;

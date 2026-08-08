@@ -1,12 +1,21 @@
-import { spawnPoint, STARTING_TOWN, townById, type Town, type TownId, type Vec2 } from "../world/map";
+import { spawnPoint, STARTING_TOWN, townById, TOWNS, type Town, type TownId, type Vec2 } from "../world/map";
 import type { EmploymentId, GigId, JobId, Requirements } from "./jobs";
 import { EMPLOYMENT, GIGS } from "./jobs";
 import { countOf, type Inventory, type ItemId } from "./items";
-import { appearance, outfitRank, OUTFITS, type HousingId, type OutfitId } from "./social";
+import { appearance, housingRank, outfitRank, OUTFITS, type HousingId, type OutfitId } from "./social";
 import type { Meters } from "./meters";
 import type { WeatherId } from "./weather";
 
 export type Facing = "up" | "down" | "left" | "right";
+
+/** One value per town. Anything you can hold in two places at once lives in one of these. */
+export type PerTown<T> = Record<TownId, T>;
+
+export function perTown<T>(value: T): PerTown<T> {
+  const out = {} as PerTown<T>;
+  for (const id of Object.keys(TOWNS) as TownId[]) out[id] = value;
+  return out;
+}
 
 export interface LogLine {
   time: number;
@@ -58,11 +67,15 @@ export interface GameState {
   wearing: OutfitId;
   wardrobe: OutfitId[];
 
-  housing: HousingId;
-  /** Absolute day on which rent is next taken. */
-  rentDueDay: number;
-  /** Nights the current bed is paid up for. */
-  nightsPaid: number;
+  /**
+   * Where you live, per town. You can hold a room in more than one place; the
+   * commute is the thing you are buying out of.
+   */
+  housing: PerTown<HousingId>;
+  /** Absolute day on which each town's rent is next taken. */
+  rentDueDay: PerTown<number>;
+  /** Nights the bed in each town is paid up for. */
+  nightsPaid: PerTown<number>;
 
   employment: EmploymentId | null;
   shiftsWorked: Record<string, number>;
@@ -79,7 +92,8 @@ export interface GameState {
   caffeine: number;
 
   education: number;
-  reputation: number;
+  /** What your name is worth, per town. You arrive somewhere new unknown. */
+  reputation: PerTown<number>;
 
   assignment: Assignment | null;
   gigsToday: Record<string, number>;
@@ -147,9 +161,9 @@ export function createState(seed = Date.now() >>> 0): GameState {
     wearing: "rags",
     wardrobe: ["rags"],
 
-    housing: "street",
-    rentDueDay: 0,
-    nightsPaid: 0,
+    housing: perTown<HousingId>("street"),
+    rentDueDay: perTown(0),
+    nightsPaid: perTown(0),
 
     employment: null,
     shiftsWorked: {},
@@ -160,7 +174,7 @@ export function createState(seed = Date.now() >>> 0): GameState {
     caffeine: 0,
 
     education: 0,
-    reputation: 0,
+    reputation: perTown(0),
 
     assignment: null,
     gigsToday: {},
@@ -207,11 +221,40 @@ export function currentAppearance(s: GameState): number {
   return appearance(s.meters.hygiene, s.wearing);
 }
 
+/* -------------------------------------------------------- per-town access */
+
+/** Where you live in a given town. Defaults to the one you are standing in. */
+export function housingIn(s: GameState, town: TownId = s.player.town): HousingId {
+  return s.housing[town] ?? "street";
+}
+
+export function setHousing(s: GameState, where: HousingId, town: TownId = s.player.town): void {
+  s.housing[town] = where;
+}
+
+/** The best address you hold anywhere. What phase you are in follows this. */
+export function bestHousing(s: GameState): HousingId {
+  let best: HousingId = "street";
+  for (const id of Object.keys(s.housing) as TownId[]) {
+    const here = s.housing[id];
+    if (here && housingRank(here) > housingRank(best)) best = here;
+  }
+  return best;
+}
+
+/** What your name is worth in a given town. */
+export function reputationIn(s: GameState, town: TownId = s.player.town): number {
+  return s.reputation[town] ?? 0;
+}
+
 export function phaseOf(s: GameState): Phase {
-  if (s.housing === "estate" || s.mayor || s.businessOwned) return 4;
-  if (s.housing === "apartment" && s.employment && EMPLOYMENT[s.employment].tier >= 3) return 3;
+  // Your standing is set by the best door you hold, in any town — you do not
+  // drop back to phase 1 by taking the coach somewhere you have no room.
+  const home = bestHousing(s);
+  if (home === "estate" || s.mayor || s.businessOwned) return 4;
+  if (home === "apartment" && s.employment && EMPLOYMENT[s.employment].tier >= 3) return 3;
   // Any address with a door on it is out of phase 1, career or not.
-  if (s.housing === "hostel" || s.housing === "trailer" || s.housing === "apartment") return 2;
+  if (home === "hostel" || home === "trailer" || home === "apartment") return 2;
   return 1;
 }
 
@@ -252,7 +295,7 @@ export function checkRequirements(s: GameState, req: Requirements): RequirementC
   if (req.morale !== undefined && s.meters.morale < req.morale) {
     reasons.push(`you cannot make yourself do this today`);
   }
-  if (req.reputation !== undefined && s.reputation < req.reputation) {
+  if (req.reputation !== undefined && reputationIn(s) < req.reputation) {
     reasons.push(`your name is worth less around here than that`);
   }
   if (req.experience !== undefined) {
@@ -344,10 +387,10 @@ const REP_CROSS_DOWN: Record<ReputationLabel, string> = {
  * Apply a reputation delta and log a message if the descriptor tier changes.
  * Use this instead of mutating s.reputation directly.
  */
-export function changeReputation(s: GameState, delta: number): void {
-  const before = reputationLabel(s.reputation);
-  s.reputation += delta;
-  const after = reputationLabel(s.reputation);
+export function changeReputation(s: GameState, delta: number, town: TownId = s.player.town): void {
+  const before = reputationLabel(reputationIn(s, town));
+  s.reputation[town] = reputationIn(s, town) + delta;
+  const after = reputationLabel(reputationIn(s, town));
   if (after !== before) {
     const msg = delta > 0 ? REP_CROSS_UP[after] : REP_CROSS_DOWN[after];
     if (msg) pushLog(s, msg, delta > 0 ? "good" : "bad");

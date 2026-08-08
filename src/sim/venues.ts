@@ -24,6 +24,9 @@ import {
   earnCash,
   phaseOf,
   pushLog,
+  housingIn,
+  reputationIn,
+  setHousing,
   setWon,
   townOf,
   type GameState,
@@ -127,10 +130,10 @@ const communityCenter: Venue = (ctx) => {
       label: "Take a bed for the night",
       hint: "free, curfew 8AM",
       run: () => {
-        const before = s.housing;
-        s.housing = "hostel";
+        const before = housingIn(s);
+        setHousing(s, "hostel");
         const result = sleep(ctx, "hostel", 7);
-        s.housing = before === "street" ? "street" : before;
+        setHousing(s, before);
         s.meters.morale = Math.min(100, s.meters.morale + 4);
         pushLog(s, "Slept at the shelter.");
         const extraLines = s.employment === "nightStock"
@@ -424,8 +427,8 @@ const hostel: Venue = (ctx) => {
           hint: `$${rate}/night`,
           run: () => {
             s.cash -= rate;
-            s.housing = "hostel";
-            s.nightsPaid = 1;
+            setHousing(s, "hostel");
+            s.nightsPaid[s.player.town] = 1;
             pushLog(s, `Paid $${rate} for a hostel cot.`, "money");
             return sleep(ctx, "hostel", 7);
           },
@@ -462,10 +465,10 @@ const hostel: Venue = (ctx) => {
 const trailer: Venue = (ctx) => {
   const s = ctx.state;
   const def = HOUSING.trailer;
-  if (s.housing === "trailer") {
+  if (housingIn(s) === "trailer") {
     return menu(
       "Your trailer",
-      [def.desc, `Rent of $${def.rent} is due on day ${s.rentDueDay}.`],
+      [def.desc, `Rent of $${def.rent} is due on day ${s.rentDueDay[s.player.town]}.`],
       [
         { label: "Sleep until morning", run: () => sleep(ctx, "trailer", 7) },
         {
@@ -493,8 +496,8 @@ const trailer: Venue = (ctx) => {
             hint: `$${deposit}`,
             run: () => {
               s.cash -= deposit;
-              s.housing = "trailer";
-              s.rentDueDay = Math.floor(s.time / 1440) + 1 + def.rentEvery;
+              setHousing(s, "trailer");
+              s.rentDueDay[s.player.town] = Math.floor(s.time / 1440) + 1 + def.rentEvery;
               s.meters.morale = Math.min(100, s.meters.morale + 22);
               pushLog(s, "Rented the trailer on Route 1.", "good");
               return menu(
@@ -516,10 +519,10 @@ const trailer: Venue = (ctx) => {
 const apartment: Venue = (ctx) => {
   const s = ctx.state;
   const def = HOUSING.apartment;
-  if (s.housing === "apartment" || s.housing === "estate") {
+  if (housingIn(s) === "apartment" || housingIn(s) === "estate") {
     return menu(
       "Your apartment",
-      [def.desc, `Rent of $${def.rent} is due on day ${s.rentDueDay}.`],
+      [def.desc, `Rent of $${def.rent} is due on day ${s.rentDueDay[s.player.town]}.`],
       [
         { label: "Sleep until morning", run: () => sleep(ctx, "apartment", 7) },
         {
@@ -576,8 +579,8 @@ const apartment: Venue = (ctx) => {
               const fromCash = Math.min(s.cash, deposit);
               s.cash -= fromCash;
               s.bank -= deposit - fromCash;
-              s.housing = "apartment";
-              s.rentDueDay = Math.floor(s.time / 1440) + 1 + def.rentEvery;
+              setHousing(s, "apartment");
+              s.rentDueDay[s.player.town] = Math.floor(s.time / 1440) + 1 + def.rentEvery;
               s.meters.morale = 100;
               s.peakPhase = 3;
               pushLog(s, "Signed a lease on an apartment in Market Square.", "good");
@@ -604,7 +607,7 @@ export const ESTATE_PRICE = 38000;
 
 const estate: Venue = (ctx) => {
   const s = ctx.state;
-  if (s.housing === "estate") {
+  if (housingIn(s) === "estate") {
     return menu(
       "The estate",
       [HOUSING.estate.desc],
@@ -662,7 +665,7 @@ const estate: Venue = (ctx) => {
               s.bank -= fromBank;
               owed -= fromBank;
               s.investments -= owed;
-              s.housing = "estate";
+              setHousing(s, "estate");
               s.peakPhase = 4;
               s.meters.morale = 100;
               pushLog(s, "Bought the estate on the hill.", "good");
@@ -927,7 +930,7 @@ const corporatePlaza: Venue = (ctx) => {
               changeReputation(s, 15);
               s.peakPhase = 4;
               pushLog(s, "Bought the Mart franchise.", "good");
-              if (s.housing === "estate") setWon(s);
+              if (housingIn(s) === "estate") setWon(s);
               return menu(
                 "Silph Regional",
                 [
@@ -946,7 +949,7 @@ const corporatePlaza: Venue = (ctx) => {
   if (s.businessOwned && !s.mayor) {
     const reasons: string[] = [];
     if (s.cash + s.bank < CAMPAIGN_PRICE) reasons.push(`a campaign costs $${CAMPAIGN_PRICE.toLocaleString()}`);
-    if (s.reputation < 40) reasons.push(`nobody knows your name yet (reputation ${s.reputation}/40)`);
+    if (reputationIn(s) < 40) reasons.push(`nobody knows your name yet (reputation ${reputationIn(s)}/40)`);
     choices.push(
       reasons.length === 0
         ? {
@@ -1001,7 +1004,7 @@ function hire(ctx: ActionCtx, id: EmploymentId): Prompt {
   ctx.advance(45, { sheltered: true });
 
   const look = currentAppearance(s);
-  const odds = Math.min(0.95, 0.25 + (look - (def.requires.appearance ?? 30)) / 60 + s.reputation / 200);
+  const odds = Math.min(0.95, 0.25 + (look - (def.requires.appearance ?? 30)) / 60 + reputationIn(s) / 200);
   if (!ctx.rng.chance(odds)) {
     s.meters.morale = Math.max(0, s.meters.morale - 10);
     pushLog(s, `Interview for ${def.name} — no offer.`, "bad");
@@ -1039,7 +1042,7 @@ function runForMayor(ctx: ActionCtx): Prompt {
   s.bank -= CAMPAIGN_PRICE - fromCash;
   ctx.advance(600, { sheltered: true });
 
-  const odds = Math.min(0.95, 0.3 + s.reputation / 120);
+  const odds = Math.min(0.95, 0.3 + reputationIn(s) / 120);
   if (!ctx.rng.chance(odds)) {
     changeReputation(s, 5);
     pushLog(s, "Lost the mayoral election.", "bad");
@@ -1055,7 +1058,7 @@ function runForMayor(ctx: ActionCtx): Prompt {
   s.peakPhase = 4;
   changeReputation(s, 20);
   pushLog(s, "Elected mayor of Brokemon Town.", "good");
-  if (s.housing === "estate") setWon(s);
+  if (housingIn(s) === "estate") setWon(s);
   return menu(
     "Election night",
     [

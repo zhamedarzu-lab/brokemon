@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { markerPos, STARTING_TOWN, townById } from "../world/map";
+import { STARTING_TOWN, markerPos, townById } from "../world/map";
 /** These bots only ever walk Brokemon Town. */
 const TOWN = townById(STARTING_TOWN);
 
@@ -8,7 +8,14 @@ import { interact } from "./actions";
 import { countOf, type ItemId } from "./items";
 import type { Choice, Prompt } from "./prompt";
 import { Rng } from "./rng";
-import { createState, currentAppearance, phaseOf, type Facing, type GameState } from "./state";
+import {
+  type Facing,
+  type GameState,
+  createState,
+  currentAppearance,
+  housingIn,
+  phaseOf,
+} from "./state";
 import { advance } from "./tick";
 import { dayOf, formatClock, hourOf, minuteOfDay, minutesUntilHour } from "./time";
 import { consume, type ActionCtx } from "./work";
@@ -256,13 +263,13 @@ function morale(p: Player): void {
 
 function upgradeHousing(p: Player): void {
   const s = p.s;
-  if (s.housing === "estate") return;
-  if (s.housing !== "apartment") {
+  if (housingIn(s) === "estate") return;
+  if (housingIn(s) !== "apartment") {
     p.goto("apartment");
     const a = p.press();
     if (p.can(a, "sign the lease")) { p.drive(a, "sign the lease"); p.note("SIGNED apartment lease"); return; }
   }
-  if (s.housing === "street" && s.cash >= 90) {
+  if (housingIn(s) === "street" && s.cash >= 90) {
     p.goto("trailer");
     const t = p.press();
     if (p.can(t, "take it")) { p.drive(t, "take it"); p.note("RENTED trailer"); }
@@ -282,7 +289,7 @@ function endgame(p: Player): void {
     const l = p.press();
     if (p.can(l, "run for mayor")) { p.drive(l, "run for mayor"); p.note(s.mayor ? "ELECTED MAYOR" : "lost the election"); }
   }
-  if (s.housing !== "estate") {
+  if (housingIn(s) !== "estate") {
     p.goto("estate");
     const e = p.press();
     if (p.can(e, "make an offer")) { p.drive(e, "make an offer"); p.note("BOUGHT THE ESTATE"); }
@@ -303,12 +310,12 @@ function bank(p: Player): void {
 
 function sleep(p: Player): void {
   const s = p.s;
-  if (s.housing === "estate" || s.housing === "apartment") {
-    p.goto(s.housing);
+  if (housingIn(s) === "estate" || housingIn(s) === "apartment") {
+    p.goto(housingIn(s));
     p.drive(p.press(), "sleep");
     return;
   }
-  if (s.housing === "trailer") {
+  if (housingIn(s) === "trailer") {
     p.goto("trailer");
     p.drive(p.press(), "sleep");
     return;

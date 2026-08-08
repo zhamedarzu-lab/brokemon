@@ -3,7 +3,7 @@ import { addItem } from "./items";
 import { EMPLOYMENT } from "./jobs";
 import { applyDelta } from "./meters";
 import { menu, type Choice, type Prompt } from "./prompt";
-import { changeReputation, checkRequirements, currentAppearance, earnCash, phaseOf, pushLog, townOf, type GameState } from "./state";
+import { changeReputation, checkRequirements, currentAppearance, earnCash, phaseOf, pushLog, reputationIn, townOf, type GameState } from "./state";
 import { hourOf } from "./time";
 import type { ActionCtx } from "./work";
 
@@ -285,7 +285,7 @@ const EVENTS: EventDef[] = [
       const s = ctx.state;
       s.flags.colleagueInterviewDone = 1;
       const look = currentAppearance(s);
-      const repOk = s.reputation >= 20;
+      const repOk = reputationIn(s) >= 20;
       const lookOk = look >= 50;
 
       function onHired(): Prompt {

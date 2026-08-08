@@ -21,7 +21,17 @@ import { countOf, type ItemId } from "./items";
 import { EMPLOYMENT, EMPLOYMENT_ORDER, type EmploymentId } from "./jobs";
 import type { Choice, Prompt } from "./prompt";
 import { Rng } from "./rng";
-import { createState, currentAppearance, phaseOf, townOf, type Facing, type GameState } from "./state";
+import {
+  bestHousing,
+  createState,
+  currentAppearance,
+  housingIn,
+  phaseOf,
+  reputationIn,
+  townOf,
+  type Facing,
+  type GameState,
+} from "./state";
 import { advance, policeCheck } from "./tick";
 import { dayOf, formatClock, hourOf, minuteOfDay } from "./time";
 import { consume, shiftWindow, type ActionCtx } from "./work";
@@ -304,11 +314,11 @@ function nearest(from: Vec2, options: Approach[]): Approach {
 
 function wash(p: Player, target = 65): void {
   if (p.s.meters.hygiene >= target) return;
-  if (p.s.housing === "apartment" || p.s.housing === "estate") {
-    p.goto(p.s.housing);
+  if (housingIn(p.s) === "apartment" || housingIn(p.s) === "estate") {
+    p.goto(housingIn(p.s));
     if (p.took(p.press(), "shower and change")) return;
   }
-  if (p.s.housing === "trailer") {
+  if (housingIn(p.s) === "trailer") {
     p.goto("trailer");
     if (p.took(p.press(), "wash")) return;
   }
@@ -474,8 +484,8 @@ function school(p: Player): void {
 
 function housing(p: Player): void {
   const s = p.s;
-  if (s.housing === "estate") return;
-  if (s.housing !== "apartment") {
+  if (housingIn(s) === "estate") return;
+  if (housingIn(s) !== "apartment") {
     p.goto("apartment");
     const a = p.press();
     if (p.can(a, "sign the lease")) {
@@ -486,7 +496,7 @@ function housing(p: Player): void {
     const why = p.lockReason(a, "sign the lease");
     if (why) p.blocked.set(`lease: ${why}`, (p.blocked.get(`lease: ${why}`) ?? 0) + 1);
   }
-  if (s.housing === "street" && s.cash >= 110) {
+  if (housingIn(s) === "street" && s.cash >= 110) {
     p.goto("trailer");
     if (p.took(p.press(), "take it")) p.note("RENTED trailer");
   }
@@ -509,7 +519,7 @@ function endgame(p: Player): void {
       p.note(s.mayor ? "ELECTED MAYOR" : "lost the election");
     }
   }
-  if (s.housing !== "estate") {
+  if (housingIn(s) !== "estate") {
     p.goto("estate");
     if (p.took(p.press(), "make an offer")) p.note("BOUGHT THE ESTATE");
   }
@@ -527,8 +537,8 @@ function banking(p: Player): void {
 
 function sleep(p: Player): void {
   const s = p.s;
-  if (s.housing === "apartment" || s.housing === "estate" || s.housing === "trailer") {
-    p.goto(s.housing);
+  if (housingIn(s) === "apartment" || housingIn(s) === "estate" || housingIn(s) === "trailer") {
+    p.goto(housingIn(s));
     if (p.took(p.press(), "sleep", "get up")) return;
   }
   if (s.cash >= 12) {
@@ -669,11 +679,11 @@ function report(seed: number, days: number): void {
 
   console.log(`\n${"=".repeat(72)}\nSEED ${seed} — ${dayOf(s.time)} days\n${"=".repeat(72)}`);
   console.log(
-    `phase ${phaseOf(s)} · ${s.housing} · ${s.employment ?? "unemployed"} · ` +
+    `phase ${phaseOf(s)} · ${bestHousing(s)} · ${s.employment ?? "unemployed"} · ` +
       `cash $${fmt(s.cash)} bank $${fmt(s.bank)} inv $${fmt(s.investments)} debt $${fmt(s.debt)} credit ${s.credit}`,
   );
   console.log(
-    `edu ${s.education}/6 · rep ${s.reputation} · collapses ${s.collapses} · fines $${fmt(s.fines)} · ` +
+    `edu ${s.education}/6 · rep ${reputationIn(s)} · collapses ${s.collapses} · fines $${fmt(s.fines)} · ` +
       `morale ${minMorale.toFixed(0)}–${maxMorale.toFixed(0)} · won ${s.won}`,
   );
   console.log(`shifts: ${JSON.stringify(s.shiftsWorked)}`);

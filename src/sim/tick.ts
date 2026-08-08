@@ -1,5 +1,5 @@
 import { isOutdoors, zoneAt, type Zone } from "../world/map";
-import { townOf } from "./state";
+import { housingIn, reputationIn, setHousing, townOf } from "./state";
 import { changeReputation, checkPostWinGoal, hasItem, phaseOf, pushLog, setWon, type GameState, type Phase } from "./state";
 import { decay, WARN_THRESHOLDS, type MeterId } from "./meters";
 import { dayOf, minuteOfDay, MINUTES_PER_DAY } from "./time";
@@ -179,10 +179,10 @@ function onNewDay(s: GameState, rng: Rng, day: number, out: Interrupt[]): void {
   payPassiveIncome(s, out);
 
   // A cot is paid for one night at a time. Come morning it isn't yours.
-  if (s.housing === "hostel") {
-    if (s.nightsPaid > 0) s.nightsPaid -= 1;
+  if (housingIn(s) === "hostel") {
+    if (s.nightsPaid[s.player.town] > 0) s.nightsPaid[s.player.town] -= 1;
     else {
-      s.housing = "street";
+      setHousing(s, "street");
       pushLog(s, "Your cot was paid to this morning. Everyone is out by eight.", "plain");
     }
   }
@@ -190,7 +190,7 @@ function onNewDay(s: GameState, rng: Rng, day: number, out: Interrupt[]): void {
   // Safety net: fire victory on the next new day if the player somehow reached
   // the win condition without triggering the immediate check (e.g. a loaded
   // save that already meets conditions).
-  if (s.housing === "estate" && (s.businessOwned || s.mayor)) {
+  if (housingIn(s) === "estate" && (s.businessOwned || s.mayor)) {
     const wasWon = s.won;
     setWon(s);
     if (!wasWon && s.won) out.push({ kind: "victory" });
@@ -209,7 +209,7 @@ function onNewDay(s: GameState, rng: Rng, day: number, out: Interrupt[]): void {
 function payPassiveIncome(s: GameState, out: Interrupt[]): void {
   const lines: string[] = [];
   if (s.businessOwned) {
-    const take = 180 + Math.round((s.reputation + 40) * 1.5);
+    const take = 180 + Math.round((reputationIn(s) + 40) * 1.5);
     s.bank += take;
     lines.push(`The franchise cleared $${take} yesterday.`);
   }
@@ -227,12 +227,12 @@ function payPassiveIncome(s: GameState, out: Interrupt[]): void {
 export const MAYOR_SALARY = 320;
 
 function chargeRent(s: GameState, day: number, out: Interrupt[]): void {
-  const def = HOUSING[s.housing];
+  const def = HOUSING[housingIn(s)];
   if (def.rentEvery <= 0 || def.rent <= 0) return;
-  if (day < s.rentDueDay) return;
+  if (day < s.rentDueDay[s.player.town]) return;
 
   const amount = def.rent;
-  s.rentDueDay = day + def.rentEvery;
+  s.rentDueDay[s.player.town] = day + def.rentEvery;
 
   if (s.cash >= amount) {
     s.cash -= amount;
@@ -249,8 +249,8 @@ function chargeRent(s: GameState, day: number, out: Interrupt[]): void {
     s.credit = Math.max(300, s.credit - 35);
     pushLog(s, `You couldn't make rent. $${amount} plus a $40 late fee goes on the debt.`, "bad");
     out.push({ kind: "rent", amount, paid: false });
-    if (s.housing === "apartment" || s.housing === "trailer") {
-      s.housing = "street";
+    if (housingIn(s) === "apartment" || housingIn(s) === "trailer") {
+      setHousing(s, "street");
       s.flags.evicted = (s.flags.evicted ?? 0) + 1;
       pushLog(s, "You've been served notice and the locks are changed. Back to the street.", "bad");
     }

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { STARTING_TOWN } from "../world/map";
 import {
   COOLDOWN_DECAY_FACTOR,
   COOLDOWN_FULL_MIN,
@@ -7,7 +8,12 @@ import {
 } from "./events";
 import type { Prompt } from "./prompt";
 import { Rng } from "./rng";
-import { createState, phaseOf, type GameState } from "./state";
+import {
+  type GameState,
+  createState,
+  phaseOf,
+  setHousing,
+} from "./state";
 import { advance } from "./tick";
 import type { ActionCtx } from "./work";
 
@@ -29,11 +35,11 @@ function inZone(s: GameState, zone: "slums" | "downtown" | "heights") {
 }
 
 function phase2(s: GameState) {
-  s.housing = "hostel";
+  setHousing(s, "hostel");
 }
 
 function phase3(s: GameState) {
-  s.housing = "apartment";
+  setHousing(s, "apartment");
   s.employment = "technician";
 }
 
@@ -127,10 +133,10 @@ describe("colleagueCall event", () => {
       delete s.flags.colleagueCallDone;
     }
     expect(prompt).not.toBeNull();
-    const repBefore = s.reputation;
+    const repBefore = s.reputation[STARTING_TOWN];
     const cashBefore = s.cash;
     drive(prompt, "yes");
-    expect(s.reputation).toBeGreaterThan(repBefore);
+    expect(s.reputation[STARTING_TOWN]).toBeGreaterThan(repBefore);
     expect(s.cash).toBeGreaterThan(cashBefore);
   });
 });
@@ -369,7 +375,7 @@ describe("oldBoss event", () => {
       delete s.flags.oldBossDone;
     }
     expect(prompt).not.toBeNull();
-    expect(s.reputation).toBeGreaterThan(0);
+    expect(s.reputation[STARTING_TOWN]).toBeGreaterThan(0);
   });
 
   it("hurts reputation when player looks bad (appearance < 60)", () => {
@@ -386,7 +392,7 @@ describe("oldBoss event", () => {
       delete s.flags.oldBossDone;
     }
     expect(prompt).not.toBeNull();
-    expect(s.reputation).toBeLessThan(0);
+    expect(s.reputation[STARTING_TOWN]).toBeLessThan(0);
   });
 });
 
@@ -473,9 +479,9 @@ describe("profilePiece event", () => {
       delete s.flags.profilePieceDone;
     }
     expect(prompt).not.toBeNull();
-    const repBefore = s.reputation;
+    const repBefore = s.reputation[STARTING_TOWN];
     drive(prompt, "give her");
-    expect(s.reputation - repBefore).toBeGreaterThanOrEqual(15);
+    expect(s.reputation[STARTING_TOWN] - repBefore).toBeGreaterThanOrEqual(15);
   });
 });
 
@@ -606,7 +612,7 @@ describe("colleagueInterview event", () => {
       const s = createState(i);
       phase2(s);
       s.employment = null;
-      s.reputation = 25; // repOk threshold
+      s.reputation[STARTING_TOWN] = 25; // repOk threshold
       s.meters = { hunger: 100, thirst: 100, hygiene: 80, energy: 100, morale: 80, health: 100 };
       const p = getInterviewPrompt(s, i);
       if (!p) continue;
@@ -666,7 +672,7 @@ describe("colleagueInterview event", () => {
         const s = createState(i);
         phase2(s);
         s.employment = job;
-        s.reputation = 30;
+        s.reputation[STARTING_TOWN] = 30;
         s.meters = { hunger: 100, thirst: 100, hygiene: 80, energy: 100, morale: 80, health: 100 };
         const p = getInterviewPrompt(s, i);
         if (!p) continue;
@@ -675,7 +681,7 @@ describe("colleagueInterview event", () => {
         if (job !== "martClerk") {
           expect(s.employment).toBe(job);
         }
-        if (s.cash > 0 || s.reputation > 30) successFired = true;
+        if (s.cash > 0 || s.reputation[STARTING_TOWN] > 30) successFired = true;
       }
     }
   });
@@ -687,15 +693,15 @@ describe("colleagueInterview event", () => {
       const s = createState(i);
       phase2(s);
       s.employment = "technician"; // higher-tier job
-      s.reputation = 25;
+      s.reputation[STARTING_TOWN] = 25;
       s.cash = 0;
       s.meters = { hunger: 100, thirst: 100, hygiene: 80, energy: 100, morale: 80, health: 100 };
       const p = getInterviewPrompt(s, i);
       if (!p) continue;
-      const repBefore = s.reputation;
+      const repBefore = s.reputation[STARTING_TOWN];
       const cashBefore = s.cash;
       drive(p, "confident");
-      if (s.reputation > repBefore) repGained = true;
+      if (s.reputation[STARTING_TOWN] > repBefore) repGained = true;
       if (s.cash > cashBefore) cashGained = true;
     }
     expect(repGained).toBe(true);
@@ -884,7 +890,7 @@ describe("the interview does not hire you into a job you cannot turn up to", () 
       phase2(s);
       s.employment = null;
       s.wearing = "rags";
-      s.reputation = 25;
+      s.reputation[STARTING_TOWN] = 25;
       s.meters = { hunger: 100, thirst: 100, hygiene: 100, energy: 100, morale: 80, health: 100 };
       const p = getInterviewPrompt(s, i);
       if (!p) continue;
@@ -906,7 +912,7 @@ describe("the interview does not hire you into a job you cannot turn up to", () 
       s.employment = null;
       s.wearing = "thrift";
       s.wardrobe.push("thrift");
-      s.reputation = 25;
+      s.reputation[STARTING_TOWN] = 25;
       s.meters = { hunger: 100, thirst: 100, hygiene: 100, energy: 100, morale: 80, health: 100 };
       const p = getInterviewPrompt(s, i);
       if (!p) continue;

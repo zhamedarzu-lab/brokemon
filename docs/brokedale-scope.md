@@ -147,12 +147,30 @@ the grid, and `world/map.ts` is the registry. Zones live inside a town.
 
 ### Phase 0b — pluralise the player, still no new content
 
-Housing, rent and reputation become per-town, with Brokedale not yet reachable.
-Same gate: no number moves. Doing this before the city exists means the
-migration is testable against a game that already works.
+Housing, rent, hostel nights and reputation become per-town, with Brokedale not
+yet reachable. Doing this before the city exists means the migration is
+testable against a game that already works.
 
-Fold open finding #3 (reputation has no ceiling) in here, since every call site
-is being touched anyway.
+**Split in two.** The original plan said to fold open finding #2 (reputation has
+no ceiling) in here *and* gate the phase on no number moving. Those contradict
+each other — capping reputation changes the franchise payout, which changes the
+endgame economy. The value of the gate is that it proves the refactor is
+behaviour-preserving, and that proof is worth more than the convenience of
+doing both at once.
+
+- **0b-1, the refactor.** ✅ **DONE.** `housing`, `rentDueDay`, `nightsPaid` and
+  `reputation` are `PerTown<T>` records, reached through `housingIn`,
+  `setHousing`, `bestHousing` and `reputationIn`. `phaseOf` reads the best
+  address in any town, so taking the coach somewhere you have no room will not
+  knock you back to phase 1. 251 tests and byte-identical playtest output.
+
+  The predicted migration pain was real: a stored scalar is the wrong *type*,
+  not a missing field. `spreadToTowns` handles all three shapes — a record, a
+  bare scalar, or nothing — and reputation earned before Brokedale existed is
+  credited to Brokemon rather than spread across both.
+- **0b-2, the ceiling.** A deliberate balance change with its own before-and-
+  after measurement, landed separately so the numbers that move are attributable
+  to it.
 
 ### Phase 1 — the coach, and a stub Brokedale
 

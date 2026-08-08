@@ -2,7 +2,7 @@ import { ITEMS, type ItemId } from "../sim/items";
 import { EMPLOYMENT, EMPLOYMENT_ORDER, MAX_CREDITS } from "../sim/jobs";
 import { METER_LABEL, METER_ORDER } from "../sim/meters";
 import { HOUSING, OUTFITS } from "../sim/social";
-import { checkRequirements, currentAppearance, netWorth, phaseOf, PHASE_NAMES, reputationLabel, type GameState } from "../sim/state";
+import { type GameState, PHASE_NAMES, checkRequirements, currentAppearance, housingIn, netWorth, phaseOf, reputationIn, reputationLabel } from "../sim/state";
 import { formatClock } from "../sim/time";
 
 function investmentDisplay(s: GameState): string {
@@ -146,10 +146,10 @@ export class Journal {
       <div class="stat-grid">
         <div class="stat"><span>Appearance</span><b>${currentAppearance(s)}</b></div>
         <div class="stat"><span>Wearing</span><b>${OUTFITS[s.wearing].name}</b></div>
-        <div class="stat"><span>Sleeping</span><b>${HOUSING[s.housing].name}</b></div>
+        <div class="stat"><span>Sleeping</span><b>${HOUSING[housingIn(s)].name}</b></div>
         <div class="stat"><span>Job</span><b>${s.employment ? EMPLOYMENT[s.employment].name : "None"}</b></div>
         <div class="stat"><span>Credits</span><b>${s.education}/${MAX_CREDITS}</b></div>
-        <div class="stat"><span>Reputation</span><b>${reputationLabel(s.reputation)}</b></div>
+        <div class="stat"><span>Reputation</span><b>${reputationLabel(reputationIn(s))}</b></div>
       </div>
       <h3>Money</h3>
       <div class="stat-grid">

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { STARTING_TOWN } from "../world/map";
 import { EMPLOYMENT } from "./jobs";
 import { addItem, countOf } from "./items";
 import { appearance, outfitRank, OUTFIT_ORDER } from "./social";
@@ -10,9 +11,11 @@ import {
   createState,
   currentAppearance,
   earnCash,
+  housingIn,
   netWorth,
   phaseOf,
   reputationLabel,
+  setHousing,
   setWon,
 } from "./state";
 
@@ -22,7 +25,7 @@ describe("createState", () => {
     expect(s.cash).toBeLessThan(10);
     expect(s.debt).toBeGreaterThan(0);
     expect(s.meters.hygiene).toBeLessThan(40);
-    expect(s.housing).toBe("street");
+    expect(housingIn(s)).toBe("street");
     expect(s.employment).toBeNull();
     expect(phaseOf(s)).toBe(1);
   });
@@ -110,16 +113,16 @@ describe("phaseOf", () => {
     const s = createState(1);
     expect(phaseOf(s)).toBe(1);
 
-    s.housing = "hostel";
+    setHousing(s, "hostel");
     expect(phaseOf(s)).toBe(2);
 
-    s.housing = "apartment";
+    setHousing(s, "apartment");
     expect(phaseOf(s)).toBe(2); // an address alone is not a career
 
     s.employment = "officeAdmin";
     expect(phaseOf(s)).toBe(3);
 
-    s.housing = "estate";
+    setHousing(s, "estate");
     expect(phaseOf(s)).toBe(4);
   });
 
@@ -170,7 +173,7 @@ describe("save migration: busPassDaysLeft", () => {
 describe("setWon", () => {
   it("marks the run as won and sets a post-win goal when net worth is below threshold", () => {
     const s = createState(1);
-    s.housing = "estate";
+    setHousing(s, "estate");
     s.businessOwned = true;
     s.cash = 100;
     s.debt = 0;
@@ -181,7 +184,7 @@ describe("setWon", () => {
 
   it("does not set a post-win goal when net worth already clears the threshold", () => {
     const s = createState(1);
-    s.housing = "estate";
+    setHousing(s, "estate");
     s.businessOwned = true;
     s.bank = 50_000;
     s.debt = 0;
@@ -192,7 +195,7 @@ describe("setWon", () => {
 
   it("is idempotent — calling it twice does not double-log or reset postWinGoal", () => {
     const s = createState(1);
-    s.housing = "estate";
+    setHousing(s, "estate");
     s.businessOwned = true;
     s.cash = 100;
     s.debt = 0;
@@ -206,7 +209,7 @@ describe("setWon", () => {
 
   it("leaves victoryAcknowledged false — only the UI sets it", () => {
     const s = createState(1);
-    s.housing = "estate";
+    setHousing(s, "estate");
     s.businessOwned = true;
     setWon(s);
     expect(s.victoryAcknowledged).toBe(false);
@@ -254,47 +257,47 @@ describe("changeReputation", () => {
 
   it("crossing up into Spotty from Infamous fires a good-tone log", () => {
     const s = createState(1);
-    s.reputation = -31; // Infamous
+    s.reputation[STARTING_TOWN] = -31; // Infamous
     const before = s.log.length;
     changeReputation(s, 2); // → -29, now Spotty
-    expect(s.reputation).toBe(-29);
+    expect(s.reputation[STARTING_TOWN]).toBe(-29);
     expect(s.log.length).toBeGreaterThan(before);
     expect(s.log.at(-1)!.tone).toBe("good");
   });
 
   it("crossing up into Neutral from Spotty fires a good-tone log", () => {
     const s = createState(1);
-    s.reputation = -1; // Spotty
+    s.reputation[STARTING_TOWN] = -1; // Spotty
     const before = s.log.length;
     changeReputation(s, 2); // → 1, now Neutral
-    expect(s.reputation).toBe(1);
+    expect(s.reputation[STARTING_TOWN]).toBe(1);
     expect(s.log.length).toBeGreaterThan(before);
     expect(s.log.at(-1)!.tone).toBe("good");
   });
 
   it("crossing up into Reliable fires a good-tone log", () => {
     const s = createState(1);
-    s.reputation = 29; // Neutral
+    s.reputation[STARTING_TOWN] = 29; // Neutral
     const before = s.log.length;
     changeReputation(s, 2); // → 31, now Reliable
-    expect(s.reputation).toBe(31);
+    expect(s.reputation[STARTING_TOWN]).toBe(31);
     expect(s.log.length).toBeGreaterThan(before);
     expect(s.log.at(-1)!.tone).toBe("good");
   });
 
   it("crossing up into Respected fires a good-tone log", () => {
     const s = createState(1);
-    s.reputation = 59; // Reliable
+    s.reputation[STARTING_TOWN] = 59; // Reliable
     const before = s.log.length;
     changeReputation(s, 2); // → 61, now Respected
-    expect(s.reputation).toBe(61);
+    expect(s.reputation[STARTING_TOWN]).toBe(61);
     expect(s.log.length).toBeGreaterThan(before);
     expect(s.log.at(-1)!.tone).toBe("good");
   });
 
   it("crossing down into Reliable fires a bad-tone log", () => {
     const s = createState(1);
-    s.reputation = 60; // Respected
+    s.reputation[STARTING_TOWN] = 60; // Respected
     const before = s.log.length;
     changeReputation(s, -31); // → 29, now Reliable
     expect(s.log.length).toBeGreaterThan(before);
@@ -303,7 +306,7 @@ describe("changeReputation", () => {
 
   it("crossing down into Neutral fires a bad-tone log", () => {
     const s = createState(1);
-    s.reputation = 1; // Neutral (barely)
+    s.reputation[STARTING_TOWN] = 1; // Neutral (barely)
     const before = s.log.length;
     changeReputation(s, -2); // → -1, now Spotty
     expect(s.log.length).toBeGreaterThan(before);
@@ -312,37 +315,37 @@ describe("changeReputation", () => {
 
   it("crossing down into Spotty fires a bad-tone log", () => {
     const s = createState(1);
-    s.reputation = 0; // Neutral boundary
+    s.reputation[STARTING_TOWN] = 0; // Neutral boundary
     const before = s.log.length;
     changeReputation(s, -1); // → -1, now Spotty
-    expect(s.reputation).toBe(-1);
+    expect(s.reputation[STARTING_TOWN]).toBe(-1);
     expect(s.log.length).toBeGreaterThan(before);
     expect(s.log.at(-1)!.tone).toBe("bad");
   });
 
   it("crossing down into Infamous fires a bad-tone log", () => {
     const s = createState(1);
-    s.reputation = -30; // Spotty boundary
+    s.reputation[STARTING_TOWN] = -30; // Spotty boundary
     const before = s.log.length;
     changeReputation(s, -1); // → -31, now Infamous
-    expect(s.reputation).toBe(-31);
+    expect(s.reputation[STARTING_TOWN]).toBe(-31);
     expect(s.log.length).toBeGreaterThan(before);
     expect(s.log.at(-1)!.tone).toBe("bad");
   });
 
   it("a swing within the same tier adds no extra log entry", () => {
     const s = createState(1);
-    s.reputation = 10; // Neutral
+    s.reputation[STARTING_TOWN] = 10; // Neutral
     const added = countNewLogs(s, () => changeReputation(s, 5)); // → 15, still Neutral
-    expect(s.reputation).toBe(15);
+    expect(s.reputation[STARTING_TOWN]).toBe(15);
     expect(added).toBe(0);
   });
 
   it("correctly applies the delta even without a tier change", () => {
     const s = createState(1);
-    s.reputation = 40; // Reliable
+    s.reputation[STARTING_TOWN] = 40; // Reliable
     changeReputation(s, 3); // → 43, still Reliable
-    expect(s.reputation).toBe(43);
+    expect(s.reputation[STARTING_TOWN]).toBe(43);
   });
 });
 
@@ -353,31 +356,31 @@ describe("reputation tiers", () => {
     // tables are total records and this asserts the runtime agrees.
     for (const tier of REPUTATION_TIERS) {
       const s = createState(1);
-      s.reputation = tier.at === -Infinity ? -100 : tier.at;
-      expect(reputationLabel(s.reputation)).toBe(tier.label);
+      s.reputation[STARTING_TOWN] = tier.at === -Infinity ? -100 : tier.at;
+      expect(reputationLabel(s.reputation[STARTING_TOWN])).toBe(tier.label);
     }
   });
 
   it("announces the crossing when a delta moves you between tiers", () => {
     const s = createState(1);
-    s.reputation = 29;
+    s.reputation[STARTING_TOWN] = 29;
     changeReputation(s, 5);
-    expect(reputationLabel(s.reputation)).toBe("Reliable");
+    expect(reputationLabel(s.reputation[STARTING_TOWN])).toBe("Reliable");
     expect(s.log.at(-1)?.text).toContain("Reliable");
     expect(s.log.at(-1)?.tone).toBe("good");
   });
 
   it("announces a fall as well as a climb", () => {
     const s = createState(1);
-    s.reputation = 31;
+    s.reputation[STARTING_TOWN] = 31;
     changeReputation(s, -5);
-    expect(reputationLabel(s.reputation)).toBe("Neutral");
+    expect(reputationLabel(s.reputation[STARTING_TOWN])).toBe("Neutral");
     expect(s.log.at(-1)?.tone).toBe("bad");
   });
 
   it("says nothing when the tier does not change", () => {
     const s = createState(1);
-    s.reputation = 40;
+    s.reputation[STARTING_TOWN] = 40;
     const before = s.log.length;
     changeReputation(s, 2);
     expect(s.log).toHaveLength(before);

@@ -10,13 +10,15 @@ import { countOf, type ItemId } from "./items";
 import type { Choice, Prompt } from "./prompt";
 import { Rng } from "./rng";
 import {
-  checkRequirements,
-  createState,
-  currentAppearance,
-  phaseOf,
   type Assignment,
   type Facing,
   type GameState,
+  checkRequirements,
+  createState,
+  currentAppearance,
+  housingIn,
+  phaseOf,
+  setHousing,
 } from "./state";
 import { advance } from "./tick";
 import { hourOf, minutesUntilHour } from "./time";
@@ -272,7 +274,7 @@ describe("phase 2 — off the street", () => {
     bot.state.cash = 20;
     bot.standOn("hostel");
     bot.drive(bot.press(), "pay for a cot", "get up");
-    expect(bot.state.housing).toBe("hostel");
+    expect(housingIn(bot.state)).toBe("hostel");
     expect(phaseOf(bot.state)).toBe(2);
     expect(bot.state.cash).toBe(11);
   });
@@ -282,9 +284,9 @@ describe("phase 2 — off the street", () => {
     bot.state.cash = 100;
     bot.standOn("trailer");
     bot.drive(bot.press(), "take it");
-    expect(bot.state.housing).toBe("trailer");
+    expect(housingIn(bot.state)).toBe("trailer");
     expect(bot.state.cash).toBe(30);
-    expect(bot.state.rentDueDay).toBeGreaterThan(1);
+    expect(bot.state.rentDueDay[STARTING_TOWN]).toBeGreaterThan(1);
   });
 
   it("pays better for a mart shift than for a day on the corner", () => {
@@ -340,7 +342,7 @@ describe("phase 3 and 4 — the ladder", () => {
     s.employment = "officeAdmin";
     bot.standOn("apartment");
     bot.drive(bot.press(), "sign the lease");
-    expect(s.housing).toBe("apartment");
+    expect(housingIn(s)).toBe("apartment");
     expect(phaseOf(s)).toBe(3);
   });
 
@@ -356,7 +358,7 @@ describe("phase 3 and 4 — the ladder", () => {
     s.bank = 5_000;
     bot.standOn("estate");
     bot.drive(bot.press(), "make an offer");
-    expect(s.housing).toBe("estate");
+    expect(housingIn(s)).toBe("estate");
     expect(s.cash + s.bank).toBe(4_000);
     expect(phaseOf(s)).toBe(4);
   });
@@ -364,7 +366,7 @@ describe("phase 3 and 4 — the ladder", () => {
   it("declares victory on the estate plus a business", () => {
     const bot = new Bot(2);
     const s = bot.state;
-    s.housing = "apartment";
+    setHousing(s, "apartment");
     s.employment = "officeAdmin";
     s.cash = BUSINESS_PRICE + 1_000;
     s.credit = 750;
@@ -388,9 +390,9 @@ describe("phase 3 and 4 — the ladder", () => {
     // Arrange: player already owns the estate; now they win the election.
     const bot = new Bot(7);
     const s = bot.state;
-    s.housing = "estate";
+    setHousing(s, "estate");
     s.businessOwned = true;      // qualifies for "Run for mayor" option
-    s.reputation = 100;          // odds capped at 95 % — almost guaranteed win
+    s.reputation[STARTING_TOWN] = 100;          // odds capped at 95 % — almost guaranteed win
     s.cash = CAMPAIGN_PRICE + 1_000;
     bot.waitUntilHour(10);
 

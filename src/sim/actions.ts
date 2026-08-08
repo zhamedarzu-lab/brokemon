@@ -171,7 +171,7 @@ function benchPrompt(ctx: ActionCtx): Prompt {
       label: "Sleep here until morning",
       hint: HOUSING.bench.risk > 0 ? "risky" : "",
       run: () => {
-        s.housing = s.housing === "street" ? "street" : s.housing;
+        
         return sleep(ctx, "bench", 7);
       },
     });

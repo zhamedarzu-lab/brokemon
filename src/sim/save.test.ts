@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach } from "vitest";
-import { createState } from "./state";
+import { createState, housingIn, reputationIn } from "./state";
 import { loadGame, saveGame } from "./save";
 import { STARTING_TOWN } from "../world/map";
 
@@ -52,6 +52,43 @@ describe("save migration", () => {
     legacy.player.town = "atlantis";
     store.set("brokemon.save.v1", JSON.stringify(legacy));
     expect(loadGame()!.player.town).toBe(STARTING_TOWN);
+  });
+
+  it("converts a save whose housing was a bare string", () => {
+    // These four went from scalars to one-value-per-town. A stored scalar is
+    // not a missing field, it is the wrong type, so the merge has to convert.
+    const legacy = JSON.parse(JSON.stringify(createState(9))) as Record<string, any>;
+    legacy.housing = "trailer";
+    legacy.rentDueDay = 12;
+    legacy.nightsPaid = 1;
+    store.set("brokemon.save.v1", JSON.stringify(legacy));
+
+    const loaded = loadGame()!;
+    expect(housingIn(loaded, STARTING_TOWN)).toBe("trailer");
+    expect(loaded.rentDueDay[STARTING_TOWN]).toBe(12);
+    expect(loaded.nightsPaid[STARTING_TOWN]).toBe(1);
+  });
+
+  it("credits an old reputation to the town it was earned in", () => {
+    const legacy = JSON.parse(JSON.stringify(createState(9))) as Record<string, any>;
+    legacy.reputation = 64;
+    store.set("brokemon.save.v1", JSON.stringify(legacy));
+
+    const loaded = loadGame()!;
+    expect(reputationIn(loaded, STARTING_TOWN)).toBe(64);
+    for (const town of Object.keys(loaded.reputation) as Array<keyof typeof loaded.reputation>) {
+      if (town !== STARTING_TOWN) expect(loaded.reputation[town]).toBe(0);
+    }
+  });
+
+  it("leaves a save that already has records alone", () => {
+    const s = createState(3);
+    s.housing[STARTING_TOWN] = "apartment";
+    s.reputation[STARTING_TOWN] = 40;
+    saveGame(s);
+    const loaded = loadGame()!;
+    expect(housingIn(loaded, STARTING_TOWN)).toBe("apartment");
+    expect(reputationIn(loaded, STARTING_TOWN)).toBe(40);
   });
 
   it("keeps the rest of the player when it migrates", () => {

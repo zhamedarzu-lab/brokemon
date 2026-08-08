@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { Rng } from "./rng";
-import { createState } from "./state";
+import {
+  createState,
+  housingIn,
+  setHousing,
+} from "./state";
 import { advance, policeCheck } from "./tick";
 import { markerPos, STARTING_TOWN, townById } from "../world/map";
 /** These bots only ever walk Brokemon Town. */
@@ -56,24 +60,24 @@ describe("advance", () => {
 
   it("charges rent on the due day and evicts when you can't pay", () => {
     const s = fed();
-    s.housing = "trailer";
-    s.rentDueDay = 2;
+    setHousing(s, "trailer");
+    s.rentDueDay[STARTING_TOWN] = 2;
     s.cash = 0;
     s.bank = 0;
     const interrupts = advance(s, new Rng(1), { minutes: 24 * HOUR });
     expect(interrupts.some((i) => i.kind === "rent" && !i.paid)).toBe(true);
-    expect(s.housing).toBe("street");
+    expect(housingIn(s)).toBe("street");
     expect(s.debt).toBeGreaterThan(createState(1).debt);
   });
 
   it("takes rent out of savings when cash is short", () => {
     const s = fed();
-    s.housing = "trailer";
-    s.rentDueDay = 2;
+    setHousing(s, "trailer");
+    s.rentDueDay[STARTING_TOWN] = 2;
     s.cash = 10;
     s.bank = 500;
     advance(s, new Rng(1), { minutes: 24 * HOUR });
-    expect(s.housing).toBe("trailer");
+    expect(housingIn(s)).toBe("trailer");
     expect(s.cash + s.bank).toBeLessThan(510);
   });
 
