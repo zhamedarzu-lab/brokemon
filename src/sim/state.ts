@@ -84,6 +84,11 @@ export interface GameState {
   /** Shifts missed at the current job. Three and you're let go. */
   strikes: number;
   lastShiftDay: number;
+  /**
+   * The last day a strike was issued. A clean week (7 days without a new
+   * strike) earns one back — being tired occasionally is not a pattern.
+   */
+  lastStrikeDay: number;
 
   /**
    * Cups of coffee since you last slept. Each one is worth less than the last,
@@ -186,6 +191,7 @@ export function createState(seed = Date.now() >>> 0): GameState {
     employmentPayOverride: {},
     strikes: 0,
     lastShiftDay: 0,
+    lastStrikeDay: 0,
 
     caffeine: 0,
 

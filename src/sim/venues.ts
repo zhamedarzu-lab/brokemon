@@ -1386,6 +1386,28 @@ const nightMarket: Venue = (ctx) => {
         }
       : { label: "Coffee, black", hint: `$${brew}`, locked: "You can't afford it" },
     pitchChoice(ctx),
+    ...(countOf(s.inventory, "phone") === 0
+      ? [
+          s.cash >= 55
+            ? {
+                label: "Second-hand phone",
+                hint: "$55",
+                run: (): Prompt => {
+                  s.cash -= 55;
+                  addItem(s.inventory, "phone");
+                  return menu(
+                    "Night Market",
+                    [
+                      `"Unlocked, works fine, charger included."`,
+                      "Forty-five at home. You pay fifty-five because it is two in the morning and this is the only one.",
+                    ],
+                    [BACK],
+                  );
+                },
+              }
+            : ({ label: "Second-hand phone", hint: "$55", locked: "You can't afford it" } as Choice),
+        ]
+      : []),
     BACK,
   ];
 

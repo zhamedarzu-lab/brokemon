@@ -1068,6 +1068,14 @@ function brokedaleDay(p: Player): void {
   // and it made a hireable bot look unhireable.
   wash(p);
   brokedaleJobHunt(p);
+
+  // A phone unlocks Dispatch Coordinator — the step up from Warehouse Picker.
+  // The night market is the only place in Brokedale that sells one.
+  if (countOf(s.inventory, "phone") === 0 && s.cash >= 75) {
+    p.goto("nightMarket");
+    if (p.took(p.press(), "Second-hand phone")) p.note("BOUGHT a phone");
+  }
+
   buyFood(p);
 
   // Two weeks up front, the moment it is in reach. This is the decision the

@@ -72,9 +72,16 @@ export function workShift(ctx: ActionCtx, job: EmploymentId): Prompt {
     return say(def.employer, "You've already worked today. Go home.");
   }
 
+  // A clean week earns one strike back. Being occasionally unwell is not a
+  // pattern — it only becomes one when it keeps happening.
+  if (s.strikes > 0 && dayOf(s.time) - s.lastStrikeDay >= 7) {
+    s.strikes -= 1;
+  }
+
   const gate = checkRequirements(s, def.requires);
   if (!gate.ok) {
     s.strikes += 1;
+    s.lastStrikeDay = dayOf(s.time);
     pushLog(s, `Sent home from ${def.employer}: ${gate.reasons[0]}.`, "bad");
     return maybeFire(
       s,
@@ -83,8 +90,10 @@ export function workShift(ctx: ActionCtx, job: EmploymentId): Prompt {
   }
 
   if (s.meters.energy < 10) {
-    s.strikes += 1;
-    return maybeFire(s, say(def.employer, "You cannot keep your eyes open. You call in and lose the shift.", "bad"));
+    // Exhaustion is not a disciplinary matter — you called in, you did not
+    // cause an incident. Losing the shift is consequence enough.
+    pushLog(s, `Too exhausted for ${def.employer}. Called in, lost the day.`, "bad");
+    return say(def.employer, "You cannot keep your eyes open. You call in and lose the shift.", "bad");
   }
 
   const late = window === "late";
@@ -104,6 +113,7 @@ export function workShift(ctx: ActionCtx, job: EmploymentId): Prompt {
   const lines = [`${fmtDuration(minutes)} on the clock.`];
   if (late) {
     s.strikes += 1;
+    s.lastStrikeDay = dayOf(s.time);
     lines.push("You turned up late. They docked you and wrote it down.");
   }
   if (!def.salaried && weather.payScale < 0.8) lines.push("Quiet day. The weather kept people home.");
