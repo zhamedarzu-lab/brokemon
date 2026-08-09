@@ -212,9 +212,8 @@ const BROKEMON_EVENTS: EventDef[] = [
               applyDelta(s.meters, { morale: -6 });
               changeReputation(s, 4);
               if (ctx.rng.chance(0.4)) {
-                earnCash(s, 20);
                 s.flags.colleagueNumberGiven = 1;
-                return menu("Someone says your name", ['"God. Right."', "They give you twenty dollars and their number, and mean both."], [close]);
+                return menu("Someone says your name", ['"God. Right."', "They give you their number and mean it."], [close]);
               }
               return menu("Someone says your name", ['"God. Right."', "They say to call them. They do not give you a number."], [close]);
             },
@@ -251,13 +250,11 @@ const BROKEMON_EVENTS: EventDef[] = [
             run: () => {
               s.flags.colleagueInterviewPending = 1;
               changeReputation(s, 5);
-              earnCash(s, 10);
               pushLog(s, "Colleague job lead — interview lined up.", "good");
               return menu(
                 "Your phone buzzes",
                 [
                   '"Done. You\'ll hear from them — probably Thursday."',
-                  "Ten dollars lands in your account. A token. The real thing is the name in the right room.",
                   "You have an interview. It has been a while since you had one of those.",
                 ],
                 [close],
@@ -500,7 +497,6 @@ const BROKEMON_EVENTS: EventDef[] = [
     weight: (_s, z) => (z === "downtown" ? 3 : z === "heights" ? 1 : 0),
     build: (ctx) => {
       const s = ctx.state;
-      const tip = ctx.rng.int(2, 8);
       return menu(
         "A couple with a map",
         [
@@ -510,20 +506,19 @@ const BROKEMON_EVENTS: EventDef[] = [
         [
           {
             label: "Point them the right way",
-            hint: `~$${tip} tip`,
             run: () => {
               ctx.advance(5);
               applyDelta(s.meters, { morale: +10 });
-              earnCash(s, tip);
-              pushLog(s, `Helped some tourists. $${tip} tip.`, "money");
+              pushLog(s, "Helped some tourists find their way.", "good");
               return menu(
                 "A couple with a map",
                 [
                   "They get there. Two minutes later the man comes jogging back.",
-                  `He presses $${tip} into your hand and won't hear a no.`,
+                  '"Thank you so much. Really."',
+                  "He means it. That's all.",
                 ],
                 [close],
-                "money",
+                "good",
               );
             },
           },
@@ -763,16 +758,6 @@ const BROKEMON_EVENTS: EventDef[] = [
    * private road where a split bin bag has no business being. They are scarcer
    * now, and scarcer still where they make no sense.
    */
-  {
-    id: "change",
-    weight: (_s, z) => (z === "slums" ? 2 : z === "downtown" ? 2 : 1),
-    build: (ctx) => {
-      const s = ctx.state;
-      const found = ctx.rng.int(1, 4);
-      earnCash(s, found);
-      return menu("Loose change", [`Coins in the gutter by the drain. $${found}.`, "You take it without breaking stride. You are good at this now."], [close], "money");
-    },
-  },
 
   {
     id: "cans",
@@ -1713,12 +1698,11 @@ const BROKEMON_EVENTS: EventDef[] = [
         [
           {
             label: `Keep it — $${credit} credit on there`,
-            hint: `$${credit} equivalent`,
+            hint: "free rides",
             run: () => {
-              earnCash(s, credit);
               applyDelta(s.meters, { morale: +6 });
-              pushLog(s, `Found a transit card with $${credit} credit.`, "money");
-              return menu("A transit card on the pavement", [`$${credit} of someone else's commute, now yours.`, "You ride for free until it runs out."], [close], "money");
+              pushLog(s, `Found a transit card with $${credit} in credit. Rides sorted for a while.`, "good");
+              return menu("A transit card on the pavement", [`$${credit} of someone else's commute.`, "You ride for free until it runs out."], [close], "good");
             },
           },
           {
@@ -2141,7 +2125,6 @@ const BROKEMON_EVENTS: EventDef[] = [
     weight: (s, z) => (z !== "heights" && currentAppearance(s) >= 25 ? 2 : 0),
     build: (ctx) => {
       const s = ctx.state;
-      const tip = ctx.rng.int(2, 6);
       return menu(
         "Excuse me",
         ['"Do you know where the bus station is?"', "They've asked you. They've chosen you."],
@@ -2150,11 +2133,6 @@ const BROKEMON_EVENTS: EventDef[] = [
             label: "Point them right",
             run: () => {
               applyDelta(s.meters, { morale: +10 });
-              if (ctx.rng.chance(0.4)) {
-                earnCash(s, tip);
-                pushLog(s, `Gave directions, got a $${tip} thank-you.`, "money");
-                return menu("Excuse me", ["They thank you and press some change into your hand before you can say anything.", `$${tip}.`, '"You sure? Take it."', "You take it."], [close], "money");
-              }
               return menu("Excuse me", ['"Thank you so much."', "They go. You watch them get it right.", "Small thing. Right thing."], [close], "good");
             },
           },
@@ -2202,17 +2180,13 @@ const BROKEMON_EVENTS: EventDef[] = [
             run: () => {
               const roll = ctx.rng.next();
               if (roll < 0.1) {
-                const win = ctx.rng.int(20, 80);
-                earnCash(s, win);
-                applyDelta(s.meters, { morale: +20 });
-                pushLog(s, `Scratch card — won $${win}.`, "money");
-                return menu("A scratch card on the ground", [`$${win}.`, "You check it twice. You check it a third time.", "It does not change."], [close], "money");
+                applyDelta(s.meters, { morale: +22 });
+                pushLog(s, "Scratch card — winner. Non-cashable promo.", "good");
+                return menu("A scratch card on the ground", ["Winner.", "You check it twice. You check it a third time.", "Non-cashable promotional ticket. Of course."], [close], "good");
               }
               if (roll < 0.45) {
-                earnCash(s, 2);
-                applyDelta(s.meters, { morale: +8 });
-                pushLog(s, "Scratch card — won $2.", "money");
-                return menu("A scratch card on the ground", ["$2. Breakeven.", "You are oddly pleased."], [close], "money");
+                applyDelta(s.meters, { morale: +6 });
+                return menu("A scratch card on the ground", ["Breakeven — a free ticket.", "You are oddly pleased.", "You leave it on the rack for someone else."], [close]);
               }
               applyDelta(s.meters, { morale: -4 });
               return menu("A scratch card on the ground", ["Nothing.", "It never had anything on it. You knew that."], [close]);
@@ -2664,7 +2638,6 @@ const BROKEMON_EVENTS: EventDef[] = [
     weight: (s, z) => (z === "downtown" && phaseOf(s) >= 2 ? 2 : 0),
     build: (ctx) => {
       const s = ctx.state;
-      const gain = ctx.rng.int(8, 20);
       return menu(
         "Two men outside a café",
         ["They're arguing about the rent on a unit above the laundromat.", "One of them doesn\'t want it.", '"It\'s going begging," the other one says.', "You file it away."],
@@ -2675,10 +2648,10 @@ const BROKEMON_EVENTS: EventDef[] = [
             run: () => {
               ctx.advance(20);
               if (ctx.rng.chance(0.5)) {
-                earnCash(s, gain);
-                changeReputation(s, 4);
-                pushLog(s, `Overheard lead — paid off $${gain}.`, "money");
-                return menu("Two men outside a café", ["The man is still there.", "You introduce yourself and he shakes your hand.", `One thing leads to another. $${gain} changes hands, and so does a contact.`], [close], "money");
+                changeReputation(s, 6);
+                applyDelta(s.meters, { morale: +8 });
+                pushLog(s, "Overheard lead — useful contact made.", "good");
+                return menu("Two men outside a café", ["The man is still there.", "You introduce yourself and he shakes your hand.", "He writes a name on a receipt and tells you to use it."], [close], "good");
               }
               applyDelta(s.meters, { morale: -4 });
               return menu("Two men outside a café", ["He's already gone.", "The other one looks at you.", '"Private conversation, mate."', "You go."], [close]);
