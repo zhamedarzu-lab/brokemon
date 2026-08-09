@@ -68,6 +68,7 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState, timeMs: 
   drawLighting(ctx, state, cam);
   drawWeather(ctx, state, timeMs);
   drawFacingCursor(ctx, state, cam, timeMs);
+  drawMinimap(ctx, state, cam);
 }
 
 /* ------------------------------------------------------------------ tiles */
@@ -582,4 +583,84 @@ function drawFacingCursor(ctx: CanvasRenderingContext2D, s: GameState, cam: Came
   ctx.strokeStyle = highlight ? "rgba(240,200,90,0.9)" : `rgba(255,255,255,${0.16 + Math.sin(t / 500) * 0.06})`;
   ctx.lineWidth = 1;
   ctx.strokeRect(sx + 0.5, sy + 0.5, TILE - 1, TILE - 1);
+}
+
+/* ----------------------------------------------------------------- minimap */
+
+/**
+ * Minimap colours tuned for 1 px per tile — needs higher contrast than the
+ * full-size tile palette because detail decoration never fires at this scale.
+ */
+const MINIMAP_COLOR: Record<string, string> = {
+  W:   "#131318", // outer retaining wall
+  "#": "#5e4636", // building wall
+  "^": "#7c3a32", // roof
+  "=": "#2d2d34", // road
+  c:   "#2d2d34", // crosswalk
+  _:   "#4e4c48", // pavement
+  M:   "#4e4c48", // marble
+  s:   "#5a4e3a", // dirt path
+  r:   "#484440", // gravel
+  ".": "#2c4e28", // grass
+  ",": "#253e23", // weeds
+  "+": "#2e5029", // flower bed
+  T:   "#1c3820", // tree
+  H:   "#1e3622", // hedge
+  "~": "#1a3855", // water
+  I:   "#5e5040", // indoor floor
+  b:   "#4a4038", // bench
+  "%": "#3c4830", // dumpster
+  x:   "#1e3e52", // recycling bin
+  f:   "#3e3020", // fence
+  G:   "#2e2e28", // gate
+  L:   "#3a3838", // lamp post
+  n:   "#3c3020", // sign
+};
+
+function minimapTileColor(glyph: string | undefined): string {
+  if (glyph === undefined) return "#0b0b0f";
+  return MINIMAP_COLOR[glyph] ?? tileAt(glyph).color;
+}
+
+function drawMinimap(ctx: CanvasRenderingContext2D, s: GameState, cam: Camera): void {
+  const town = townOf(s);
+  const tw = town.width;
+  const th = town.height;
+
+  const INSET = 2;   // padding between panel edge and tile pixels
+  const MARGIN = 3;  // gap from canvas edge
+
+  // Panel top-left
+  const panelX = CANVAS_W - tw - INSET * 2 - MARGIN;
+  const panelY = CANVAS_H - th - INSET * 2 - MARGIN;
+  const tilesX = panelX + INSET;
+  const tilesY = panelY + INSET;
+
+  // Background panel + 1 px border
+  ctx.fillStyle = "rgba(0,0,0,0.75)";
+  ctx.fillRect(panelX - 1, panelY - 1, tw + INSET * 2 + 2, th + INSET * 2 + 2);
+
+  // Tile pixels — 1 px per tile
+  for (let y = 0; y < th; y++) {
+    for (let x = 0; x < tw; x++) {
+      const glyph = glyphAt(town, x, y);
+      ctx.fillStyle = minimapTileColor(glyph);
+      ctx.fillRect(tilesX + x, tilesY + y, 1, 1);
+    }
+  }
+
+  // Viewport rectangle (what the main camera currently shows)
+  const vx = Math.floor(cam.px / TILE);
+  const vy = Math.floor(cam.py / TILE);
+  ctx.strokeStyle = "rgba(255,255,255,0.35)";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(tilesX + vx + 0.5, tilesY + vy + 0.5, VIEW_W, VIEW_H);
+
+  // Player dot — bright so it reads at 1 px
+  const px = tilesX + s.player.pos.x;
+  const py = tilesY + s.player.pos.y;
+  ctx.fillStyle = "#f5e642"; // yellow; contrast against both dark and light tiles
+  ctx.fillRect(px - 1, py - 1, 3, 3);
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(px, py, 1, 1);
 }
