@@ -18,9 +18,11 @@ import {
   CLASS_NAMES,
   CLASS_START,
   EMPLOYMENT,
-  EMPLOYMENT_ORDER,
+  employmentIn,
+  hiringRequirements,
   GIGS,
   MAX_CREDITS,
+  type EmploymentDef,
   type EmploymentId,
 } from "./jobs";
 import { applyDelta } from "./meters";
@@ -985,12 +987,15 @@ function jobApplications(ctx: ActionCtx): Prompt {
   const phase = phaseOf(s);
   const choices: Choice[] = [];
 
-  for (const id of EMPLOYMENT_ORDER) {
+  // Only what is advertised in the town you are standing in. A board in Market
+  // Square listing a depot shift in Brokedale would be offering you a job that
+  // costs 250 minutes and $26 a day to turn up to.
+  for (const id of employmentIn(s.player.town)) {
     const def = EMPLOYMENT[id];
     if (s.employment === id) continue;
     // Hide jobs more than one tier beyond the player's current phase.
     if (def.tier > phase + 1) continue;
-    const gate = checkRequirements(s, def.requires);
+    const gate = checkRequirements(s, hiringRequirements(def));
     choices.push(
       gate.ok
         ? {
@@ -1009,14 +1014,32 @@ function jobApplications(ctx: ActionCtx): Prompt {
   );
 }
 
+/**
+ * Whether they take you.
+ *
+ * A job that names an appearance requirement is judging you on it, so the
+ * margin above that bar is what moves the odds. A job that names none is not
+ * judging you on it at all, and rolling against your looks anyway was a
+ * contradiction sitting in plain sight: the depot ladder exists so that a
+ * player who cannot hold appearance 70 has somewhere to go, and a hidden
+ * appearance roll on the way in quietly rebuilt the wall it was meant to route
+ * around. It also made a nonsense of the overnight stocker, whose entire pitch
+ * is that nobody sees you.
+ *
+ * Those jobs hire on your name and the fact that you turned up.
+ */
+export function hireOdds(s: GameState, def: EmploymentDef): number {
+  const name = reputationIn(s) / 200;
+  if (def.requires.appearance === undefined) return Math.min(0.95, 0.7 + name);
+  return Math.min(0.95, 0.25 + (currentAppearance(s) - def.requires.appearance) / 60 + name);
+}
+
 function hire(ctx: ActionCtx, id: EmploymentId): Prompt {
   const s = ctx.state;
   const def = EMPLOYMENT[id];
   ctx.advance(45, { sheltered: true });
 
-  const look = currentAppearance(s);
-  const odds = Math.min(0.95, 0.25 + (look - (def.requires.appearance ?? 30)) / 60 + reputationIn(s) / 200);
-  if (!ctx.rng.chance(odds)) {
+  if (!ctx.rng.chance(hireOdds(s, def))) {
     s.meters.morale = Math.max(0, s.meters.morale - 10);
     pushLog(s, `Interview for ${def.name} — no offer.`, "bad");
     return menu(
@@ -1572,6 +1595,62 @@ const pawnShop: Venue = (ctx) => {
   );
 };
 
+/* ------------------------------------------------- Brokedale: job centre */
+
+const jobCentre: Venue = (ctx) => {
+  const s = ctx.state;
+  if (!withinHours(s.time, 9, 17)) return say("Brokedale Employment Exchange", "Closed. Open 9AM to 5PM.");
+
+  return menu(
+    "Brokedale Employment Exchange",
+    [
+      "Numbered tickets, a screen of vacancies, and eleven plastic chairs bolted to a rail.",
+      "Nobody here has looked at your shoes.",
+    ],
+    [
+      { label: "Take a ticket and see what's going", run: () => jobApplications(ctx) },
+      {
+        label: "Ask what it takes to get on",
+        run: () =>
+          say("Employment Exchange", [
+            "\"Depot start you on the floor. Twelve shifts and they'll look at you for dispatch.\"",
+            "\"Dispatch wants two night-class credits. We don't run them here — that's a Brokemon thing.\"",
+            "\"After that it's the yard, if you want it. Nobody's going to ask you for a suit.\"",
+          ]),
+      },
+      BACK,
+    ],
+  );
+};
+
+/* ----------------------------------------------------- Brokedale: the depot */
+
+const depot: Venue = (ctx) => {
+  const s = ctx.state;
+  const job = s.employment && EMPLOYMENT[s.employment].location === "depot" ? s.employment : null;
+
+  if (!job) {
+    return say("Eastgate Depot", [
+      "Roller shutters, a weighbridge, and a gatehouse with a hatch in it.",
+      "\"Staff only. If you're after work it's the Exchange on the High Street.\"",
+    ]);
+  }
+
+  const w = shiftWindow(s, job);
+  return menu(
+    "Eastgate Depot",
+    [`${EMPLOYMENT[job].name}. Shift ${fmtHour(EMPLOYMENT[job].shiftStart)}–${fmtHour(EMPLOYMENT[job].shiftEnd)}.`],
+    [
+      {
+        label: "Clock in",
+        hint: w === "open" ? "on time" : w === "late" ? "late" : "not your hours",
+        run: () => workShift(ctx, job),
+      },
+      BACK,
+    ],
+  );
+};
+
 /* -------------------------------------------------------- Brokedale: gym */
 
 export const GYM_PRICE = 12;
@@ -1855,5 +1934,7 @@ export const VENUES: Record<string, Venue> = {
   washhouse,
   dossHouse,
   pawnShop,
+  jobCentre,
+  depot,
   gym,
 };

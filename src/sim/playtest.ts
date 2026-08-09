@@ -19,7 +19,7 @@ import { interact } from "./actions";
 import { boardingReasons, rideCoach, serviceFrom } from "./coach";
 import { EVENT_CHANCE, EVENT_STEP_INTERVAL, rollEvent } from "./events";
 import { countOf, type ItemId } from "./items";
-import { EMPLOYMENT, EMPLOYMENT_ORDER, type EmploymentId } from "./jobs";
+import { EMPLOYMENT, EMPLOYMENT_ORDER, employmentIn, type EmploymentId } from "./jobs";
 import type { Choice, Prompt } from "./prompt";
 import { Rng } from "./rng";
 import {
@@ -837,15 +837,18 @@ function strandedDay(p: Player): void {
  */
 function buyFood(p: Player): void {
   const s = p.s;
-  if (s.meters.hunger >= 45) return;
+  if (s.meters.hunger >= 55) return;
   if (!hasMarker(townOf(s), "nightMarket")) return;
   // Leave the fare alone once it is nearly in reach — going hungry one more
   // night to get out is the trade a stranded player actually makes.
   const service = serviceFrom(s.player.town);
   const keep = service && s.cash >= service.fare - 6 ? service.fare : 0;
-  if (s.cash - keep < 6) return;
   p.goto("nightMarket");
-  if (p.took(p.press(), "noodles")) p.note("ate at the night market");
+  // One tray does not cover an eight-hour shift; the bot was ending every
+  // working day on hunger 0 and collapsing on the days it travelled.
+  for (let i = 0; i < 3 && s.meters.hunger < 55 && s.cash - keep >= 6; i++) {
+    if (!p.took(p.press(), "noodles")) break;
+  }
 }
 
 /* ------------------------------------------------------------------ runs */
@@ -964,18 +967,68 @@ function brokedaleDay(p: Player): void {
   p.low = { hunger: 100, thirst: 100, hygiene: 100, energy: 100, morale: 100, health: 100 };
   const notesBefore = p.notes.length;
 
-  p.waitUntil(7);
+  // A class trip leaves you in Brokemon overnight — the last coach back goes
+  // before the class lets out. Get home first.
+  if (s.player.town !== "brokedale") {
+    p.waitUntil(6);
+    // Brokemon has a food bank and free water; use them before a forty-minute
+    // ride. Coming back from a class trip on an empty stomach was collapsing
+    // the bot on arrival and costing it the job it went for the credits for.
+    p.goto("communityCenter");
+    p.drive(p.press(), "food bank");
+    p.eat();
+    drink(p);
+    if (!p.commuteTo("brokedale")) {
+      p.note("STRANDED in Brokemon");
+      p.days.push(dayLog(p, day, cashStart, false, notesBefore));
+      return;
+    }
+  }
+
+  // The depot wants night-class credits and there is no night class in
+  // Brokedale. That is on purpose: the two towns are supposed to need each
+  // other, and this is the seam where it shows.
+  if (wantsCredits(p) && s.cash > 200 && hourOf(s.time) < 15) {
+    p.note(`CLASS TRIP (edu ${s.education})`);
+    classTrip(p);
+    p.days.push(dayLog(p, day, cashStart, false, notesBefore));
+    return;
+  }
+
+  const job = s.employment && EMPLOYMENT[s.employment].town === "brokedale" ? s.employment : null;
+  p.waitUntil(job ? Math.max(6, EMPLOYMENT[job].shiftStart - 1) : 7);
   drink(p);
   p.eat();
 
-  // The muster is 6AM–11AM and there is nothing else reliable in the city.
+  // A depot shift if you hold one; the agency muster if you do not. The muster
+  // is 6AM–11AM, so a day that starts late has already lost.
   const t0 = s.time;
-  p.goto("agency");
-  const worked = p.took(p.press(), "put your name down", "leave");
+  let worked: boolean;
+  if (job) {
+    const d = EMPLOYMENT[job];
+    wash(p, Math.max(50, (d.requires.hygiene ?? 0) + 20));
+    // Eat before the shift, not after it. The low-water mark that matters is
+    // the one during the eight hours, and it was pinned at zero all fortnight.
+    buyFood(p);
+    p.eat();
+    p.goto("depot");
+    if (shiftWindow(s, job) === "early") p.waitUntil(d.shiftStart);
+    const before = s.shiftsWorked[job] ?? 0;
+    p.drive(p.press(), "clock in", "clock out");
+    worked = (s.shiftsWorked[job] ?? 0) > before;
+    if (!worked) p.note(`MISSED ${d.name} (${shiftWindow(s, job)}, hyg ${s.meters.hygiene.toFixed(0)})`);
+  } else {
+    p.goto("agency");
+    worked = p.took(p.press(), "put your name down", "leave");
+    if (!worked) p.note(`NO WORK (${formatClock(s.time)})`);
+  }
   p.workMinutes += s.time - t0;
-  if (!worked) p.note(`NO WORK (${formatClock(s.time)})`);
 
+  // Wash *first*. Applying straight off a site with hygiene 0 was twenty-one
+  // "you need to be a lot cleaner (0/25)" in a row — nobody would do that,
+  // and it made a hireable bot look unhireable.
   wash(p);
+  brokedaleJobHunt(p);
   buyFood(p);
 
   // Two weeks up front, the moment it is in reach. This is the decision the
@@ -1001,6 +1054,69 @@ function brokedaleDay(p: Player): void {
   sleep(p);
 
   p.days.push(dayLog(p, day, cashStart, worked, notesBefore));
+}
+
+/** How many credits the next rung of the depot ladder is waiting on. */
+function wantsCredits(p: Player): boolean {
+  const s = p.s;
+  const needed = employmentIn("brokedale")
+    .filter((id) => EMPLOYMENT[id].pay > (s.employment ? EMPLOYMENT[s.employment].pay : 0))
+    .map((id) => EMPLOYMENT[id].requires.education ?? 0);
+  return needed.some((n) => n > s.education) && s.education < 6;
+}
+
+/**
+ * Go and sit a night class in Brokemon, and lose a day and a night to it.
+ *
+ * The last coach back leaves before the class lets out, so this is always an
+ * overnight: two fares, a bed on the far side, and a morning gone. Whether
+ * that price is worth two credits is the question Phase 2b exists to ask.
+ */
+function classTrip(p: Player): void {
+  const s = p.s;
+  buyFood(p);
+  drink(p);
+  if (!p.commuteTo("brokemon")) return;
+  wash(p);
+  p.eat();
+  drink(p);
+  school(p);
+  // Keep the fare home. Spending it on a phone stranded the bot in Brokemon
+  // for a week on one seed, which is survivable there and still a week.
+  if (countOf(s.inventory, "phone") === 0 && s.cash >= 60 + 40 && hourOf(s.time) < 23) {
+    p.goto("mart");
+    if (p.took(p.press(), "buy something", "Prepaid Phone")) p.note("BOUGHT a phone");
+  }
+  p.eat();
+  sleep(p);
+}
+
+/**
+ * Climb the depot ladder. Same shape as the Brokemon job hunt, except the
+ * listings are at the Employment Exchange and nothing on them asks what you
+ * are wearing.
+ */
+function brokedaleJobHunt(p: Player): void {
+  const s = p.s;
+  if (!withinHours(s.time, 9, 17)) return;
+  const currentPay = s.employment ? EMPLOYMENT[s.employment].pay : 0;
+  const wanted = employmentIn("brokedale")
+    .filter((id) => EMPLOYMENT[id].pay > currentPay)
+    .sort((a, b) => EMPLOYMENT[b].pay - EMPLOYMENT[a].pay);
+  if (wanted.length === 0) return;
+
+  p.goto("jobCentre");
+  const list = p.drive(p.press(), "take a ticket");
+  for (const id of wanted) {
+    if (p.can(list, EMPLOYMENT[id].name)) {
+      const before = s.employment;
+      p.drive(list, EMPLOYMENT[id].name);
+      p.note(s.employment !== before ? `HIRED as ${EMPLOYMENT[id].name}` : `interview failed: ${EMPLOYMENT[id].name}`);
+      return;
+    }
+    const why = p.lockReason(list, EMPLOYMENT[id].name);
+    if (why) p.blockedBy(`job ${EMPLOYMENT[id].name}`, why);
+  }
 }
 
 /** Can you actually live in Brokedale? Run with `npm run playtest -- --brokedale`. */

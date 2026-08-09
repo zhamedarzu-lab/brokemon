@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { markerPos, townById } from "../world/map";
+import { markerPos, townById, zoneAt } from "../world/map";
 
 import { interact } from "./actions";
 import {
@@ -16,8 +16,9 @@ import type { Choice, Prompt } from "./prompt";
 import { Rng } from "./rng";
 import { loadGame, saveGame } from "./save";
 import { ITEMS } from "./items";
+import { EMPLOYMENT, employmentIn } from "./jobs";
 import { HOUSING } from "./social";
-import { createState, housingIn, reputationIn, type GameState } from "./state";
+import { createState, housingIn, phaseOf, reputationIn, type GameState } from "./state";
 import { advance } from "./tick";
 import { minuteOfDay } from "./time";
 import { type ActionCtx } from "./work";
@@ -418,5 +419,107 @@ describe("Brokedale, as somewhere to live", () => {
     expect(p.s.cash).toBeLessThan(ITEMS.bicycle.price!);
     // Consumables are not stock.
     expect(p.took(p.press(), "sell deli sandwich")).toBe(false);
+  });
+});
+
+/* ------------------------------------------------------------- the ladder */
+
+describe("the depot ladder", () => {
+  const LADDER = employmentIn("brokedale");
+
+  it("never asks how you look, at any rung", () => {
+    // This is the whole reason it exists. Brokemon's career is worked inside a
+    // gate that wants appearance 70 every morning, so a player who cannot hold
+    // that number had nowhere to go. A dress code anywhere on this track would
+    // rebuild the wall it was cut to route around.
+    for (const id of LADDER) {
+      const req = EMPLOYMENT[id].requires;
+      expect(req.appearance, `${id} judges appearance`).toBeUndefined();
+      expect(req.outfit, `${id} has a dress code`).toBeUndefined();
+    }
+  });
+
+  it("climbs on hours and credits instead", () => {
+    const rungs = LADDER.map((id) => EMPLOYMENT[id]);
+    // Each rung pays more and asks for more of what you have actually done.
+    for (let i = 1; i < rungs.length; i++) {
+      expect(rungs[i]!.pay, `${rungs[i]!.id} pays no better`).toBeGreaterThan(rungs[i - 1]!.pay);
+      const exp = rungs[i]!.requires.experience;
+      expect(exp?.job, `${rungs[i]!.id} does not build on the rung below`).toBe(rungs[i - 1]!.id);
+    }
+  });
+
+  it("is worked outside the district that wants a dress code", () => {
+    // Riverside has requiresAttire. Putting the depot there would have been
+    // finding 1 all over again, in a new town.
+    const where = markerPos(BROKEDALE, "depot");
+    expect(zoneAt(BROKEDALE, where.y).requiresAttire).toBe(false);
+  });
+
+  it("hires you tired — that is a question for the door, not the interview", () => {
+    const p = new Player();
+    p.rideOut(9);
+    p.setClock(10);
+    p.s.meters = { hunger: 60, thirst: 60, hygiene: 60, energy: 1, morale: 1, health: 60 };
+    p.goto("jobCentre");
+    const list = p.drive(p.press(), "take a ticket");
+    expect(p.lockReason(list, "Warehouse Picker")).toBeNull();
+  });
+
+  it("still sends you home from the shift itself when you cannot stand up", () => {
+    const p = new Player();
+    p.rideOut(9);
+    p.s.employment = "picker";
+    p.setClock(EMPLOYMENT.picker.shiftStart);
+    p.s.meters.energy = 2;
+    p.goto("depot");
+    p.drive(p.press(), "clock in");
+    expect(p.s.strikes).toBeGreaterThan(0);
+    expect(p.s.shiftsWorked.picker ?? 0).toBe(0);
+  });
+
+  it("can be clocked into on time from a bed that wakes you at seven", () => {
+    // A 6AM start was unworkable: every bed in the game wakes you at 7, so the
+    // shift was already an hour gone and every day was a written warning.
+    for (const id of LADDER) {
+      expect(EMPLOYMENT[id].shiftStart, `${id} starts before you can be awake`).toBeGreaterThanOrEqual(7);
+    }
+  });
+
+  it("does not advertise itself in the other town", () => {
+    const p = new Player();
+    p.setClock(11);
+    p.goto("jobBoard");
+    const board = p.drive(p.press(), "career listings");
+    const labels = (board?.choices ?? []).map((c) => c.label);
+    for (const id of LADDER) expect(labels, `Market Square is advertising ${id}`).not.toContain(EMPLOYMENT[id].name);
+    expect(labels).toContain(EMPLOYMENT.martClerk.name);
+  });
+
+  it("does not advertise Brokemon's jobs at the Exchange either", () => {
+    const p = new Player();
+    p.rideOut(9);
+    p.setClock(11);
+    p.goto("jobCentre");
+    const list = p.drive(p.press(), "take a ticket");
+    const labels = (list?.choices ?? []).map((c) => c.label);
+    expect(labels).not.toContain(EMPLOYMENT.martClerk.name);
+    expect(labels).toContain(EMPLOYMENT.picker.name);
+  });
+
+  it("turns you away at the yard gate if you do not work there", () => {
+    const p = new Player();
+    p.rideOut(9);
+    p.goto("depot");
+    expect(p.press()?.lines.join(" ")).toMatch(/staff only/i);
+  });
+
+  it("counts a room plus a career as phase 3", () => {
+    // The apartment used to be the only door to phase 3. A depot manager on St
+    // Giles Row would otherwise have held a tier-4 job at phase 2.
+    const p = new Player();
+    p.s.housing.brokedale = "room";
+    p.s.employment = "dispatcher";
+    expect(phaseOf(p.s)).toBe(3);
   });
 });

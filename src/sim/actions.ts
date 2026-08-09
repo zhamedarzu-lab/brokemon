@@ -322,6 +322,8 @@ export const VENUE_LABELS: Record<string, string> = {
   washhouse: "Washhouse",
   dossHouse: "Doss house",
   pawnShop: "Pawnbrokers",
+  jobCentre: "Employment Exchange",
+  depot: "Eastgate Depot",
   gym: "The Wharf Club",
 };
 
@@ -354,6 +356,8 @@ export const DOOR_SIGNS: Record<string, string> = {
   washhouse: "WASHHOUSE",
   dossHouse: "BEDS",
   pawnShop: "PAWN",
+  jobCentre: "JOBS",
+  depot: "DEPOT",
   gym: "WHARF CLUB",
 };
 

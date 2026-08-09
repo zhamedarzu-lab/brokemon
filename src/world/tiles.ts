@@ -113,6 +113,8 @@ export const MARKERS: Record<Glyph, string> = {
   R: "weeklyRooms",
   U: "washhouse",
   P: "pawnShop",
+  J: "jobCentre",
+  V: "depot",
   Z: "gym",
 };
 
@@ -146,6 +148,8 @@ export const MARKER_FLOOR: Record<Glyph, Glyph> = {
   R: "I",
   U: "I",
   P: "I",
+  J: "I",
+  V: "I",
   Z: "I",
 };
 

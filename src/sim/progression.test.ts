@@ -41,7 +41,9 @@ class Player {
 
   /** Walking across town costs real time; don't let the bot cheat it. */
   goto(marker: string): void {
-    const p = markerPos(TOWN, marker);
+    // Whichever town the bot is standing in — the workplaces are not all in
+    // Brokemon any more.
+    const p = markerPos(townById(this.s.player.town), marker);
     this.ctx.advance(10, { exertion: 1.35 });
     this.s.player.pos = { x: p.x, y: p.y };
   }
@@ -491,6 +493,8 @@ describe("every job can actually be worked", () => {
     s.education = 6;
     s.inventory.phone = 1;
     s.shiftsWorked.officeAdmin = 20;
+    // Jobs live in towns now, and the workplace is in the job's own town.
+    s.player.town = def.town;
     p.waitUntil(def.shiftStart);
 
     p.goto(def.location);

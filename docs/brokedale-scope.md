@@ -242,10 +242,53 @@ Two things the rig found on the way, both of which would have shipped:
   today" in a row, 8 collapses, reputation on the floor. Site work asks for
   energy and nothing else now, which is what "no questions" is supposed to mean.
 
-**2b — the ladder.** A second career track worked from Brokedale addresses: the
-job centre on the High Street, and jobs that do not run through an appearance
-checkpoint. This is what makes Brokedale a real alternative rather than a
-grind, and it retires open finding 1.
+**2b — the ladder. ✅ DONE.** Three rungs at the Eastgate Depot, hired at the
+Employment Exchange on the High Street:
+
+| | | |
+|---|---|---|
+| **Warehouse Picker** | $118, 8AM–4PM | hygiene 25 |
+| **Dispatch Coordinator** | $210, 8AM–5PM | 12 picker shifts, 2 credits, a phone |
+| **Depot Manager** | $420, 7AM–5PM | 18 dispatch shifts, 4 credits |
+
+**Not one requirement on the track is about how you look** — no outfit, no
+appearance, and the hygiene numbers are about being safe on a yard rather than
+presentable in a lobby. That is the point of it, and there is a test that fails
+if anyone adds a dress code to any rung. It pays less at the top than Silph's
+director does and gets there with far less ceremony, which is the fork: **the
+estate is more money and a longer road through a gate; the depot is a decent
+life you can actually reach.**
+
+**The two towns need each other, on purpose.** Dispatch wants night-class
+credits and a phone. There is no college in Brokedale and no Mart, so the
+credits mean going back — and the last coach home leaves before the class lets
+out, so every credit costs a day, two fares and a night on the far side. The
+rig does the trip and gets there: hired as Dispatch Coordinator on day 22 of a
+three-week run that started with $54.
+
+Four things it found on the way, in the order it found them:
+
+- **The hire roll was appearance-based even for jobs with no appearance
+  requirement.** A hidden dice roll on your looks quietly rebuilt the wall the
+  whole track was cut to route around — and made nonsense of the overnight
+  stocker, whose pitch is that nobody sees you. Those jobs hire on your name
+  and the fact you turned up. Brokemon shifted 164 → 165 days across ten
+  seeds, well inside the noise.
+- **The interview asked whether you were tired.** Energy and morale are right
+  at the door on the morning of a shift and wrong at an interview; the rig was
+  told it was "too worn out for this right now" twenty days running, applying
+  after a shift. Same family as finding 13 — the check that gets you hired and
+  the check that gets you through the door are not the same question.
+- **A 6AM shift is unworkable.** Every bed in the game wakes you at 7, so the
+  picker was hired, written up three times for lateness, fired, and rehired,
+  six times in three weeks. It starts at 8 now, and a test refuses any rung
+  starting before 7.
+- **The board in Market Square was advertising jobs in Brokedale**, which
+  would have cost 250 minutes and $26 a day to turn up to. Listings are
+  filtered by town.
+
+Phase 3's second apex still needs writing. Everything else from section 7 —
+university, hospital, auction house, the $200–$12,000 gap — is open.
 
 Still to come from section 7: the university, the hospital, the auction house,
 the night bus, and something to spend money on between $200 and $12,000.

@@ -269,7 +269,11 @@ export function phaseOf(s: GameState): Phase {
   // drop back to phase 1 by taking the coach somewhere you have no room.
   const home = bestHousing(s);
   if (home === "estate" || s.mayor || s.businessOwned) return 4;
-  if (home === "apartment" && s.employment && EMPLOYMENT[s.employment].tier >= 3) return 3;
+  // A let of your own plus a career. The apartment used to be the only door
+  // to phase 3, which was fine while Brokemon was the only town — a Brokedale
+  // depot manager on St Giles Row would otherwise have topped out at phase 2
+  // with a tier-4 job.
+  if ((home === "apartment" || home === "room") && s.employment && EMPLOYMENT[s.employment].tier >= 3) return 3;
   // Any address with a door on it is out of phase 1, career or not.
   if (home === "hostel" || home === "room" || home === "trailer" || home === "apartment") return 2;
   return 1;

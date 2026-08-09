@@ -1,9 +1,21 @@
+import type { TownId } from "../world/map";
 import type { ItemId } from "./items";
 import { MORALE_BREAKDOWN, type MeterDelta } from "./meters";
 import type { OutfitId } from "./social";
 
 export type GigId = "panhandle" | "flyers" | "yardWork" | "dayLabor" | "siteWork";
-export type EmploymentId = "martClerk" | "nightStock" | "landscaper" | "technician" | "officeAdmin" | "executive";
+export type EmploymentId =
+  // Brokemon Town — the ladder that runs on how you look.
+  | "martClerk"
+  | "nightStock"
+  | "landscaper"
+  | "technician"
+  | "officeAdmin"
+  | "executive"
+  // Brokedale — the ladder that runs on hours put in.
+  | "picker"
+  | "dispatcher"
+  | "depotManager";
 export type JobId = GigId | EmploymentId;
 
 /** Everything the town can ask you to prove before it lets you earn. */
@@ -124,6 +136,12 @@ export interface EmploymentDef {
   id: EmploymentId;
   name: string;
   employer: string;
+  /**
+   * Which town the job is in. Listings are filtered by it, so the Market
+   * Square board does not offer you a shift forty minutes up the road that
+   * would cost more to reach than it pays.
+   */
+  town: TownId;
   /** Marker id where the shift is worked. */
   location: string;
   /** Which phase of the ladder this belongs to. */
@@ -144,6 +162,7 @@ export interface EmploymentDef {
 export const EMPLOYMENT: Record<EmploymentId, EmploymentDef> = {
   martClerk: {
     id: "martClerk",
+    town: "brokemon",
     name: "Mart Clerk (part-time)",
     employer: "Brokemon Mart",
     location: "mart",
@@ -160,6 +179,7 @@ export const EMPLOYMENT: Record<EmploymentId, EmploymentDef> = {
   },
   nightStock: {
     id: "nightStock",
+    town: "brokemon",
     name: "Overnight Stocker",
     employer: "Brokemon Mart",
     location: "mart",
@@ -176,6 +196,7 @@ export const EMPLOYMENT: Record<EmploymentId, EmploymentDef> = {
   },
   landscaper: {
     id: "landscaper",
+    town: "brokemon",
     name: "Grounds Crew",
     employer: "Market Square Parks Dept.",
     location: "jobBoard",
@@ -195,6 +216,7 @@ export const EMPLOYMENT: Record<EmploymentId, EmploymentDef> = {
   },
   technician: {
     id: "technician",
+    town: "brokemon",
     name: "Field Technician",
     employer: "Route 1 Utilities",
     location: "corporatePlaza",
@@ -211,6 +233,7 @@ export const EMPLOYMENT: Record<EmploymentId, EmploymentDef> = {
   },
   officeAdmin: {
     id: "officeAdmin",
+    town: "brokemon",
     name: "Office Administrator",
     employer: "Silph Regional",
     location: "corporatePlaza",
@@ -227,6 +250,7 @@ export const EMPLOYMENT: Record<EmploymentId, EmploymentDef> = {
   },
   executive: {
     id: "executive",
+    town: "brokemon",
     name: "Regional Director",
     employer: "Silph Regional",
     location: "corporatePlaza",
@@ -248,6 +272,83 @@ export const EMPLOYMENT: Record<EmploymentId, EmploymentDef> = {
     salaried: true,
     desc: "You approve other people's overtime now. You remember asking for it.",
   },
+
+  /* ------------------------------------------------------------ Brokedale */
+
+  /**
+   * The other ladder.
+   *
+   * Not one requirement on this track is about how you look — no outfit, no
+   * appearance, and the hygiene numbers are about being safe on a yard rather
+   * than presentable in a lobby. That is the whole point of it: Brokemon's
+   * career runs through a security gate that wants appearance 70 every single
+   * morning, so a player who cannot hold that number has, until now, had
+   * nowhere to go. What Brokedale asks for instead is hours and credits.
+   *
+   * It pays less at the top than Silph does and gets there with far less
+   * ceremony. The two towns still need each other: the credits come from night
+   * class, and night class is in Brokemon.
+   */
+  picker: {
+    id: "picker",
+    town: "brokedale",
+    name: "Warehouse Picker",
+    employer: "Eastgate Depot",
+    location: "depot",
+    tier: 2,
+    // 8AM, not the 6AM a real picking shift would start at. Every bed in the
+    // game wakes you at 7, so a 6AM start with half an hour of grace was a
+    // shift you could not clock into on time from any address — the walking
+    // rig was hired, written up for lateness three times, fired, and rehired,
+    // six times over three weeks.
+    shiftStart: 8,
+    shiftEnd: 16,
+    grace: 0.5,
+    // Eight hours at about what the agency pays by the hour. You are buying
+    // a rota rather than a raise: shifts here count, and the agency's do not.
+    pay: 118,
+    requires: { hygiene: 25, energy: 30 },
+    cost: { energy: -34, hygiene: -20, hunger: -28, thirst: -32, morale: -3 },
+    exertion: 2.2,
+    salaried: false,
+    desc: "A handheld scanner, a numbered aisle, and a target on a screen that goes up every quarter.",
+  },
+  dispatcher: {
+    id: "dispatcher",
+    town: "brokedale",
+    name: "Dispatch Coordinator",
+    employer: "Eastgate Depot",
+    location: "depot",
+    tier: 3,
+    shiftStart: 8,
+    shiftEnd: 17,
+    grace: 0.75,
+    pay: 210,
+    requires: { hygiene: 40, education: 2, item: "phone", experience: { job: "picker", shifts: 12 } },
+    cost: { energy: -20, hygiene: -10, hunger: -24, thirst: -28 },
+    exertion: 1.2,
+    salaried: true,
+    desc: "You are the voice on the other end of the handheld now. Nine hours, and a chair.",
+  },
+  depotManager: {
+    id: "depotManager",
+    town: "brokedale",
+    name: "Depot Manager",
+    employer: "Eastgate Depot",
+    location: "depot",
+    tier: 4,
+    shiftStart: 7,
+    shiftEnd: 17,
+    grace: 1,
+    // Less than Silph's director, and it wants no suit, no lobby and nobody's
+    // permission to walk up a hill.
+    pay: 420,
+    requires: { hygiene: 50, education: 4, item: "phone", experience: { job: "dispatcher", shifts: 18 } },
+    cost: { energy: -16, hunger: -22, thirst: -26, morale: +2 },
+    exertion: 1.0,
+    salaried: true,
+    desc: "Ten hours, the keys to the yard, and the rota is yours to write. You remember reading it.",
+  },
 };
 
 export const EMPLOYMENT_ORDER: EmploymentId[] = [
@@ -257,10 +358,38 @@ export const EMPLOYMENT_ORDER: EmploymentId[] = [
   "technician",
   "officeAdmin",
   "executive",
+  "picker",
+  "dispatcher",
+  "depotManager",
 ];
+
+/** The ladder available in a given town, worst-paid first. */
+export function employmentIn(town: TownId): EmploymentId[] {
+  return EMPLOYMENT_ORDER.filter((id) => EMPLOYMENT[id].town === town);
+}
 
 export function isEmployment(id: JobId): id is EmploymentId {
   return id in EMPLOYMENT;
+}
+
+/**
+ * What an employer asks at the interview, as opposed to at the door on the
+ * morning of a shift.
+ *
+ * Energy and morale are the difference. They are right on the door — a
+ * supervisor sends home someone who cannot keep their eyes open — and wrong at
+ * the interview, where being tired this afternoon says nothing about whether
+ * you can do the job. The walking rig hit this twenty days running: it applied
+ * for the warehouse after a six-hour shift and was told it was "too worn out
+ * for this right now", which is not a hiring decision anyone makes.
+ *
+ * Same family of bug as the dress-code one (finding 13): the check that gets
+ * you hired and the check that gets you through the door were the same object,
+ * and they are not the same question.
+ */
+export function hiringRequirements(def: EmploymentDef): Requirements {
+  const { energy: _energy, morale: _morale, ...durable } = def.requires;
+  return durable;
 }
 
 /** Night classes at the community college. */
