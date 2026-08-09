@@ -47,7 +47,7 @@ export interface TileDef {
     | "gate"
     | "door";
   /** Interaction handled generically by tile type (benches, dumpsters, bins). */
-  interaction?: "bench" | "dumpster" | "bin" | "sign" | "gate" | "water";
+  interaction?: "bench" | "dumpster" | "bin" | "sign" | "gate" | "water" | "street";
   /** Standing here counts as outdoors for weather/police purposes. */
   outdoor?: boolean;
 }

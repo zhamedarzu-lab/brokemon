@@ -3178,6 +3178,16 @@ const EVENTS: EventDef[] = [
 ];
 
 /** Steps between encounter rolls. */
+/**
+ * Odds that a step which has earned an encounter actually produces one.
+ *
+ * Lives here rather than in the renderer because the walking rig has to roll
+ * the same number: it was written down twice, the game moved to 0.28, the rig
+ * stayed on 0.4, and every encounter figure the rig printed was a figure about
+ * a game nobody was playing.
+ */
+export const EVENT_CHANCE = 0.28;
+
 export const EVENT_STEP_INTERVAL = 40;
 
 /**

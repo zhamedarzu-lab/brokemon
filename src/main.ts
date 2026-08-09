@@ -3,7 +3,7 @@ import "./styles.css";
 import { Input, type Button } from "./engine/input";
 import { CANVAS_H, CANVAS_W, render } from "./engine/render";
 import { interact } from "./sim/actions";
-import { EVENT_STEP_INTERVAL, rollEvent } from "./sim/events";
+import { EVENT_CHANCE, EVENT_STEP_INTERVAL, rollEvent } from "./sim/events";
 import type { ItemId } from "./sim/items";
 import { menu, say, type Prompt } from "./sim/prompt";
 import { EMPLOYMENT } from "./sim/jobs";
@@ -258,7 +258,7 @@ class Game {
 
     if (this.stepsSinceEvent >= EVENT_STEP_INTERVAL) {
       this.stepsSinceEvent = 0;
-      if (this.rng.chance(0.28)) {
+      if (this.rng.chance(EVENT_CHANCE)) {
         this.enqueue(rollEvent(this.actionCtx()));
         this.openNext();
       }

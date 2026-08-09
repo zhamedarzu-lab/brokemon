@@ -16,7 +16,7 @@ declare const process: { argv: string[] };
 import { isSolid, markerPos, townById, STARTING_TOWN, type Town, type Vec2 } from "../world/map";
 import { approaches, sleepableBenches, type Approach } from "../world/landmarks";
 import { interact } from "./actions";
-import { EVENT_STEP_INTERVAL, rollEvent } from "./events";
+import { EVENT_CHANCE, EVENT_STEP_INTERVAL, rollEvent } from "./events";
 import { countOf, type ItemId } from "./items";
 import { EMPLOYMENT, EMPLOYMENT_ORDER, type EmploymentId } from "./jobs";
 import type { Choice, Prompt } from "./prompt";
@@ -182,7 +182,7 @@ class Player {
       policeCheck(this.s, this.rng);
       if (this.stepsSinceEvent >= EVENT_STEP_INTERVAL) {
         this.stepsSinceEvent = 0;
-        if (this.rng.chance(0.4)) this.resolve(rollEvent(this.ctx));
+        if (this.rng.chance(EVENT_CHANCE)) this.resolve(rollEvent(this.ctx));
       }
     }
     this.s.player.pos = { ...dest };

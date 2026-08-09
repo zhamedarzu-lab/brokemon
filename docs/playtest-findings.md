@@ -140,7 +140,20 @@ Options: separate "sent home" from "written up"; let a strike decay after a
 clean week; warn at two; or drop energy from the door check and let a tired
 shift just pay less.
 
-### 5. Smaller items
+### 5. Encounters got rarer and runs got longer
+
+The per-step encounter roll went from 0.4 to 0.28 in the renderer and stayed at
+0.4 in the walking rig — the number was written down twice. It is one constant
+now (`EVENT_CHANCE` in `events.ts`), imported by both, so the rig cannot drift
+from the game it is measuring again.
+
+With the rig telling the truth, the four standard seeds come in at 141, 133,
+284 and 179 days, against 138–210 before. Seed 11 nearly doubling is the item:
+encounters are a meaningful slice of early income and a third of them stopped
+happening. Not tuned here — the change is somebody else's and it may well be
+the right direction — but it should be measured before it is called done.
+
+### 6. Smaller items
 
 - **The trailer is never worth renting.** $70/week is $10/night against the
   hostel's $9, with eviction risk and a rent clock attached. Its real advantages
