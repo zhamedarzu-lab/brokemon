@@ -16,7 +16,10 @@ export type ItemId =
   | "sleepingBag"
   | "lotteryTicket"
   | "busPass"
+  | "rollerSkates"
+  | "kickScooter"
   | "foldingBike"
+  | "bmxBike"
   | "bicycle"
   | "roadBike"
   | "phone"
@@ -176,11 +179,35 @@ export const ITEMS: Record<ItemId, ItemDef> = {
     consumable: false,
     gear: true,
   },
+  rollerSkates: {
+    id: "rollerSkates",
+    name: "Roller Skates",
+    price: 15,
+    desc: "Four wheels and no dignity. Faster than walking, cheaper than everything else.",
+    consumable: false,
+    gear: true,
+  },
+  kickScooter: {
+    id: "kickScooter",
+    name: "Kick Scooter",
+    price: 28,
+    desc: "Folds flat and goes under your arm on the bus. Honest transport.",
+    consumable: false,
+    gear: true,
+  },
   foldingBike: {
     id: "foldingBike",
     name: "Folding Bike",
     price: 32,
     desc: "Collapses into an awkward lump. Faster than walking, slower than a proper bike — but it fits under any bed.",
+    consumable: false,
+    gear: true,
+  },
+  bmxBike: {
+    id: "bmxBike",
+    name: "BMX",
+    price: 50,
+    desc: "Low gears, fat tyres, built for the street. More bike than it looks.",
     consumable: false,
     gear: true,
   },

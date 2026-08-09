@@ -19,7 +19,10 @@ import { Journal } from "./ui/journal";
 import { isSolid, markerPos } from "./world/map";
 
 const STEP_MS = 180;
-const FOLDING_BIKE_STEP_MS = 145;
+const ROLLER_SKATES_STEP_MS = 162;
+const KICK_SCOOTER_STEP_MS = 150;
+const FOLDING_BIKE_STEP_MS = 140;
+const BMX_STEP_MS = 108;
 const BIKE_STEP_MS = 95;
 const ROAD_BIKE_STEP_MS = 58;
 const AUTOSAVE_EVERY_MS = 20_000;
@@ -216,9 +219,12 @@ class Game {
     if (this.paused()) return;
 
     const stepMs =
-      (s.inventory.roadBike ?? 0) > 0 ? ROAD_BIKE_STEP_MS :
-      (s.inventory.bicycle ?? 0) > 0 ? BIKE_STEP_MS :
+      (s.inventory.roadBike    ?? 0) > 0 ? ROAD_BIKE_STEP_MS :
+      (s.inventory.bicycle     ?? 0) > 0 ? BIKE_STEP_MS :
+      (s.inventory.bmxBike     ?? 0) > 0 ? BMX_STEP_MS :
       (s.inventory.foldingBike ?? 0) > 0 ? FOLDING_BIKE_STEP_MS :
+      (s.inventory.kickScooter ?? 0) > 0 ? KICK_SCOOTER_STEP_MS :
+      (s.inventory.rollerSkates ?? 0) > 0 ? ROLLER_SKATES_STEP_MS :
       STEP_MS;
 
     if (p.moveFrom !== null) {
