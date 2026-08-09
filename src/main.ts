@@ -19,7 +19,9 @@ import { Journal } from "./ui/journal";
 import { isSolid, markerPos } from "./world/map";
 
 const STEP_MS = 180;
+const FOLDING_BIKE_STEP_MS = 145;
 const BIKE_STEP_MS = 95;
+const ROAD_BIKE_STEP_MS = 58;
 const AUTOSAVE_EVERY_MS = 20_000;
 
 class Game {
@@ -213,7 +215,11 @@ class Game {
     if (p.moveFrom === null) this.tick(dt / MS_PER_MINUTE, { exertion: 0.75 });
     if (this.paused()) return;
 
-    const stepMs = (s.inventory.bicycle ?? 0) > 0 ? BIKE_STEP_MS : STEP_MS;
+    const stepMs =
+      (s.inventory.roadBike ?? 0) > 0 ? ROAD_BIKE_STEP_MS :
+      (s.inventory.bicycle ?? 0) > 0 ? BIKE_STEP_MS :
+      (s.inventory.foldingBike ?? 0) > 0 ? FOLDING_BIKE_STEP_MS :
+      STEP_MS;
 
     if (p.moveFrom !== null) {
       p.moveProgress += dt / stepMs;

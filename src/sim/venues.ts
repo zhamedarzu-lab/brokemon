@@ -2047,48 +2047,147 @@ function makeRide(ctx: ActionCtx, name: string, dest: { x: number; y: number }, 
 
 /* ---------------------------------------------------------------- bikeShop */
 
+const BIKE_TRADE_IN: Partial<Record<ItemId, number>> = {
+  foldingBike: 16,
+  bicycle: 35,
+  roadBike: 72,
+};
+
 const bikeShop: Venue = (ctx) => {
   const s = ctx.state;
-  const owned = (s.inventory.bicycle ?? 0) > 0;
-  const price = ITEMS.bicycle?.price ?? 70;
 
-  if (owned) {
-    return menu(
-      "Bob's Bikes",
-      ["Your bicycle is locked outside. Wheels look fine — plenty of miles left in it."],
-      [BACK],
-    );
+  const hasFolding  = (s.inventory.foldingBike ?? 0) > 0;
+  const hasMountain = (s.inventory.bicycle    ?? 0) > 0;
+  const hasRoad     = (s.inventory.roadBike   ?? 0) > 0;
+
+  // ── owns road bike (best in shop) ─────────────────────────────
+  if (hasRoad) {
+    const tradeIn = BIKE_TRADE_IN.roadBike!;
+    return menu("Bob's Bikes", [
+      "Your road bike is leaning outside. That's the best thing in this shop.",
+      "Bob nods. You've arrived.",
+    ], [
+      {
+        label: `Sell the road bike — $${tradeIn}`,
+        run: () => {
+          s.cash += tradeIn;
+          removeItem(s.inventory, "roadBike");
+          pushLog(s, "You hand the road bike back. Back to two feet.", "bad");
+          return null;
+        },
+      },
+      BACK,
+    ]);
   }
 
-  const canAfford = s.cash >= price;
-  return menu(
-    "Bob's Bikes",
-    [
-      "A row of second-hand bikes in various states of repair.",
-      `A hand-written tag on the nearest one: MOUNTAIN BIKE — $${price}. Halves every walk.`,
-    ],
-    [
-      canAfford
+  // ── owns mountain bike ─────────────────────────────────────────
+  if (hasMountain) {
+    const tradeIn   = BIKE_TRADE_IN.bicycle!;
+    const roadPrice = ITEMS.roadBike!.price!;
+    const upgradeCost = roadPrice - tradeIn;
+    const canRoad = s.cash >= upgradeCost;
+    return menu("Bob's Bikes", [
+      "Your mountain bike is chained up outside.",
+      "Bob has a road bike on the stand — dropped bars, 21 gears.",
+    ], [
+      canRoad
         ? {
-            label: `Buy the bicycle — $${price}`,
+            label: `Upgrade to road bike — $${upgradeCost} (trade-in)`,
             run: () => {
-              s.cash -= price;
-              addItem(s.inventory, "bicycle", 1);
-              pushLog(
-                s,
-                "You wheel a battered mountain bike out of the shop. Every walk just got shorter.",
-                "good",
-              );
+              s.cash -= upgradeCost;
+              removeItem(s.inventory, "bicycle");
+              addItem(s.inventory, "roadBike");
+              pushLog(s, "You swap the mountain bike for the road bike. The frame is lighter than you expected.", "good");
               return null;
             },
           }
-        : {
-            label: `Mountain bike — $${price}`,
-            locked: `Need $${price - s.cash} more`,
-          },
+        : { label: `Road bike — $${upgradeCost} after trade-in`, locked: `Need $${upgradeCost - s.cash} more` },
+      {
+        label: `Sell the mountain bike — $${tradeIn}`,
+        run: () => {
+          s.cash += tradeIn;
+          removeItem(s.inventory, "bicycle");
+          pushLog(s, `Bob hands you $${tradeIn} without looking up.`, "plain");
+          return null;
+        },
+      },
       BACK,
-    ],
-  );
+    ]);
+  }
+
+  // ── owns folding bike ──────────────────────────────────────────
+  if (hasFolding) {
+    const tradeIn        = BIKE_TRADE_IN.foldingBike!;
+    const mountainUpgrade = (ITEMS.bicycle!.price!)  - tradeIn;
+    const roadUpgrade     = (ITEMS.roadBike!.price!) - tradeIn;
+    const canMountain = s.cash >= mountainUpgrade;
+    const canRoad     = s.cash >= roadUpgrade;
+    return menu("Bob's Bikes", [
+      "Your folding bike is in the corner — Bob eyes it the way mechanics always do.",
+      "He's got better if you want to step up.",
+    ], [
+      canMountain
+        ? {
+            label: `Upgrade to mountain bike — $${mountainUpgrade} (trade-in)`,
+            run: () => {
+              s.cash -= mountainUpgrade;
+              removeItem(s.inventory, "foldingBike");
+              addItem(s.inventory, "bicycle");
+              pushLog(s, "The mountain bike is out the door. Every walk just got shorter again.", "good");
+              return null;
+            },
+          }
+        : { label: `Mountain bike — $${mountainUpgrade} after trade-in`, locked: `Need $${mountainUpgrade - s.cash} more` },
+      canRoad
+        ? {
+            label: `Upgrade to road bike — $${roadUpgrade} (trade-in)`,
+            run: () => {
+              s.cash -= roadUpgrade;
+              removeItem(s.inventory, "foldingBike");
+              addItem(s.inventory, "roadBike");
+              pushLog(s, "You skip straight to the road bike. The folder is Bob's problem now.", "good");
+              return null;
+            },
+          }
+        : { label: `Road bike — $${roadUpgrade} after trade-in`, locked: `Need $${roadUpgrade - s.cash} more` },
+      {
+        label: `Sell the folding bike — $${tradeIn}`,
+        run: () => {
+          s.cash += tradeIn;
+          removeItem(s.inventory, "foldingBike");
+          pushLog(s, `Bob gives you $${tradeIn} for the folder.`, "plain");
+          return null;
+        },
+      },
+      BACK,
+    ]);
+  }
+
+  // ── no bike ────────────────────────────────────────────────────
+  const mkBuy = (id: ItemId, label: string, log: string): Choice => {
+    const cost = ITEMS[id]!.price!;
+    return s.cash >= cost
+      ? {
+          label: `${label} — $${cost}`,
+          run: () => {
+            s.cash -= cost;
+            addItem(s.inventory, id);
+            pushLog(s, log, "good");
+            return null;
+          },
+        }
+      : { label: `${label} — $${cost}`, locked: `Need $${cost - s.cash} more` };
+  };
+
+  return menu("Bob's Bikes", [
+    "Three bikes on the floor, none of them new.",
+    "Folding at $32. Mountain at $70. Road at $145. Bob's got something for every budget.",
+  ], [
+    mkBuy("foldingBike", "Folding bike",  "The folder goes under any bed. Beats walking."),
+    mkBuy("bicycle",     "Mountain bike", "You wheel the mountain bike out. Every walk just got shorter."),
+    mkBuy("roadBike",    "Road bike",     "The road bike slides into traffic like it was born there."),
+    BACK,
+  ]);
 };
 
 /* --------------------------------------------------------------- church */

@@ -416,7 +416,7 @@ describe("Brokedale, as somewhere to live", () => {
     p.s.cash = 0;
     p.goto("pawnShop");
     const counter = p.press();
-    expect(p.took(counter, "sell second-hand bicycle")).toBe(true);
+    expect(p.took(counter, "sell mountain bike")).toBe(true);
     expect(p.s.cash).toBeGreaterThan(0);
     expect(p.s.cash).toBeLessThan(ITEMS.bicycle.price!);
     // Consumables are not stock.

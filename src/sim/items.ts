@@ -16,7 +16,9 @@ export type ItemId =
   | "sleepingBag"
   | "lotteryTicket"
   | "busPass"
+  | "foldingBike"
   | "bicycle"
+  | "roadBike"
   | "phone"
   | "recyclables"
   | "staffBadge"
@@ -174,11 +176,27 @@ export const ITEMS: Record<ItemId, ItemDef> = {
     consumable: false,
     gear: true,
   },
+  foldingBike: {
+    id: "foldingBike",
+    name: "Folding Bike",
+    price: 32,
+    desc: "Collapses into an awkward lump. Faster than walking, slower than a proper bike — but it fits under any bed.",
+    consumable: false,
+    gear: true,
+  },
   bicycle: {
     id: "bicycle",
-    name: "Second-hand Bicycle",
+    name: "Mountain Bike",
     price: 70,
     desc: "One gear, both brakes. Halves every walk you'll ever take again.",
+    consumable: false,
+    gear: true,
+  },
+  roadBike: {
+    id: "roadBike",
+    name: "Road Bike",
+    price: 145,
+    desc: "Dropped handlebars, 21 gears, tyres thin as patience. Three times faster than walking.",
     consumable: false,
     gear: true,
   },
