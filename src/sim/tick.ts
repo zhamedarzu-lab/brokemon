@@ -1,4 +1,4 @@
-import { isOutdoors, townById, TOWNS, zoneAt, type Town, type TownId, type Zone } from "../world/map";
+import { glyphAt, isOutdoors, townById, TOWNS, zoneAt, type Town, type TownId, type Zone } from "../world/map";
 import { housingIn, reputationIn, setHousing, townOf, type Ending } from "./state";
 import { changeReputation, checkPostWinGoal, hasItem, phaseOf, pushLog, setWon, type GameState, type Phase } from "./state";
 import { decay, WARN_THRESHOLDS, type MeterId } from "./meters";
@@ -7,7 +7,7 @@ import { rollWeather, WEATHER, weatherDuration } from "./weather";
 import { HOUSING } from "./social";
 import type { Rng } from "./rng";
 import { currentAppearance } from "./state";
-import { removeItem } from "./items";
+import { addItem, removeItem } from "./items";
 
 /**
  * Something that has to stop the player and be acknowledged. The renderer
@@ -24,7 +24,8 @@ export type Interrupt =
   | { kind: "income"; lines: string[] }
   | { kind: "weather"; text: string }
   | { kind: "victory"; ending: Ending }
-  | { kind: "jobExpired"; label: string };
+  | { kind: "jobExpired"; label: string }
+  | { kind: "carHit"; cost: number };
 
 export interface TickOptions {
   /** In-game minutes to advance. */
@@ -70,6 +71,24 @@ export function advance(s: GameState, rng: Rng, opts: TickOptions): Interrupt[] 
         s.flags.headInjuryDay = dayOf(s.time);
         const inj = headInjury(s, rng, interrupts);
         interrupts.push(inj);
+        remaining = 0;
+        break;
+      }
+    }
+
+    // Hit by a car: walking on road tiles.
+    if (outdoors && !asleep) {
+      const town = townOf(s);
+      const tile = glyphAt(town, s.player.pos.x, s.player.pos.y);
+      const hitDay = s.flags.carHitDay ?? -1;
+      if (
+        (tile === "=" || tile === "c") &&
+        hitDay !== dayOf(s.time) &&
+        rng.chance(0.04 * (step / 60))
+      ) {
+        s.flags.carHitDay = dayOf(s.time);
+        const hit = carHit(s, rng, interrupts);
+        interrupts.push(hit);
         remaining = 0;
         break;
       }
@@ -357,6 +376,28 @@ function chargeRentIn(s: GameState, town: TownId, day: number, out: Interrupt[])
  *   bmxBike                    — skateHelmet OR cyclingHelmet
  *   foldingBike / bicycle / roadBike — cyclingHelmet only
  */
+function carHit(s: GameState, rng: Rng, out: Interrupt[]): Interrupt {
+  // Generous: bystanders helped, hospital fed you, bill is small or nothing.
+  const cost = rng.chance(0.55) ? 0 : Math.min(s.cash, rng.int(10, 45));
+  s.cash -= cost;
+  s.meters.health = Math.min(s.meters.health, 48);
+  s.meters.morale = Math.max(0, s.meters.morale - 14);
+  s.meters.energy = Math.max(0, s.meters.energy - 18);
+  // Hospital gave you something to eat and drink.
+  s.meters.hunger = Math.max(s.meters.hunger, 58);
+  s.meters.thirst = Math.max(s.meters.thirst, 62);
+  addItem(s.inventory, "sandwich", 1); // bystander left it on the chair
+
+  // Skip 2 hours of hospital time.
+  const dayBefore = dayOf(s.time);
+  s.time += 120;
+  const dayAfter = dayOf(s.time);
+  for (let d = dayBefore + 1; d <= dayAfter; d++) onNewDay(s, rng, d, out);
+
+  pushLog(s, "A car clipped you crossing the road. You come round in the hospital, two hours gone.", "bad");
+  return { kind: "carHit", cost };
+}
+
 function bareheadRisk(s: GameState): number {
   const hasSk = hasItem(s, "skateHelmet");
   const hasCy = hasItem(s, "cyclingHelmet");

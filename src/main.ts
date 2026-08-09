@@ -16,7 +16,7 @@ import { cap, consume, type ActionCtx } from "./sim/work";
 import { Dialogue } from "./ui/dialogue";
 import { Hud } from "./ui/hud";
 import { Journal } from "./ui/journal";
-import { isSolid, markerPos } from "./world/map";
+import { hasMarker, isSolid, markerPos } from "./world/map";
 
 const STEP_MS = 180;
 const ROLLER_SKATES_STEP_MS = 162;
@@ -453,6 +453,27 @@ function interruptPrompt(i: Interrupt, ctx: ActionCtx): Prompt | null {
         [`You are no longer employed at ${EMPLOYMENT[i.job as keyof typeof EMPLOYMENT]?.employer ?? i.job}.`],
         "bad",
       );
+
+    case "carHit": {
+      const town = townOf(ctx.state);
+      const dest = hasMarker(town, "hospital")
+        ? markerPos(town, "hospital")
+        : markerPos(town, "communityCenter");
+      ctx.teleport(dest.x, dest.y);
+      return menu(
+        "A&E",
+        [
+          "You don't remember the impact. Just the horn, very close, and then the ground.",
+          "You wake up on a gurney. A nurse tells you it was a glancing blow — you were lucky.",
+          i.cost > 0
+            ? `They hand you a discharge form and take $${i.cost}. Less than it could have been.`
+            : "The driver stopped. There's nothing to pay. Someone called it in.",
+          "There's a sandwich on the chair beside you. You don't know who left it.",
+        ],
+        [{ label: "Get up carefully" }],
+        "bad",
+      );
+    }
 
     case "jobExpired":
       return menu(

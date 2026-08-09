@@ -2220,10 +2220,8 @@ const church: Venue = (ctx) => {
             run: () => {
               ctx.advance(20, { sheltered: true });
               s.flags[soupKey] = today;
-              addItem(s.inventory, "sandwich", 1);
-              addItem(s.inventory, "waterBottle", 1);
-              if (ctx.rng.chance(0.4)) addItem(s.inventory, "instantNoodles", 1);
-              applyDelta(s.meters, { morale: +5 });
+              applyDelta(s.meters, { hunger: +55, thirst: +25, morale: +10, health: +4 });
+              if (ctx.rng.chance(0.4)) addItem(s.inventory, "sandwich", 1);
               pushLog(s, "Had a meal at St. Jude's soup kitchen.", "good");
               return menu(
                 "St. Jude's",

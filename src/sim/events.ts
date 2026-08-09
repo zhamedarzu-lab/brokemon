@@ -1645,26 +1645,6 @@ const BROKEMON_EVENTS: EventDef[] = [
     },
   },
 
-  {
-    id: "heightsResident",
-    weight: (_s, z) => (z === "heights" ? 4 : 0),
-    build: (ctx) => {
-      const s = ctx.state;
-      const look = currentAppearance(s);
-      if (look >= 80) {
-        changeReputation(s, 2);
-        return menu("On the hill", ['A man walking a whippet says good morning as though you live here.', "You say it back. Nobody checks."], [close]);
-      }
-      applyDelta(s.meters, { morale: -8 });
-      return menu(
-        "On the hill",
-        ["A woman crosses to the far pavement and stays there until you are past.", "She does it smoothly, like it is a manoeuvre she has practised."],
-        [close],
-        "bad",
-      );
-    },
-  },
-
   /* --------------------------------------------------------- fire barrel */
   {
     id: "fireBarrel",
@@ -2405,59 +2385,6 @@ const BROKEMON_EVENTS: EventDef[] = [
     },
   },
 
-  /* ---------------------------------------------- rainbow after storm */
-  {
-    id: "rainbowAfterRain",
-    weight: (s) => (s.weather === "rain" || s.weather === "storm" ? 2 : 0),
-    build: (ctx) => {
-      const s = ctx.state;
-      applyDelta(s.meters, { morale: +14 });
-      return menu(
-        "The sky after",
-        ["The rain stops mid-step.", "You look up and there is a full rainbow, one end over the estate, the other end out past the slums.", "For about thirty seconds everyone on the street is doing the same thing."],
-        [close],
-        "good",
-      );
-    },
-  },
-
-  /* ------------------------------------------------- pigeon steals food */
-  {
-    id: "pigeonFood",
-    weight: (s, z) => ((z === "downtown" || z === "slums") && Object.values(s.inventory).some(v => (v ?? 0) > 0) ? 2 : 0),
-    build: (ctx) => {
-      const s = ctx.state;
-      if (s.inventory.trashFood && s.inventory.trashFood > 0) {
-        s.inventory.trashFood -= 1;
-      } else if (s.inventory.sandwich && s.inventory.sandwich > 0) {
-        s.inventory.sandwich -= 1;
-      }
-      applyDelta(s.meters, { morale: -10 });
-      pushLog(s, "A pigeon took your food.", "bad");
-      return menu(
-        "A pigeon",
-        ["It comes from nowhere.", "You were holding it for two seconds.", "You blink and it's gone and the pigeon is already on a bin."],
-        [close],
-        "bad",
-      );
-    },
-  },
-
-  /* ------------------------------------------------- night star visible */
-  {
-    id: "nightStar",
-    weight: (s) => (hourOf(s.time) >= 22 || hourOf(s.time) <= 4 ? 2 : 0),
-    build: (ctx) => {
-      const s = ctx.state;
-      applyDelta(s.meters, { morale: +10 });
-      return menu(
-        "One star",
-        ["The light pollution takes most of them.", "But there's one, right overhead, getting through.", "You stop and look at it for a moment before you remember where you are."],
-        [close],
-      );
-    },
-  },
-
   /* ----------------------------------------- street preacher */
   {
     id: "streetPreacher",
@@ -2490,62 +2417,6 @@ const BROKEMON_EVENTS: EventDef[] = [
     },
   },
 
-  /* ---------------------------------------- graffiti moment */
-  {
-    id: "graffiti",
-    weight: (_s, z) => (z === "slums" ? 3 : z === "downtown" ? 1 : 0),
-    build: (ctx) => {
-      const s = ctx.state;
-      const texts = [
-        "YOU ARE HERE.",
-        "THIS TOO SHALL PASS",
-        "RENT IS THEFT",
-        "WAKE UP",
-        "IT'S OK TO NOT BE OK",
-      ];
-      const text = texts[ctx.rng.int(0, texts.length - 1)]!;
-      applyDelta(s.meters, { morale: +8 });
-      return menu(
-        "On the wall",
-        [`"${text}"`, "Whoever wrote it is not here. The words still are."],
-        [close],
-      );
-    },
-  },
-
-  /* --------------------------------------- automatic door ignores you */
-  {
-    id: "automaticDoor",
-    weight: (s, z) => (z === "downtown" && currentAppearance(s) < 40 ? 2 : 0),
-    build: (ctx) => {
-      const s = ctx.state;
-      applyDelta(s.meters, { morale: -8 });
-      return menu(
-        "The sensor",
-        ["You step toward the automatic door. It does not open.", "You step back. You step forward. It opens for the woman behind you.", "You follow her through, which is a different thing from being let in."],
-        [close],
-        "bad",
-      );
-    },
-  },
-
-  /* ------------------------------------------ deep puddle */
-  {
-    id: "deepPuddle",
-    weight: (s) => (s.weather === "rain" || s.weather === "storm" ? 3 : 0),
-    build: (ctx) => {
-      const s = ctx.state;
-      applyDelta(s.meters, { hygiene: -10, morale: -8, health: -3 });
-      pushLog(s, "Soaked by a passing car — deep puddle.", "bad");
-      return menu(
-        "A car that doesn't slow",
-        ["It is the size of the puddle that gets you.", "You hear the water before you see it.", "There is nothing to do. You are completely soaked from the knee down.", "The car does not stop."],
-        [close],
-        "bad",
-      );
-    },
-  },
-
   /* ----------------------------------------- cyclist near miss */
   {
     id: "cyclistNearMiss",
@@ -2565,22 +2436,6 @@ const BROKEMON_EVENTS: EventDef[] = [
           },
           { label: "Don't react", run: () => { applyDelta(s.meters, { morale: -6 }); return menu("On the pavement", ["You let it go.", "You let everything go eventually."], [close]); } },
         ],
-      );
-    },
-  },
-
-  /* ------------------------------------------ road works detour */
-  {
-    id: "roadWorksDetour",
-    weight: (_s, z) => (z === "downtown" ? 2 : 0),
-    build: (ctx) => {
-      const s = ctx.state;
-      ctx.advance(15, { exertion: 1.0 });
-      applyDelta(s.meters, { energy: -4, morale: -4 });
-      return menu(
-        "ROAD CLOSED",
-        ["They've dug up the whole pavement with no notice.", "The detour adds fifteen minutes and goes through the worst-smelling street on this side of town."],
-        [close],
       );
     },
   },
@@ -2738,23 +2593,6 @@ const BROKEMON_EVENTS: EventDef[] = [
     },
   },
 
-  /* -------------------------------------------- watching the city wake up */
-  {
-    id: "cityWakingUp",
-    weight: (s) => (hourOf(s.time) >= 5 && hourOf(s.time) <= 7 ? 3 : 0),
-    build: (ctx) => {
-      const s = ctx.state;
-      ctx.advance(10, { exertion: 0.2 });
-      applyDelta(s.meters, { morale: +12, energy: +4 });
-      return menu(
-        "First light",
-        ["The street is yours for another twenty minutes.", "A fox crosses the road without hurrying.", "The first bus goes past with two people in it.", "A bakery somewhere has its extractor on.", "This is the only time the day feels like it might be fair."],
-        [close],
-        "good",
-      );
-    },
-  },
-
   /* -------------------------------------------- someone drops groceries */
   {
     id: "droppedGroceries",
@@ -2780,30 +2618,6 @@ const BROKEMON_EVENTS: EventDef[] = [
             },
           },
           { label: "Keep walking", run: () => null },
-        ],
-      );
-    },
-  },
-
-  /* ---------------------------------------- landlord notice in your area */
-  {
-    id: "rentIncrease",
-    weight: (s, z) => (z === "slums" && phaseOf(s) <= 2 ? 2 : 0),
-    build: (ctx) => {
-      const s = ctx.state;
-      applyDelta(s.meters, { morale: -10 });
-      return menu(
-        "A notice in a window",
-        ["RENT REVIEW IN PROGRESS.", "Every window on the street has one.", "You do not live here, but the people who do are standing on the pavement reading them."],
-        [
-          {
-            label: "Read one",
-            run: () => {
-              applyDelta(s.meters, { morale: -6 });
-              return menu("A notice in a window", ["Forty percent.", "In six months.", "Two weeks to respond.", "You are looking at this notice from the street because you could not afford to be inside one of these rooms.", "The people inside them are looking at it from the window."], [close], "bad");
-            },
-          },
-          { label: "Walk past", run: () => menu("A notice in a window", ["You walk past it.", "The people standing outside are still reading theirs."], [close]) },
         ],
       );
     },
@@ -3147,35 +2961,6 @@ const BROKEMON_EVENTS: EventDef[] = [
     },
   },
 
-  /* ----------------------------------------- cat in a window */
-  {
-    id: "catInWindow",
-    weight: (_s, z) => (z === "heights" ? 3 : 1),
-    build: (ctx) => {
-      const s = ctx.state;
-      applyDelta(s.meters, { morale: +8 });
-      return menu(
-        "A cat",
-        ["On a windowsill. Watching you.", "You stop. It doesn\'t move.", "You\'ve had a harder morning than a cat on a windowsill in a warm house.", "It blinks at you. Slowly. That means something, with cats."],
-        [close],
-      );
-    },
-  },
-
-  /* ---------------------------------------- power cut on the street */
-  {
-    id: "powerCut",
-    weight: (_s, z) => (z === "downtown" ? 1 : 0),
-    build: (ctx) => {
-      const s = ctx.state;
-      applyDelta(s.meters, { morale: +10 });
-      return menu(
-        "The lights go out",
-        ["The whole block loses power at once.", "Every shop front dark, every till stopped.", "People come outside looking at their phones like phones will explain it.", "For about four minutes, everybody is standing around with the same amount of information as everybody else.", "It feels briefly and absurdly fair."],
-        [close],
-      );
-    },
-  },
 ];
 
 /** Steps between encounter rolls. */
