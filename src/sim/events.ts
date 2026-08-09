@@ -2224,22 +2224,6 @@ const BROKEMON_EVENTS: EventDef[] = [
     },
   },
 
-  /* ------------------------------------------ free newspaper on a wall */
-  {
-    id: "freeNewspaper",
-    weight: (s, z) => (z === "downtown" && phaseOf(s) <= 2 ? 2 : 0),
-    build: (ctx) => {
-      const s = ctx.state;
-      ctx.advance(20, { sheltered: false, exertion: 0.3 });
-      applyDelta(s.meters, { morale: +8, energy: +4 });
-      return menu(
-        "Today's paper, left on a wall",
-        ["Folded neatly like a gift.", "You sit on the kerb and read the whole thing, cover to cover, adverts and all.", "For twenty minutes you are just someone reading the news."],
-        [close],
-      );
-    },
-  },
-
   /* -------------------------------------------- film crew on the street */
   {
     id: "movieShoot",
