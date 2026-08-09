@@ -35,6 +35,7 @@ import {
   checkRequirements,
   currentAppearance,
   earnCash,
+  hasItem,
   phaseOf,
   pushLog,
   housingIn,
