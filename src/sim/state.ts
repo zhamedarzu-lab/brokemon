@@ -111,7 +111,15 @@ export interface GameState {
 
   businessOwned: boolean;
   mayor: boolean;
+  /** The building on St Giles Row. Brokedale's apex. */
+  blockOwned: boolean;
   won: boolean;
+  /**
+   * Which apexes you have reached. `won` stays as "at all", because a hundred
+   * places ask that question and none of them care how; this says which, and
+   * a run can collect both.
+   */
+  endings: Ending[];
   /**
    * Persisted flag: true once the victory screen has been shown and
    * acknowledged. Distinct from `won` so that a save written right after
@@ -190,7 +198,9 @@ export function createState(seed = Date.now() >>> 0): GameState {
 
     businessOwned: false,
     mayor: false,
+    blockOwned: false,
     won: false,
+    endings: [],
     victoryAcknowledged: false,
 
     busPassDaysLeft: 0,
@@ -268,7 +278,7 @@ export function phaseOf(s: GameState): Phase {
   // Your standing is set by the best door you hold, in any town — you do not
   // drop back to phase 1 by taking the coach somewhere you have no room.
   const home = bestHousing(s);
-  if (home === "estate" || s.mayor || s.businessOwned) return 4;
+  if (home === "estate" || s.mayor || s.businessOwned || s.blockOwned) return 4;
   // A let of your own plus a career. The apartment used to be the only door
   // to phase 3, which was fine while Brokemon was the only town — a Brokedale
   // depot manager on St Giles Row would otherwise have topped out at phase 2
@@ -457,10 +467,35 @@ const POST_WIN_GOAL = 10_000;
  * Sets the post-win net-worth challenge atomically, skipping it if the player
  * is already above the threshold.
  */
-export function setWon(s: GameState): void {
+/**
+ * The two ways a run can end, and they are meant to mean opposite things.
+ *
+ * The estate is getting *out*: a view of the town that moved you on. The block
+ * is staying, and owning the door you first paid rent through. A game about
+ * housing precarity where one ending is becoming the landlord ought to be
+ * uncomfortable, and this is where that lands.
+ */
+export type Ending = "estate" | "block";
+
+export const ENDING_NAMES: Record<Ending, string> = {
+  estate: "The estate on the hill",
+  block: "The block on St Giles Row",
+};
+
+/**
+ * Mark an apex reached. Safe to call repeatedly — each ending lands once, and
+ * a run that collects both keeps them both.
+ */
+export function setWon(s: GameState, ending: Ending): void {
+  if (s.endings.includes(ending)) return;
+  s.endings.push(ending);
+  pushLog(
+    s,
+    ending === "estate" ? "You made it all the way out." : "The building is yours. You still live in it.",
+    "good",
+  );
   if (s.won) return;
   s.won = true;
-  pushLog(s, "You made it all the way out.", "good");
   const nw = netWorth(s);
   if (nw < POST_WIN_GOAL) {
     s.postWinGoal = POST_WIN_GOAL;

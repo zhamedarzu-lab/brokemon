@@ -180,7 +180,7 @@ describe("setWon", () => {
     s.businessOwned = true;
     s.cash = 100;
     s.debt = 0;
-    setWon(s);
+    setWon(s, "estate");
     expect(s.won).toBe(true);
     expect(s.postWinGoal).toBeGreaterThan(0);
   });
@@ -191,7 +191,7 @@ describe("setWon", () => {
     s.businessOwned = true;
     s.bank = 50_000;
     s.debt = 0;
-    setWon(s);
+    setWon(s, "estate");
     expect(s.won).toBe(true);
     expect(s.postWinGoal).toBe(0);
   });
@@ -202,10 +202,10 @@ describe("setWon", () => {
     s.businessOwned = true;
     s.cash = 100;
     s.debt = 0;
-    setWon(s);
+    setWon(s, "estate");
     const goal = s.postWinGoal;
     const logLen = s.log.length;
-    setWon(s);
+    setWon(s, "estate");
     expect(s.postWinGoal).toBe(goal);
     expect(s.log.length).toBe(logLen);
   });
@@ -214,7 +214,7 @@ describe("setWon", () => {
     const s = createState(1);
     setHousing(s, "estate");
     s.businessOwned = true;
-    setWon(s);
+    setWon(s, "estate");
     expect(s.victoryAcknowledged).toBe(false);
   });
 });

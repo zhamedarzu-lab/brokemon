@@ -1006,10 +1006,11 @@ function brokedaleDay(p: Player): void {
   let worked: boolean;
   if (job) {
     const d = EMPLOYMENT[job];
+    // Wash, and eat only what is already in your bag. Queuing at the night
+    // market first cost forty-five minutes and made the bot chronically late:
+    // it worked every day, was written up every day, and was fired and
+    // demoted back to picker every fifth day for three hundred days.
     wash(p, Math.max(50, (d.requires.hygiene ?? 0) + 20));
-    // Eat before the shift, not after it. The low-water mark that matters is
-    // the one during the eight hours, and it was pinned at zero all fortnight.
-    buyFood(p);
     p.eat();
     p.goto("depot");
     if (shiftWindow(s, job) === "early") p.waitUntil(d.shiftStart);
@@ -1047,6 +1048,14 @@ function brokedaleDay(p: Player): void {
     beg(p, 3);
   }
 
+  // The block, the moment Aldiss will hear it. Everything above this line is
+  // how you get to be somebody he will sell to.
+  if (!s.blockOwned && housingIn(s) === "room" && s.cash + s.bank >= 28_000) {
+    p.goto("weeklyRooms");
+    if (p.took(p.press(), "Aldiss")) p.note("BOUGHT THE BLOCK");
+  }
+  bankBrokedale(p);
+
   buyFood(p);
   drink(p);
   p.eat();
@@ -1054,6 +1063,21 @@ function brokedaleDay(p: Player): void {
   sleep(p);
 
   p.days.push(dayLog(p, day, cashStart, worked, notesBefore));
+}
+
+/**
+ * Brokedale has no bank. Money you are saving for the building has to be
+ * carried, or banked on a class trip — another seam where the two towns need
+ * each other, and one the rig has to model or the block is unreachable.
+ */
+function bankBrokedale(p: Player): void {
+  const s = p.s;
+  if (s.player.town !== "brokemon") return;
+  if (s.cash < 400 || !withinHours(s.time, 9, 17)) return;
+  p.goto("bank");
+  const b = p.press();
+  if (s.debt > 0 && p.can(b, "pay down")) p.drive(b, "pay down the debt");
+  else if (p.can(b, "deposit")) p.drive(b, "deposit amount");
 }
 
 /** How many credits the next rung of the depot ladder is waiting on. */
@@ -1136,7 +1160,12 @@ function brokedaleReport(seed: number, days: number): void {
 
   for (let d = 0; d < days; d++) {
     brokedaleDay(p);
+    if (s.blockOwned) {
+      console.log(`  day ${dayOf(s.time)}: BOUGHT THE BLOCK`);
+      break;
+    }
     const l = p.days[p.days.length - 1]!;
+    if (p.days.length > 30 && l.notes.length === 0) continue;
     console.log(
       `  ${String(l.day).padStart(3)} ${String("$" + fmt(s.cash + s.bank)).padStart(7)}` +
         ` ${String(Math.round(l.walkMinutes)).padStart(4)}${String(Math.round(l.workMinutes)).padStart(5)}  |` +
@@ -1273,7 +1302,7 @@ const DEFAULT_SEEDS = [2026, 7, 11, 99, 3, 42, 77, 500, 1234, 8888];
 if (args.includes("--crossing")) {
   for (const seed of seeds.length ? seeds : [2026]) crossingReport(seed);
 } else if (args.includes("--brokedale")) {
-  for (const seed of seeds.length ? seeds : [2026, 7]) brokedaleReport(seed, 21);
+  for (const seed of seeds.length ? seeds : [2026, 7]) brokedaleReport(seed, 400);
 } else {
   const runs = seeds.length ? seeds : DEFAULT_SEEDS;
   const lengths = runs.map((seed) => report(seed, 400));

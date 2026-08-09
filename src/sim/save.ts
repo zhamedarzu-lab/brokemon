@@ -44,6 +44,14 @@ export function loadGame(): GameState | null {
     merged.nightsPaid = spreadToTowns(parsed.nightsPaid, fresh.nightsPaid, 0, STARTING_TOWN);
     merged.reputation = spreadToTowns(parsed.reputation, fresh.reputation, 0, STARTING_TOWN);
 
+    // A save from before there were two apexes knows it won but not how. It
+    // was the estate — there was nothing else to win.
+    //
+    // Test `parsed`, not `merged`: the fresh state supplies an empty array, so
+    // a guard on the merged value is always satisfied and never fires. That is
+    // the shallow-merge trap for the third time in this file.
+    if (!Array.isArray(parsed.endings)) merged.endings = merged.won ? ["estate"] : [];
+
     // Migration: old saves with a bus pass but no counter get a fresh 7-day term.
     if (countOf(merged.inventory, "busPass") > 0 && merged.busPassDaysLeft === 0) {
       merged.busPassDaysLeft = 7;

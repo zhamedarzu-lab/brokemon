@@ -682,7 +682,7 @@ const estate: Venue = (ctx) => {
               s.peakPhase = 4;
               s.meters.morale = 100;
               pushLog(s, "Bought the estate on the hill.", "good");
-              if (s.businessOwned || s.mayor) setWon(s);
+              if (s.businessOwned || s.mayor) setWon(s, "estate");
               return menu(
                 "The estate",
                 [
@@ -943,7 +943,7 @@ const corporatePlaza: Venue = (ctx) => {
               changeReputation(s, 15);
               s.peakPhase = 4;
               pushLog(s, "Bought the Mart franchise.", "good");
-              if (housingIn(s) === "estate") setWon(s);
+              if (housingIn(s, "brokemon") === "estate") setWon(s, "estate");
               return menu(
                 "Silph Regional",
                 [
@@ -1092,7 +1092,7 @@ function runForMayor(ctx: ActionCtx): Prompt {
   s.peakPhase = 4;
   changeReputation(s, 20);
   pushLog(s, "Elected mayor of Brokemon Town.", "good");
-  if (housingIn(s) === "estate") setWon(s);
+  if (housingIn(s, "brokemon") === "estate") setWon(s, "estate");
   return menu(
     "Election night",
     [
@@ -1453,8 +1453,10 @@ const weeklyRooms: Venue = (ctx) => {
 
   if (housingIn(s) === "room") {
     return menu(
-      "Your room",
-      [def.desc, `Rent of $${def.rent} is due on day ${s.rentDueDay[s.player.town]}.`],
+      s.blockOwned ? "Your building" : "Your room",
+      s.blockOwned
+        ? [def.desc, "The rent from the other eleven doors comes to you now."]
+        : [def.desc, `Rent of $${def.rent} is due on day ${s.rentDueDay[s.player.town]}.`],
       [
         { label: "Sleep until morning", run: () => sleep(ctx, "room", 7) },
         {
@@ -1466,6 +1468,7 @@ const weeklyRooms: Venue = (ctx) => {
             return menu("Your room", ["Cold tap, one flannel. It is not a wash and you know it."], [BACK]);
           },
         },
+        blockChoice(ctx),
         BACK,
       ],
     );
@@ -1491,6 +1494,9 @@ const weeklyRooms: Venue = (ctx) => {
               s.cash -= fromCash;
               s.bank -= deposit - fromCash;
               setHousing(s, "room");
+              // Remembered for good. The block is only for sale to somebody
+              // who has paid rent through that door.
+              s.flags.livedOnStGiles = 1;
               s.rentDueDay[s.player.town] = Math.floor(s.time / 1440) + 1 + def.rentEvery;
               s.meters.morale = Math.min(100, s.meters.morale + 20);
               changeReputation(s, 4);
@@ -1511,6 +1517,83 @@ const weeklyRooms: Venue = (ctx) => {
     ],
   );
 };
+
+/* ------------------------------------------------- Brokedale: the block */
+
+export const BLOCK_PRICE = 28000;
+/** What the landlord wants to know about you, which is not your credit score. */
+export const BLOCK_REPUTATION = 40;
+
+/**
+ * The other apex.
+ *
+ * The estate is getting out — a view of the town that moved you on. This is
+ * staying, and owning the door you first paid rent through. Aldiss is
+ * seventy-one and has nobody, and he will not sell to a company, and he does
+ * not run anyone's credit; he sells to somebody he knows, which is why the
+ * gate here is reputation and cash rather than a score.
+ *
+ * It costs less than the estate because Brokedale's ladder pays less. What it
+ * costs instead is that you become the person collecting.
+ */
+function blockChoice(ctx: ActionCtx): Choice {
+  const s = ctx.state;
+  if (s.blockOwned) {
+    return {
+      label: "Look at the rent book",
+      run: () =>
+        say("Your building", [
+          "Eleven doors, nine of them paying, and two you have not had the conversation about yet.",
+          "The man who used to knock for Aldiss knocks for you. He is perfectly pleasant about it.",
+        ]),
+    };
+  }
+
+  const funds = s.cash + s.bank + s.investments;
+  const reasons: string[] = [];
+  if (!s.flags.livedOnStGiles) reasons.push("he does not sell to people who have not lived in it");
+  if (funds < BLOCK_PRICE) {
+    reasons.push(`he wants $${BLOCK_PRICE.toLocaleString()} and you have $${funds.toLocaleString()}`);
+  }
+  if (reputationIn(s, "brokedale") < BLOCK_REPUTATION) {
+    reasons.push(`he sells to people he knows (your name is worth ${reputationIn(s, "brokedale")} here, he wants ${BLOCK_REPUTATION})`);
+  }
+
+  if (reasons.length > 0) return lockedChoice("Ask Aldiss what he wants for the building", reasons, `$${BLOCK_PRICE.toLocaleString()}`);
+
+  return {
+    label: "Ask Aldiss what he wants for the building",
+    hint: `$${BLOCK_PRICE.toLocaleString()}`,
+    run: () => {
+      let owed = BLOCK_PRICE;
+      const fromCash = Math.min(s.cash, owed);
+      s.cash -= fromCash;
+      owed -= fromCash;
+      const fromBank = Math.min(s.bank, owed);
+      s.bank -= fromBank;
+      owed -= fromBank;
+      s.investments -= owed;
+
+      s.blockOwned = true;
+      s.peakPhase = 4;
+      s.meters.morale = 100;
+      changeReputation(s, 10, "brokedale");
+      pushLog(s, "You bought the building on St Giles Row.", "good");
+      setWon(s, "block");
+      return menu(
+        "St Giles Row",
+        [
+          "He does it at the table in the corner shop with a solicitor who is his nephew.",
+          "You get twelve keys on a ring, a folder of certificates, and a list of who is behind and by how much.",
+          "",
+          "Your own name is on the list. Somebody has written PAID beside it in a different pen.",
+        ],
+        [BACK],
+        "good",
+      );
+    },
+  };
+}
 
 /* -------------------------------------------------- Brokedale: washhouse */
 

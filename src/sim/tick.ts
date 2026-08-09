@@ -1,5 +1,5 @@
 import { isOutdoors, townById, TOWNS, zoneAt, type Town, type TownId, type Zone } from "../world/map";
-import { bestHousing, housingIn, reputationIn, setHousing, townOf } from "./state";
+import { housingIn, reputationIn, setHousing, townOf, type Ending } from "./state";
 import { changeReputation, checkPostWinGoal, hasItem, phaseOf, pushLog, setWon, type GameState, type Phase } from "./state";
 import { decay, WARN_THRESHOLDS, type MeterId } from "./meters";
 import { dayOf, minuteOfDay, MINUTES_PER_DAY } from "./time";
@@ -22,7 +22,7 @@ export type Interrupt =
   | { kind: "newDay"; day: number }
   | { kind: "income"; lines: string[] }
   | { kind: "weather"; text: string }
-  | { kind: "victory" };
+  | { kind: "victory"; ending: Ending };
 
 export interface TickOptions {
   /** In-game minutes to advance. */
@@ -194,10 +194,15 @@ function onNewDay(s: GameState, rng: Rng, day: number, out: Interrupt[]): void {
   // save that already meets conditions).
   // `bestHousing`, not the town you happen to be standing in — you do not stop
   // owning the estate by being forty minutes up the road when the day turns.
-  if (bestHousing(s) === "estate" && (s.businessOwned || s.mayor)) {
-    const wasWon = s.won;
-    setWon(s);
-    if (!wasWon && s.won) out.push({ kind: "victory" });
+  if (housingIn(s, "brokemon") === "estate" && (s.businessOwned || s.mayor)) {
+    const had = s.endings.length;
+    setWon(s, "estate");
+    if (s.endings.length > had) out.push({ kind: "victory", ending: "estate" });
+  }
+  if (s.blockOwned) {
+    const had = s.endings.length;
+    setWon(s, "block");
+    if (s.endings.length > had) out.push({ kind: "victory", ending: "block" });
   }
 
   // Post-win goal progress (also checked in earnCash and payPassiveIncome;
@@ -226,6 +231,11 @@ function payPassiveIncome(s: GameState, out: Interrupt[]): void {
     s.bank += MAYOR_SALARY;
     lines.push(`Your mayoral salary landed: $${MAYOR_SALARY}.`);
   }
+  if (s.blockOwned) {
+    // Eleven doors, and it arrives whether or not anybody could spare it.
+    s.bank += BLOCK_RENT_ROLL;
+    lines.push(`Rents on St Giles Row: $${BLOCK_RENT_ROLL}. Nine of the eleven paid on time.`);
+  }
   if (lines.length === 0) return;
   pushLog(s, lines.join(" "), "money");
   out.push({ kind: "income", lines });
@@ -234,6 +244,9 @@ function payPassiveIncome(s: GameState, out: Interrupt[]): void {
 }
 
 export const MAYOR_SALARY = 320;
+
+/** What eleven doors on St Giles Row bring in overnight. */
+export const BLOCK_RENT_ROLL = 245;
 
 /**
  * Rent, in every town you hold a key to.
@@ -249,6 +262,8 @@ function chargeRent(s: GameState, day: number, out: Interrupt[]): void {
 }
 
 function chargeRentIn(s: GameState, town: TownId, day: number, out: Interrupt[]): void {
+  // You do not pay rent to yourself.
+  if (town === "brokedale" && s.blockOwned) return;
   const def = HOUSING[housingIn(s, town)];
   if (def.rentEvery <= 0 || def.rent <= 0) return;
   if (day < s.rentDueDay[town]) return;

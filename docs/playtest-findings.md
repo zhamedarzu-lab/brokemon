@@ -57,6 +57,7 @@ All in `4b44b36`.
 | 25 | The hire roll judged your looks even for jobs that do not | `0.25 + (look - (requires.appearance ?? 30)) / 60` ran for every job, including the ones with no appearance requirement at all. That put a hidden dress code on the whole Brokedale ladder, which exists precisely so a player who cannot hold appearance 70 has somewhere to go, and made nonsense of the overnight stocker, whose pitch is that nobody sees you. Those hire on reputation and turning up. Brokemon moved 164 → 165 days over ten seeds, inside the noise | `coach` — never asks how you look, at any rung |
 | 26 | The interview asked whether you were tired | Energy and morale belong at the door on the morning of a shift, not at an interview. The rig applied after a six-hour shift and was told it was "too worn out for this right now", twenty days running. `hiringRequirements` strips both. Same family as 13: the check that gets you hired and the check that gets you through the door are not the same question | `coach` — hires you tired |
 | 27 | A 6AM shift could not be clocked into on time | Every bed wakes you at 7. The picker was hired, written up for lateness three times, fired and rehired six times in three weeks before anyone noticed the start time was an hour before the earliest possible wake | `coach` — can be clocked into from a bed that wakes you at seven |
+| 28 | Brokemon's whole encounter pool fired in Brokedale | The weight functions only ever saw a zone, so once Brokedale had districts of its own every Brokemon event fell through their ternaries: sixteen distinct ones on a measured run, including a bin lorry on Route 1 and the lads outside the chip shop, forty minutes up the road. One pool per town | `coach` — does not borrow Brokemon's |
 | 22 | Stranded in Brokedale was a soft lock | The scope wants stranding "possible, survivable and memorable". Rode out with the fare and nothing else: eight days, never above $9, health on the floor, never got home. Cans were the only earnable thing and there was nowhere to sell them. A scrap yard on the back lot turns two days of bins and begging into the fare home — no collapses, no charity | `map` — gives a penniless arrival some way to earn the fare home |
 | 18 | Coffee had no ceiling | Not a price problem — at $3 for +12 it is dearer per point than a bed. The hole was that nothing capped it: seven cups was $21 and 35 minutes and bought back a night worth $88–680 of shift time, so once employed you could stop sleeping. Each cup now does less than the last, and a night on top of a stack of them is not a proper night | `tick` — cannot replace a night's sleep |
 
@@ -84,7 +85,28 @@ closed by `4b44b36`:
 
 ## Open — ranked by how much they cost the player
 
-### 1. Every career job is worked inside the gated zone
+### 1. The block takes 1.7x as long as the estate
+
+Six seeds run to Brokedale's apex: 168, 238, 274, 289, 296 days, and one still
+sixty days short at 400. The estate lands at 114–284, mean 165. The gap is far
+outside the ~22-day noise floor, so it is real.
+
+It is not the price. **Brokemon compounds and Brokedale does not.** The
+franchise pays $350+ a night whether you get up or not, the mayor draws a
+salary, and the index fund is at the bank — and Brokedale has no bank, no
+franchise and no fund. Every dollar toward the building is earned by turning
+up to a shift.
+
+Options, in order of how much they fit the fiction: the auction house or a
+market stall of your own (both already in the scope, both compounding); a way
+to bank without a day trip; a lower price on the block. The last one is the
+cheapest and the least interesting.
+
+Related: living in Brokedale costs 4–13 collapses a run against Brokemon's 0–3,
+with hunger on the floor most working days. That is "no floor" doing its job,
+but the number is worth a look while the above is being fixed.
+
+### 2. Every career job is worked inside the gated zone
 
 Field Technician, Office Administrator and Regional Director all clock in at the
 Corporate Plaza — which sits at row 10, above the hedge, behind the one security
@@ -102,7 +124,7 @@ Options: a staff badge item that passes the gate; a side/service entrance;
 lowering the gate for anyone with a tier-3 employer; or moving one tier-3 job
 down into Market Square so the tier is not all-or-nothing.
 
-### 2. The mid-game is one day on a loop
+### 3. The mid-game is one day on a loop
 
 From the moment you hold a tier-3 job to the moment you can afford the
 franchise, every day is identical: wake, wash, walk, eight-hour shift, walk,
@@ -113,7 +135,7 @@ Options: weekly events; a rent/bills rhythm that forces decisions; relationships
 or a named NPC with a thread; workplace incidents; something to spend money on
 between $200 and $12,000.
 
-### 3. Walking still dominates the day, and the town just doubled
+### 4. Walking still dominates the day, and the town just doubled
 
 The map went from 48x50 to 72x72 — 2.16x the area. Average walking went from
 90–100 minutes a day to **154–173**, time actually on shift fell, and one seed
@@ -135,7 +157,7 @@ What is left:
 Options: a second free wash in the outskirts; make the bicycle discoverable
 (see below) since it halves every walk; more bus stops.
 
-### 4. Strikes fire for conditions that lapse on their own
+### 5. Strikes fire for conditions that lapse on their own
 
 Grounds Crew wants energy 35 at the door, Overnight Stocker 30. Energy bottoms
 out near zero on most working days. Turning up tired is a disciplinary strike,
@@ -148,7 +170,7 @@ Options: separate "sent home" from "written up"; let a strike decay after a
 clean week; warn at two; or drop energy from the door check and let a tired
 shift just pay less.
 
-### 5. Smaller items
+### 6. Smaller items
 
 - **The trailer is never worth renting.** $70/week is $10/night against the
   hostel's $9, with eviction risk and a rent clock attached. Its real advantages

@@ -1,4 +1,5 @@
-import { zoneAt, type ZoneId } from "../world/map";
+import { zoneAt, type TownId, type ZoneId } from "../world/map";
+import { BROKEDALE_EVENTS } from "./events-brokedale";
 import { addItem } from "./items";
 import { EMPLOYMENT } from "./jobs";
 import { applyDelta } from "./meters";
@@ -7,7 +8,7 @@ import { changeReputation, checkRequirements, currentAppearance, earnCash, phase
 import { hourOf } from "./time";
 import type { ActionCtx } from "./work";
 
-interface EventDef {
+export interface EventDef {
   id: string;
   /** Relative weight, or 0 to exclude. */
   weight(s: GameState, zone: ZoneId): number;
@@ -18,7 +19,7 @@ interface EventDef {
 
 const close: Choice = { label: "Move on" };
 
-const EVENTS: EventDef[] = [
+const BROKEMON_EVENTS: EventDef[] = [
   {
     id: "wallet",
     weight: (s, z) => (z === "slums" ? 1 : 3) * (s.flags.walletDone ? 0.2 : 1),
@@ -3242,12 +3243,28 @@ function recentIds(s: GameState, n: number): string[] {
     .map(([id]) => id);
 }
 
+/**
+ * One pool per town, and no sharing.
+ *
+ * The weight functions only ever saw a zone, so once Brokedale had districts
+ * of its own every Brokemon encounter fell through their ternaries and fired
+ * there: a bin lorry on Route 1, the lads outside the chip shop, and the man
+ * with the guitar case, all in a city forty minutes away. Sixteen of them, on
+ * a measured run.
+ *
+ * A town's encounters are part of what the town *is*, so they live with it.
+ */
+const POOLS: Record<TownId, EventDef[]> = {
+  brokemon: BROKEMON_EVENTS,
+  brokedale: BROKEDALE_EVENTS,
+};
+
 export function rollEvent(ctx: ActionCtx): Prompt | null {
   const s = ctx.state;
   const zone = zoneAt(townOf(s), s.player.pos.y).id;
   const fired: Record<string, number> = s.flags;
 
-  const available = EVENTS.filter((e) => !(e.once && fired[`ev:${e.id}`]));
+  const available = POOLS[s.player.town].filter((e) => !(e.once && fired[`ev:${e.id}`]));
   const barred = new Set(recentIds(s, NO_REPEAT_WINDOW));
 
   const weigh = (pool: EventDef[]) =>

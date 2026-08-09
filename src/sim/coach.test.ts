@@ -18,8 +18,10 @@ import { loadGame, saveGame } from "./save";
 import { ITEMS } from "./items";
 import { EMPLOYMENT, employmentIn } from "./jobs";
 import { HOUSING } from "./social";
-import { createState, housingIn, phaseOf, reputationIn, type GameState } from "./state";
-import { advance } from "./tick";
+import { createState, housingIn, phaseOf, reputationIn, setWon, type GameState } from "./state";
+import { advance, BLOCK_RENT_ROLL } from "./tick";
+import { rollEvent } from "./events";
+import { BLOCK_PRICE, BLOCK_REPUTATION } from "./venues";
 import { minuteOfDay } from "./time";
 import { type ActionCtx } from "./work";
 
@@ -521,5 +523,129 @@ describe("the depot ladder", () => {
     p.s.housing.brokedale = "room";
     p.s.employment = "dispatcher";
     expect(phaseOf(p.s)).toBe(3);
+  });
+});
+
+/* -------------------------------------------------------- the other apex */
+
+describe("the block on St Giles Row", () => {
+  function moveIn(p: Player): void {
+    p.s.cash = HOUSING.room.rent * 2;
+    p.goto("weeklyRooms");
+    p.drive(p.press(), "take it");
+  }
+
+  it("is not for sale to somebody who has never lived in it", () => {
+    const p = new Player();
+    p.rideOut(9);
+    p.s.cash = 60_000;
+    p.s.reputation.brokedale = 90;
+    p.goto("weeklyRooms");
+    expect(p.took(p.press(), "Aldiss")).toBe(false);
+  });
+
+  it("is not for sale to somebody he does not know, however rich", () => {
+    const p = new Player();
+    p.rideOut(9);
+    moveIn(p);
+    p.s.cash = 60_000;
+    p.s.reputation.brokedale = BLOCK_REPUTATION - 1;
+    const room = p.press();
+    expect(p.took(room, "Aldiss")).toBe(false);
+    expect(p.lockReason(room, "Aldiss")).toMatch(/knows/i);
+  });
+
+  it("takes the money, ends the run, and stops charging you rent", () => {
+    const p = new Player();
+    p.rideOut(9);
+    moveIn(p);
+    p.s.bank = BLOCK_PRICE;
+    p.s.reputation.brokedale = BLOCK_REPUTATION;
+
+    expect(p.took(p.press(), "Aldiss")).toBe(true);
+    expect(p.s.blockOwned).toBe(true);
+    expect(p.s.endings).toContain("block");
+    expect(p.s.won).toBe(true);
+    expect(phaseOf(p.s)).toBe(4);
+    expect(p.s.bank).toBe(0);
+
+    // A week passes: rents arrive, and none of it is yours to pay.
+    const before = p.s.bank;
+    for (let i = 0; i < 7; i++) p.ctx.advance(24 * 60, { sheltered: true, asleep: true });
+    expect(p.s.bank).toBeGreaterThan(before + BLOCK_RENT_ROLL * 6);
+    expect(p.s.log.some((l) => /Rent taken/.test(l.text) && /Brokedale/.test(l.text))).toBe(false);
+  });
+
+  it("is a different ending from the estate, and a run can hold both", () => {
+    const p = new Player();
+    p.s.endings = [];
+    setWon(p.s, "estate");
+    setWon(p.s, "block");
+    setWon(p.s, "block");
+    expect(p.s.endings).toEqual(["estate", "block"]);
+  });
+
+  it("credits a save from before there were two endings to the only one there was", () => {
+    useMemoryStorage();
+    const legacy = JSON.parse(JSON.stringify(createState(2))) as Record<string, any>;
+    legacy.won = true;
+    delete legacy.endings;
+    localStorage.setItem("brokemon.save.v1", JSON.stringify(legacy));
+    expect(loadGame()!.endings).toEqual(["estate"]);
+  });
+});
+
+/* ---------------------------------------------------------- encounters */
+
+describe("Brokedale's encounters", () => {
+  /** Every distinct encounter that fires standing in one district all day. */
+  function pool(y: number, seed = 3): Set<string> {
+    const p = new Player(seed);
+    p.rideOut(9);
+    p.s.player.pos = { x: 19, y };
+    p.s.cash = 300;
+    const seen = new Set<string>();
+    for (let i = 0; i < 400; i++) {
+      p.s.time += 190;
+      p.s.inventory.phone = 1;
+      p.s.meters.hygiene = 30;
+      const prompt = rollEvent(p.ctx);
+      if (prompt) seen.add(prompt.title);
+    }
+    return seen;
+  }
+
+  it("does not borrow Brokemon's", () => {
+    // The weight functions only ever saw a zone. Once Brokedale had districts
+    // of its own, sixteen Brokemon encounters fell through their ternaries and
+    // fired there — a bin lorry on Route 1, the lads outside the chip shop.
+    const here = pool(4);
+    expect(here.size).toBeGreaterThan(2);
+    for (const title of here) {
+      expect(title, `${title} is a Brokemon encounter`).not.toMatch(/bin lorry|chip shop|Route 1/i);
+    }
+  });
+
+  it("gives each district something of its own", () => {
+    const districts = [4, 15, 30, 36].map((y) => pool(y));
+    for (const [i, set] of districts.entries()) {
+      expect(set.size, `district ${i} has nothing to run into`).toBeGreaterThan(2);
+    }
+    // And they are not the same four everywhere.
+    const [terminal, blocks] = districts;
+    const shared = [...terminal!].filter((t) => blocks!.has(t));
+    expect(shared.length, "the terminal and the blocks feel identical").toBeLessThan(terminal!.size - 1);
+  });
+
+  it("leaves Brokemon's own pool alone", () => {
+    const p = new Player(9);
+    p.goto("busStop");
+    const seen = new Set<string>();
+    for (let i = 0; i < 300; i++) {
+      p.s.time += 190;
+      const prompt = rollEvent(p.ctx);
+      if (prompt) seen.add(prompt.title);
+    }
+    expect(seen.size).toBeGreaterThan(20);
   });
 });

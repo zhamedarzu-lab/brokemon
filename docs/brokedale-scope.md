@@ -295,10 +295,51 @@ university, hospital, auction house, the $200–$12,000 gap — is open.
 Still to come from section 7: the university, the hospital, the auction house,
 the night bus, and something to spend money on between $200 and $12,000.
 
-### Phase 3 — encounters, threads, and the second apex
+### Phase 3 — encounters and the second apex ✅ MOSTLY DONE
 
-Its own event pool weighted by district, at least one named thread, and the
-block ending.
+**Its own encounters.** Fourteen, in `sim/events-brokedale.ts`, weighted by
+district: the tout at the barriers and the last coach in at the Terminal
+Quarter, the woman on the landing and the night market at two in The Blocks, a
+clipboard and a lanyard on the High Street, the river at night in Riverside.
+Written against the one thing true of everywhere in this city — nothing is
+free, including being left alone — so the generosity that does turn up comes
+from people with no more than you have.
+
+This closed a leak that shipped in Phase 1 and nobody had looked for: the
+weight functions only ever saw a *zone*, so once Brokedale had districts of its
+own, **sixteen Brokemon encounters fell through their ternaries and fired
+there** — a bin lorry on Route 1, the lads outside the chip shop, all forty
+minutes up the road. One pool per town now, with a test.
+
+**The block.** $28,000, and Aldiss will not sell to you unless you have paid
+rent through that door and your name is worth 40 in Brokedale. He is
+seventy-one and has nobody and does not run anyone' credit; he sells to
+somebody he knows. Owning it stops your rent and pays you $245 a night from the
+other eleven doors, and the closing screen is the estate's from the other
+side: you did not get out, you got the keys, and somebody else is where you
+were.
+
+`won` now records *which* endings, a run can collect both, and a save from
+before there were two is credited to the estate — the third time the shallow
+merge in `loadGame` has needed a guard on `parsed` rather than `merged`, and
+the first time a test caught it before it shipped.
+
+**Measured, and this is the open question.** Six seeds run to the block:
+168, 238, 274, 289, 296 days, and one still sixty days short at 400. Against
+the estate's 114–284 (mean 165), **the block takes roughly 1.7x as long** — well
+outside the ~22-day noise floor, so it is a real difference and not a seed.
+
+The cause is structural rather than a price being wrong: Brokemon compounds and
+Brokedale does not. The franchise pays $350+ a night whether you get up or not,
+the mayor draws a salary, the index fund is at the bank — and Brokedale has no
+bank, no franchise and no fund. Every dollar toward the building is earned by
+turning up. That inverts what the ladder was written to say, which was that the
+estate is the longer road. **Phase 4 should fix it in the fiction rather than by
+nudging the price** — the auction house and the market stall in section 7 are
+both compounding, and both already belong to the city.
+
+Still open from the phase: a named thread. `bd_collector` plants Aldiss and
+`bd_askedWhoOwns` records that you asked, which is the hook for one.
 
 ### Phase 4 — balance
 

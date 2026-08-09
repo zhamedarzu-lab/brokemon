@@ -9,7 +9,7 @@ import { menu, say, type Prompt } from "./sim/prompt";
 import { EMPLOYMENT } from "./sim/jobs";
 import { Rng } from "./sim/rng";
 import { clearSave, hasSave, loadGame, saveGame } from "./sim/save";
-import { createState, netWorth, pushLog, reputationIn, reputationLabel, townOf, type GameState } from "./sim/state";
+import { createState, netWorth, pushLog, reputationIn, reputationLabel, townOf, type Ending, type GameState } from "./sim/state";
 import { advance, escortDestination, policeCheck, type Interrupt, type TickOptions } from "./sim/tick";
 import { MS_PER_MINUTE } from "./sim/time";
 import { cap, consume, type ActionCtx } from "./sim/work";
@@ -113,7 +113,8 @@ class Game {
     if (this.state.won && !this.wonAcknowledged) {
       this.wonAcknowledged = true;
       this.state.victoryAcknowledged = true; // persist so reload doesn't re-show
-      const victory = interruptPrompt({ kind: "victory" }, this.actionCtx());
+      const ending = this.state.endings[this.state.endings.length - 1] ?? "estate";
+      const victory = interruptPrompt({ kind: "victory", ending }, this.actionCtx());
       if (victory) this.queue.unshift(victory);
     }
     const next = this.queue.shift();
@@ -406,33 +407,60 @@ function interruptPrompt(i: Interrupt, ctx: ActionCtx): Prompt | null {
       );
 
     case "victory":
-      return victoryPrompt(ctx.state);
+      return victoryPrompt(ctx.state, i.ending);
   }
 }
 
-function victoryPrompt(s: GameState): Prompt {
+/**
+ * Two endings, and they are supposed to sit differently.
+ *
+ * The estate closes with the bench you slept on, seen from a long way up. The
+ * block closes with the same fact from the other side: you did not get out,
+ * you got the keys, and somebody else is where you were. Neither is presented
+ * as the correct one.
+ */
+function victoryPrompt(s: GameState, ending: Ending): Prompt {
   const day = s.daysSurvived;
   const nw = netWorth(s);
-  const rep = reputationLabel(reputationIn(s));
-  const how = s.mayor && s.businessOwned
-    ? "franchise owner and mayor"
-    : s.mayor
-      ? "mayor of Brokemon Town"
-      : "franchise owner";
+  const both = s.endings.length > 1;
+
+  const how =
+    ending === "block"
+      ? "Landlord, St Giles Row"
+      : s.mayor && s.businessOwned
+        ? "Franchise owner and mayor"
+        : s.mayor
+          ? "Mayor of Brokemon Town"
+          : "Franchise owner";
+
+  const closing =
+    ending === "block"
+      ? [
+          "You keep the fourth-floor room. You could take any of them and you keep that one.",
+          "Somebody new moves into the back on the second, and pays you on a Friday,",
+          "and you know exactly what the walk to the washhouse costs them.",
+        ]
+      : [
+          "From up here Market Square is about the size of your hand.",
+          "The bench is still there. Somebody is on it.",
+        ];
 
   return menu(
-    "The Apex — You made it",
+    ending === "block" ? "The Block — the door is yours" : "The Apex — you made it out",
     [
-      `Day ${day}. ${how.charAt(0).toUpperCase() + how.slice(1)}.`,
+      `Day ${day}. ${how}.`,
+      `Reputation: ${reputationLabel(reputationIn(s, ending === "block" ? "brokedale" : "brokemon"))}`,
       "",
       `Days on the street: ${day}`,
       `Total earned: $${s.totalEarned.toLocaleString()}`,
       `Times collapsed: ${s.collapses}`,
       `Net worth: $${nw.toLocaleString()}`,
-      `Reputation: ${rep}`,
       "",
-      "The bench is still there. Somebody is on it.",
-      "— Keep playing. New challenge: reach $10,000 net worth.",
+      ...closing,
+      "",
+      both
+        ? "— You have reached both. There is nothing left to buy and you are still here."
+        : "— Keep playing. The other ending is still out there.",
     ],
     [{ label: "Continue" }],
     "good",
