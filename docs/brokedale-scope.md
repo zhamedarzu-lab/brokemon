@@ -3,8 +3,10 @@
 A second place, reachable by coach. Dense, well supplied, and expensive in
 every way that matters.
 
-Phases 0, 0b and 1 are done and merged — the coach runs and Brokedale exists as
-a terminal and one street. Everything from Phase 2 on is still a plan.
+Phases 0, 0b, 1 and 2 are done and merged. The coach runs, Brokedale is four
+districts deep, and it has a career ladder of its own that nobody is judged on
+their clothes for. Phase 3 — the encounters and the second apex — is still a
+plan.
 
 ---
 
