@@ -174,7 +174,7 @@ export function createState(seed = Date.now() >>> 0): GameState {
 
     cash: 3,
     bank: 0,
-    debt: 240,
+    debt: 0,
     credit: 480,
     investments: 0,
     investmentLastDelta: 0,

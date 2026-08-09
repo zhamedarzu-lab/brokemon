@@ -430,9 +430,8 @@ function headInjury(s: GameState, rng: Rng, out: Interrupt[]): Interrupt {
 }
 
 function collapse(s: GameState, rng: Rng, out: Interrupt[]): Interrupt {
-  const cost = Math.min(s.cash, rng.int(30, 90));
-  s.cash -= cost;
-  if (cost < 30) s.debt += 90 - cost;
+  const cost = 0;
+  s.debt += 100;
   s.collapses += 1;
   s.meters.health = 45;
   s.meters.hunger = Math.max(s.meters.hunger, 40);

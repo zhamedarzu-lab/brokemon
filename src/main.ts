@@ -385,7 +385,7 @@ function interruptPrompt(i: Interrupt, ctx: ActionCtx): Prompt | null {
         [
           "You do not remember going down.",
           "A nurse tells you it was dehydration and exhaustion, in that order, and that you were lucky someone called it in.",
-          i.cost > 0 ? `They take $${i.cost} off you on the way out.` : "They write you down as unable to pay. It goes on the tab.",
+          "$100 goes on the debt. They hand you a discharge slip and point you to the door.",
         ],
         [{ label: "Get up" }],
         "bad",
