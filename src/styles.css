@@ -917,20 +917,66 @@ kbd {
 }
 
 /*
- * Portrait: reserve the full control-strip height at the bottom so #app
- * centres the frame in whatever remains, then anchor the pad to bottom: 0.
- * The strip's own safe-area padding already keeps buttons clear of the
- * home indicator — no extra offset needed.
+ * Portrait — two-panel layout, like a vertical Game Boy:
+ *   top panel  : game frame, edge-to-edge, fills the full width
+ *   bottom panel: control strip, fills the remaining screen height
+ *
+ * Taking #touch out of position:fixed and into flex flow eliminates the
+ * dead zone that appeared with the fixed layout. The buttons are centred
+ * vertically inside the control panel so thumbs land naturally.
  */
 @media (pointer: coarse) and (orientation: portrait) {
-  :root {
-    /* dpad: 3 × 62px + 2 × 5px gap = 196px content, plus 12px top padding
-       inside #touch = 208px. safe-area-bottom adds ~34px on iPhone.
-       220px reserve keeps the frame from sitting behind the pad. */
-    --controls: 220px;
+  :root { --controls: 0px; } /* layout handled by flex, not by reservation */
+
+  #app {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    padding: 0;
+    padding-top: env(safe-area-inset-top);
+    height: 100dvh;
   }
+
+  #frame {
+    flex: 0 0 auto;
+    /* fill the full viewport width; height follows aspect-ratio */
+    width: 100%;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  /* Control panel: everything below the frame */
   #touch {
-    bottom: 0;
+    position: static !important;  /* pull out of fixed positioning */
+    flex: 1 1 auto;
+    display: flex !important;
+    align-items: center;           /* vertically centre buttons in the panel */
+    padding: 12px max(14px, env(safe-area-inset-left))
+             max(16px, env(safe-area-inset-bottom))
+             max(14px, env(safe-area-inset-right));
+    background: #0d0d12;
+    border-top: 1px solid var(--line);
+    /* override the opacity transition so overlaid still works */
+    z-index: auto;
+  }
+
+  /* Landscape adjustments to hud-left don't apply in portrait — undo them. */
+  .hud-left {
+    top: auto;
+    bottom: 0.6em;
+  }
+  .toasts {
+    top: 3em;
+  }
+  .hud-bottom {
+    left: auto;
+    right: 0.6em;
+    transform: none;
+    bottom: 0.6em;
+    justify-items: end;
+    text-align: right;
+    max-width: 46%;
   }
 }
 
