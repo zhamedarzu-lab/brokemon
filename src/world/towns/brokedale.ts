@@ -38,7 +38,7 @@ const ROWS = [
   /* 18 */ "W___________________n__________________W",
   /* 19 */ "WrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrW",
   /* 20 */ "Wrrrrrrrrrrrrrr%rrrrrrrrrxrrrrrrrrrrrrrW",
-  /* 21 */ "WrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrW",
+  /* 21 */ "Wrrrrrrrrrrrrrrrrrrrr9rrrrrrrrrrrrrrrrrW",
   /* 22 */ "W,,,,,T,,,,,,,,,,,,,,,,,,,,,,,,,,,,T,,,W",
   /* 23 */ "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
 ];
@@ -47,7 +47,12 @@ export const BROKEDALE: Town = buildTown({
   id: "brokedale",
   name: "Brokedale",
   rows: ROWS,
-  requires: ["coachTerminal", "dossHouse", "nightMarket", "panhandleSpot"],
+  // `recycling` and `panhandleSpot` are Brokemon's glyphs reused: the venues
+  // behind them are generic, and a scrap yard is a scrap yard. They are also
+  // the only two ways to make money here, which is deliberate — the walking
+  // rig showed that without the yard, riding out with the fare and nothing
+  // else was not a bad night, it was a soft lock.
+  requires: ["coachTerminal", "dossHouse", "nightMarket", "panhandleSpot", "recycling"],
   zones: [
     {
       id: "terminal",

@@ -301,6 +301,18 @@ describe("Brokedale", () => {
     expect(sleepableBenches(BROKEDALE)).toHaveLength(0);
   });
 
+  it("gives a penniless arrival some way to earn the fare home", () => {
+    // The walking rig rode out with the fare and nothing else and never got
+    // back: eight days, never above $9, health on the floor. Cans are the only
+    // thing a stranded player can turn into money here, and without somewhere
+    // to sell them, "you can get stranded" stops being a bad night and becomes
+    // a soft lock. Bins, a buyer, and a corner — that is the whole floor, and
+    // it is meant to be exactly this thin.
+    expect(approaches(BROKEDALE, "dumpster").length, "nothing to scavenge").toBeGreaterThan(0);
+    expect(BROKEDALE.markers.recycling, "nowhere to sell what you scavenge").toBeDefined();
+    expect(BROKEDALE.markers.panhandleSpot, "nowhere to ask").toBeDefined();
+  });
+
   it("polices every district — there is no free corner", () => {
     for (const zone of BROKEDALE.zones) {
       expect(zone.fineScale, `${zone.id} lets you camp`).toBeGreaterThan(0);

@@ -50,6 +50,9 @@ All in `4b44b36`.
 | 16 | Test rigs wrote tile coordinates down | The town grew 48x50 → 72x72 and two rigs silently walked to tiles where scenery used to be, reporting healthy runs that never scavenged, drank or slept. `world/landmarks.ts` finds scenery by what it is | `map` — the scenery a phase-1 day needs |
 | 17 | All free water was one lake in downtown | A 52–58 tile round trip from spawn and the hostel, for a meter that empties three times a day. A standpipe in the outskirts took it to 11–18; collapses went to zero and seed 11 came back from 320 days to 187 | `map` — puts free water within reach of the outskirts |
 | 19 | Reputation had no ceiling | It only ever went up, ending runs at 546–723. That put the franchise on $1,000+ a day and `+reputation/200` past certainty on every interview, so the last third of a run had no failure mode. Gains now shrink as your name grows and stop at 100; losses land in full. The franchise gets its own base rather than borrowing one from a runaway number. Runs settle at 68–83 reputation and 138–210 days | `state` — never gets past the ceiling |
+| 20 | Four seeds could not see anything | Run length swings 114–284 days on identical code, sd ≈ 43. Any change smaller than about 22 days is invisible in that spread, and one nearly got tuned on: the encounter roll moving 0.4 → 0.28 looked like it had doubled a run, and across ten seeds it moves the mean by a single day (163 → 164). The rig runs ten seeds by default now and prints the spread with a line saying what is inside the noise | the rig itself — `npm run playtest` |
+| 21 | The rig and the renderer each kept their own copy of the encounter chance | The game moved to 0.28 and the rig stayed on 0.4, so every encounter figure it printed described a game nobody was playing. One `EVENT_CHANCE` in `events.ts`, imported by both | shared constant; the compiler |
+| 22 | Stranded in Brokedale was a soft lock | The scope wants stranding "possible, survivable and memorable". Rode out with the fare and nothing else: eight days, never above $9, health on the floor, never got home. Cans were the only earnable thing and there was nowhere to sell them. A scrap yard on the back lot turns two days of bins and begging into the fare home — no collapses, no charity | `map` — gives a penniless arrival some way to earn the fare home |
 | 18 | Coffee had no ceiling | Not a price problem — at $3 for +12 it is dearer per point than a bed. The hole was that nothing capped it: seven cups was $21 and 35 minutes and bought back a night worth $88–680 of shift time, so once employed you could stop sleeping. Each cup now does less than the last, and a night on top of a stack of them is not a proper night | `tick` — cannot replace a night's sleep |
 
 ### Already done, if a follow-up task says otherwise
@@ -140,20 +143,7 @@ Options: separate "sent home" from "written up"; let a strike decay after a
 clean week; warn at two; or drop energy from the door check and let a tired
 shift just pay less.
 
-### 5. Encounters got rarer and runs got longer
-
-The per-step encounter roll went from 0.4 to 0.28 in the renderer and stayed at
-0.4 in the walking rig — the number was written down twice. It is one constant
-now (`EVENT_CHANCE` in `events.ts`), imported by both, so the rig cannot drift
-from the game it is measuring again.
-
-With the rig telling the truth, the four standard seeds come in at 141, 133,
-284 and 179 days, against 138–210 before. Seed 11 nearly doubling is the item:
-encounters are a meaningful slice of early income and a third of them stopped
-happening. Not tuned here — the change is somebody else's and it may well be
-the right direction — but it should be measured before it is called done.
-
-### 6. Smaller items
+### 5. Smaller items
 
 - **The trailer is never worth renting.** $70/week is $10/night against the
   hostel's $9, with eviction risk and a rent clock attached. Its real advantages
@@ -185,13 +175,30 @@ The teleporting bot in `progression.test.ts` is still the regression net; it is
 fast and deterministic. It cannot find anything that costs time or distance,
 which is what the walking rig is for.
 
-**The rig does not ride the coach yet.** Brokedale exists and is reachable, but
-every route the bot plans is a route around Brokemon, so every number above is a
-number about Brokemon. Its pathfinding takes a town rather than assuming one, so
-the day a routine does leave it will not silently plan against the wrong grid —
-but until Phase 4 teaches it to commute, treat anything it prints about the
-crossing as unmeasured. This is the third time the rigs have been at risk of
-going blind to a map change; the first two are items 16 and 17 above.
+**The rig rides the coach.** `commuteTo` walks to the stand, pays the fare and
+waits on the stand for the departure, and every minute and dollar of it lands in
+the day's log. `goto` deliberately *refuses* to cross towns and records a block
+instead, so a routine naming a place in the wrong town shows up in the blocks
+table rather than quietly riding forty minutes to a dumpster.
+
+`npm run playtest -- --crossing` measures the link on its own:
+
+```
+spawn to the Market Square stand: 27 min on foot
+and out to Brokedale:             73 min (wait included), $6
+back again:                       88 min, $14
+round trip: 250 min of a 1440-minute day, $26 gone
+coach alone: 144 min and $20
+```
+
+**Read that before pricing anything in Brokedale.** A day trip costs a sixth of
+the day and $26 before you have earned a penny, so a job over there has to beat
+a Brokemon shift *plus* 144 minutes and $20 — which it will not. Brokedale is
+somewhere you move to, not somewhere you commute to, and the Phase 2 room
+prices are the real decision, not the wages.
+
+The same command then strands a bot with the fare and nothing else and reports
+whether it gets home. That check found the item 22 soft lock.
 
 The "guarded by" column names the file and the test. To check one item:
 

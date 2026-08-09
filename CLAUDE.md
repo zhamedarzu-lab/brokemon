@@ -30,8 +30,11 @@ Two harnesses, and the difference between them matters:
   and it cannot see anything that costs time or distance.
 - `npm run playtest` (optionally `-- 7 99` for seeds) — `src/sim/playtest.ts`
   drives the same tree with a bot that *walks*: real pathfinding at the real
-  per-tile rate, police checks and encounters on the way. Every balance bug
-  found so far was one the teleporting bot could not see.
+  per-tile rate, police checks and encounters on the way, and the coach when a
+  routine asks for it. Every balance bug found so far was one the teleporting
+  bot could not see.
+- `npm run playtest -- --crossing` — what a Brokedale day trip actually costs,
+  and whether a bot stranded there with nothing can get home.
 
 The playtest prints, per seed: the day each milestone landed, shifts by job,
 minutes per day spent walking versus working, meter low-water marks, and a
@@ -41,6 +44,11 @@ eighty times.
 
 Run the playtest after any change to meters, jobs, prices or venue hours. A
 change can pass all 233 tests and still make the game unwinnable.
+
+**Read the spread line before believing a number.** Run length swings 114–284
+days on identical code, so the last line of the run tells you what is inside the
+noise — currently about 22 days. One seed moving is not a finding. That mistake
+has already been made once, on ten minutes of evidence.
 
 ## Where things live
 
@@ -72,5 +80,8 @@ change can pass all 233 tests and still make the game unwinnable.
   the town you happen to be standing in. Anything charged on the clock — rent
   especially — loops over `TOWNS`, because a landlord does not stop wanting the
   money because you took the coach somewhere else.
-- The walking rig only walks Brokemon. Balance numbers about the crossing do
-  not exist yet; see `docs/brokedale-scope.md` Phase 4.
+- **A Brokedale day trip costs 250 minutes and $26**, of which the coach alone
+  is 144 minutes and $20 (`npm run playtest -- --crossing`). Nothing you can
+  pay someone for a day's work in Brokedale beats a Brokemon shift plus that,
+  so Brokedale is somewhere you move to, not somewhere you commute to. Price
+  the rooms, not the wages.

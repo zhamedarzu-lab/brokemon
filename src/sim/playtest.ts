@@ -13,9 +13,10 @@
 /** Declared rather than typed in: this file runs under vite-node, not the app. */
 declare const process: { argv: string[] };
 
-import { isSolid, markerPos, townById, STARTING_TOWN, type Town, type Vec2 } from "../world/map";
+import { hasMarker, isSolid, markerPos, townById, STARTING_TOWN, type Town, type TownId, type Vec2 } from "../world/map";
 import { approaches, sleepableBenches, type Approach } from "../world/landmarks";
 import { interact } from "./actions";
+import { boardingReasons, rideCoach, serviceFrom } from "./coach";
 import { EVENT_CHANCE, EVENT_STEP_INTERVAL, rollEvent } from "./events";
 import { countOf, type ItemId } from "./items";
 import { EMPLOYMENT, EMPLOYMENT_ORDER, type EmploymentId } from "./jobs";
@@ -33,7 +34,7 @@ import {
   type GameState,
 } from "./state";
 import { advance, policeCheck } from "./tick";
-import { dayOf, formatClock, hourOf, minuteOfDay } from "./time";
+import { dayOf, formatClock, hourOf, minuteOfDay, withinHours } from "./time";
 import { consume, shiftWindow, type ActionCtx } from "./work";
 
 /* --------------------------------------------------------------- walking */
@@ -43,10 +44,11 @@ const BIKE_STEP_MS = 95;
 const MS_PER_MINUTE = 260;
 
 /**
- * The town the day's routines are written against. The bot does not ride the
- * coach yet — that is Phase 4, and until then every route it plans is a route
- * around Brokemon. The pathfinding below takes a town regardless, so the day
- * a routine does leave, it will not silently plan against the wrong grid.
+ * The town a day starts and ends in. The bot can ride the coach — see
+ * `commuteTo` — but it does so because a routine asked, never by accident:
+ * `goto` refuses to leave town and records a block instead. That way a routine
+ * that names a place in the wrong town shows up in the blocks table rather
+ * than quietly spending forty minutes and $6 on a trip to a dumpster.
  */
 const TOWN: Town = townById(STARTING_TOWN);
 
@@ -92,6 +94,9 @@ interface DayLog {
   cashEnd: number;
   walkMinutes: number;
   workMinutes: number;
+  /** Minutes lost to the coach — the wait on the stand as well as the ride. */
+  coachMinutes: number;
+  coachFares: number;
   worked: boolean;
   low: Record<string, number>;
   notes: string[];
@@ -107,6 +112,8 @@ class Player {
   /** Minutes spent walking, per day. */
   walkMinutes = 0;
   workMinutes = 0;
+  coachMinutes = 0;
+  coachFares = 0;
   blocked = new Map<string, number>();
   stepsSinceEvent = 0;
   low = { hunger: 100, thirst: 100, hygiene: 100, energy: 100, morale: 100, health: 100 };
@@ -159,7 +166,7 @@ class Player {
       const before = this.s.player.pos.y;
       this.press();
       if (this.s.player.pos.y === before) {
-        this.blocked.set("heights gate: turned away", (this.blocked.get("heights gate: turned away") ?? 0) + 1);
+        this.blockedBy("heights gate", "turned away");
         return;
       }
     }
@@ -188,8 +195,59 @@ class Player {
     this.s.player.pos = { ...dest };
   }
 
-  goto(marker: string): void {
-    this.walkTo(markerPos(townOf(this.s), marker));
+  /**
+   * Walk to a named place in the town you are standing in.
+   *
+   * Deliberately refuses to cross towns. Making this commute automatically
+   * reads well until the bot rides forty minutes and $6 each way to cash in
+   * four dollars of cans, because `recycling` happens to be a Brokemon marker.
+   * A routine that wants the other town says so.
+   */
+  goto(marker: string): boolean {
+    const town = townOf(this.s);
+    if (!hasMarker(town, marker)) {
+      this.blockedBy(marker, `there is no ${marker} in ${town.name}`);
+      return false;
+    }
+    this.walkTo(markerPos(town, marker));
+    return true;
+  }
+
+  /**
+   * Ride the coach, paying for it the way a player does: walk to the stand,
+   * find the fare, and stand there until the coach comes. The wait is the
+   * expensive part and the part a teleporting bot cannot see.
+   *
+   * One hop, because there are two towns and one direct service each way. A
+   * third town would need routing, and would announce itself here.
+   */
+  commuteTo(town: TownId): boolean {
+    if (this.s.player.town === town) return true;
+
+    const service = serviceFrom(this.s.player.town);
+    if (!service || service.to !== town) {
+      this.blockedBy(`coach to ${town}`, "nothing runs there from here");
+      return false;
+    }
+    if (!this.goto(service.stop)) return false;
+
+    const why = boardingReasons(this.s, service);
+    if (why.length > 0) {
+      this.blockedBy(`coach to ${town}`, why[0]!);
+      return false;
+    }
+
+    const t0 = this.s.time;
+    const cash0 = this.s.cash;
+    rideCoach(this.ctx, service);
+    this.coachMinutes += this.s.time - t0;
+    this.coachFares += cash0 - this.s.cash;
+    return this.s.player.town === town;
+  }
+
+  blockedBy(what: string, why: string): void {
+    const key = `${what}: ${why}`;
+    this.blocked.set(key, (this.blocked.get(key) ?? 0) + 1);
   }
 
   standAt(x: number, y: number, f: Facing): void {
@@ -248,7 +306,7 @@ class Player {
     const c = p?.choices?.find((q) => !q.locked && q.label.toLowerCase().includes(step.toLowerCase()));
     if (!c) {
       const why = this.lockReason(p, step);
-      if (why) this.blocked.set(`${step}: ${why}`, (this.blocked.get(`${step}: ${why}`) ?? 0) + 1);
+      if (why) this.blockedBy(step, why);
     }
     return c;
   }
@@ -290,17 +348,71 @@ class Player {
 
 /* --------------------------------------------------------- day routines */
 
-const FOUNTAINS = approaches(TOWN, "water");
-const DUMPSTERS = approaches(TOWN, "dumpster");
-const LEGAL_BENCHES = sleepableBenches(TOWN);
-
-for (const [what, found] of [["water", FOUNTAINS], ["dumpsters", DUMPSTERS], ["a sleepable bench", LEGAL_BENCHES]] as const) {
-  if (found.length === 0) throw new Error(`${TOWN.name} has no ${what} — the playtest cannot model a phase-1 day without it`);
+/** The unnamed things a day runs on. Found by what they are, per town. */
+interface Scenery {
+  water: Approach[];
+  dumpsters: Approach[];
+  /** Benches in a zone with no camping ordinance. Brokedale has none by design. */
+  benches: Approach[];
 }
 
+const SCENERY = new Map<TownId, Scenery>();
+
+function scenery(town: Town): Scenery {
+  let found = SCENERY.get(town.id);
+  if (!found) {
+    found = {
+      water: approaches(town, "water"),
+      dumpsters: approaches(town, "dumpster"),
+      benches: sleepableBenches(town),
+    };
+    SCENERY.set(town.id, found);
+  }
+  return found;
+}
+
+// Only the starting town has to support a phase-1 day — that is where one
+// happens. Brokedale deliberately has nowhere free to lie down.
+{
+  const home = scenery(TOWN);
+  for (const [what, found] of [["water", home.water], ["dumpsters", home.dumpsters], ["a sleepable bench", home.benches]] as const) {
+    if (found.length === 0) throw new Error(`${TOWN.name} has no ${what} — the playtest cannot model a phase-1 day without it`);
+  }
+}
+
+/**
+ * Where a town lets you wash and sleep. Written down per town because the
+ * answers are genuinely different: Brokemon's shelter is free and Brokedale
+ * has nothing free but a plastic chair in the coach station.
+ */
+interface Amenities {
+  /** A bought bed, and the cash the bot wants in hand before walking there. */
+  bed: { marker: string; take: string[]; need: number } | null;
+  /** The cheapest bed of last resort, if the town has one, and when it is open. */
+  refuge: { marker: string; take: string[]; fromHour: number; toHour: number } | null;
+  wash: { marker: string; take: string[] } | null;
+}
+
+const AMENITIES: Record<TownId, Amenities> = {
+  brokemon: {
+    bed: { marker: "hostel", take: ["pay for a cot", "get up"], need: 12 },
+    refuge: { marker: "communityCenter", take: ["take a bed", "get up"], fromHour: 18, toHour: 8 },
+    wash: { marker: "communityCenter", take: ["wash up"] },
+  },
+  brokedale: {
+    bed: { marker: "dossHouse", take: ["pay for a room", "get up"], need: 18 },
+    // The concourse never shuts, which is the only thing in the city that
+    // doesn't want money off you.
+    refuge: { marker: "coachTerminal", take: ["concourse", "get up"], fromHour: 0, toHour: 24 },
+    wash: { marker: "dossHouse", take: ["use the shower"] },
+  },
+};
+
 function drink(p: Player): void {
+  const water = scenery(townOf(p.s)).water;
+  if (water.length === 0) return;
   for (let i = 0; i < 3 && p.s.meters.thirst < 85; i++) {
-    p.approach(nearest(p, FOUNTAINS));
+    p.approach(nearest(p, water));
     if (!p.took(p.press(), "drink")) break;
   }
 }
@@ -330,16 +442,20 @@ function wash(p: Player, target = 65): void {
     p.goto("trailer");
     if (p.took(p.press(), "wash")) return;
   }
-  p.goto("communityCenter");
-  p.drive(p.press(), "wash up");
+  const here = AMENITIES[p.s.player.town].wash;
+  if (!here) return;
+  p.goto(here.marker);
+  p.drive(p.press(), ...here.take);
 }
 
 function scavenge(p: Player): void {
-  for (const d of DUMPSTERS) {
+  for (const d of scenery(townOf(p.s)).dumpsters) {
     p.approach(d);
     p.drive(p.press(), "close the lid");
   }
-  if (countOf(p.s.inventory, "recyclables") > 0) {
+  // Only worth emptying the bag where there is a depot to empty it into. The
+  // cans keep until you are back in a town that has one.
+  if (countOf(p.s.inventory, "recyclables") > 0 && hasMarker(townOf(p.s), "recycling")) {
     p.goto("recycling");
     p.drive(p.press(), "feed it in");
   }
@@ -549,18 +665,25 @@ function sleep(p: Player): void {
     p.goto(housingIn(s));
     if (p.took(p.press(), "sleep", "get up")) return;
   }
-  if (s.cash >= 12) {
-    p.goto("hostel");
-    if (p.took(p.press(), "pay for a cot", "get up")) return;
+
+  const here = AMENITIES[s.player.town];
+  if (here.bed && s.cash >= here.bed.need) {
+    p.goto(here.bed.marker);
+    if (p.took(p.press(), ...here.bed.take)) return;
   }
-  // The shelter is free but only opens at 6PM.
-  if (hourOf(s.time) >= 18 || hourOf(s.time) < 8) {
-    p.goto("communityCenter");
-    if (p.took(p.press(), "take a bed", "get up")) return;
+  // Brokemon's shelter is free but only opens at 6PM; Brokedale's concourse
+  // never shuts and is barely a bed.
+  if (here.refuge && withinHours(s.time, here.refuge.fromHour, here.refuge.toHour)) {
+    p.goto(here.refuge.marker);
+    if (p.took(p.press(), ...here.refuge.take)) return;
   }
-  // Last resort: a bench in the outskirts, where camping is not an offence.
-  p.approach(nearest(p, LEGAL_BENCHES));
-  if (p.took(p.press(), "sleep here", "get up")) return;
+  // Last resort: a bench somewhere camping is not an offence. There is no such
+  // bench in Brokedale, which is the point of the place.
+  const benches = scenery(townOf(s)).benches;
+  if (benches.length > 0) {
+    p.approach(nearest(p, benches));
+    if (p.took(p.press(), "sleep here", "get up")) return;
+  }
   p.note("NOWHERE TO SLEEP");
   p.ctx.advance(60 * 8, { asleep: true });
 }
@@ -601,10 +724,23 @@ function playDay(p: Player): void {
   const cashStart = s.cash + s.bank + s.investments;
   p.walkMinutes = 0;
   p.workMinutes = 0;
+  p.coachMinutes = 0;
+  p.coachFares = 0;
   p.low = { hunger: 100, thirst: 100, hygiene: 100, energy: 100, morale: 100, health: 100 };
   const notesBefore = p.notes.length;
 
   p.waitUntil(7);
+
+  // Everything below this line is a Brokemon day, because Brokedale has no
+  // work, no food bank and no free wash yet. A bot that woke up over there
+  // gets itself home first, and pays the fare and the wait to do it. When
+  // Phase 2 gives it a reason to stay, the decision goes here.
+  if (s.player.town !== STARTING_TOWN && !p.commuteTo(STARTING_TOWN)) {
+    p.note(`STRANDED in ${townOf(s).name}`);
+    strandedDay(p);
+    p.days.push(dayLog(p, day, cashStart, false, notesBefore));
+    return;
+  }
 
   // Food bank first: free calories, and it is the whole safety net on day one.
   p.goto("communityCenter");
@@ -640,16 +776,60 @@ function playDay(p: Player): void {
   wash(p);
   sleep(p);
 
-  p.days.push({
+  p.days.push(dayLog(p, day, cashStart, worked, notesBefore));
+}
+
+function dayLog(p: Player, day: number, cashStart: number, worked: boolean, notesBefore: number): DayLog {
+  const s = p.s;
+  return {
     day,
     cashStart,
     cashEnd: s.cash + s.bank + s.investments,
     walkMinutes: p.walkMinutes,
     workMinutes: p.workMinutes,
+    coachMinutes: p.coachMinutes,
+    coachFares: p.coachFares,
     worked,
     low: { ...p.low },
     notes: p.notes.slice(notesBefore),
-  });
+  };
+}
+
+/**
+ * A day in a town you cannot afford to leave. Scrape the fare together and
+ * survive the night — this is the shape a stranded player's day has, and the
+ * rig has to be able to live it or "you can get stuck over there" is a claim
+ * nobody has checked.
+ */
+function strandedDay(p: Player): void {
+  const s = p.s;
+  drink(p);
+  p.eat();
+  scavenge(p);
+  buyFood(p);
+  if (hourOf(s.time) < 20) beg(p, 4);
+  p.eat();
+  buyFood(p);
+  drink(p);
+  sleep(p);
+}
+
+/**
+ * Buy something to eat where the town sells it. Brokemon has a food bank and
+ * the Mart; Brokedale has a stall and a price. Without this the bot starved on
+ * a full wallet, which said more about the bot than the city.
+ */
+function buyFood(p: Player): void {
+  const s = p.s;
+  if (s.meters.hunger >= 45) return;
+  if (!hasMarker(townOf(s), "nightMarket")) return;
+  // Leave the fare alone once it is nearly in reach — going hungry one more
+  // night to get out is the trade a stranded player actually makes.
+  const service = serviceFrom(s.player.town);
+  const keep = service && s.cash >= service.fare - 6 ? service.fare : 0;
+  if (s.cash - keep < 6) return;
+  p.goto("nightMarket");
+  if (p.took(p.press(), "noodles")) p.note("ate at the night market");
 }
 
 /* ------------------------------------------------------------------ runs */
@@ -682,7 +862,7 @@ function fmt(n: number): string {
   return n.toLocaleString("en-US", { maximumFractionDigits: 0 });
 }
 
-function report(seed: number, days: number): void {
+function report(seed: number, days: number): number {
   const { p, s, reached, minMorale, maxMorale } = playThrough(seed, days);
 
   console.log(`\n${"=".repeat(72)}\nSEED ${seed} — ${dayOf(s.time)} days\n${"=".repeat(72)}`);
@@ -701,6 +881,16 @@ function report(seed: number, days: number): void {
   const avgWalk = p.days.reduce((a, d) => a + d.walkMinutes, 0) / Math.max(1, p.days.length);
   const avgWork = p.days.reduce((a, d) => a + d.workMinutes, 0) / Math.max(1, p.days.length);
   console.log(`worked ${workedDays}/${p.days.length} days · avg ${avgWalk.toFixed(0)} min walking, ${avgWork.toFixed(0)} min on shift`);
+
+  const coachDays = p.days.filter((d) => d.coachMinutes > 0);
+  if (coachDays.length > 0) {
+    const mins = coachDays.reduce((a, d) => a + d.coachMinutes, 0);
+    const fares = coachDays.reduce((a, d) => a + d.coachFares, 0);
+    console.log(
+      `coach: ${coachDays.length} days travelling · ${fmt(mins)} min and $${fmt(fares)} total ` +
+        `(${(mins / coachDays.length).toFixed(0)} min, $${(fares / coachDays.length).toFixed(0)} a travelling day)`,
+    );
+  }
 
   const top = [...p.blocked.entries()].sort((a, b) => b[1] - a[1]).slice(0, 12);
   if (top.length) {
@@ -731,8 +921,137 @@ function report(seed: number, days: number): void {
   for (const n of p.notes.filter((n) => /BOUGHT|HIRED|SIGNED|RENTED|ELECTED|CLASS |UNREACHABLE/.test(n))) {
     console.log(`  ${n}`);
   }
+
+  return dayOf(s.time);
+}
+
+/* -------------------------------------------------------- the crossing */
+
+/**
+ * What a day trip to Brokedale actually costs, walked rather than assumed.
+ *
+ * There is nothing over there worth going for yet, which is exactly why this
+ * is worth measuring now: Phase 2 is about to price a second economy, and the
+ * fare and the wait are the floor any Brokedale wage has to clear. Run it with
+ * `npm run playtest -- --crossing`.
+ */
+function crossingReport(seed: number): void {
+  const p = new Player(seed);
+  const s = p.s;
+  s.cash = 200;
+  p.waitUntil(8);
+
+  console.log(`\n${"=".repeat(72)}\nTHE CROSSING — seed ${seed}\n${"=".repeat(72)}`);
+
+  const t0 = s.time;
+  const cash0 = s.cash;
+  p.goto("busStop");
+  const atStop = s.time;
+  console.log(`  spawn to the Market Square stand: ${Math.round(atStop - t0)} min on foot`);
+
+  p.commuteTo("brokedale");
+  console.log(`  and out to Brokedale: ${Math.round(s.time - atStop)} min (wait included), $${cash0 - s.cash}`);
+
+  // A round of the errands the city can actually do for you today.
+  const errands = s.time;
+  drink(p);
+  p.goto("nightMarket");
+  p.drive(p.press(), "noodles");
+  p.goto("dossHouse");
+  p.press();
+  console.log(`  a drink, a meal and a look at the rooms: ${Math.round(s.time - errands)} min`);
+
+  const home = s.time;
+  const cashThere = s.cash;
+  p.commuteTo("brokemon");
+  console.log(`  back again: ${Math.round(s.time - home)} min, $${cashThere - s.cash}`);
+
+  console.log(
+    `\n  round trip: ${Math.round(s.time - t0)} min of a ${24 * 60}-minute day, ` +
+      `$${cash0 - s.cash} gone, and you are standing at the bus stop.`,
+  );
+  console.log(`  coach alone: ${Math.round(p.coachMinutes)} min and $${p.coachFares}.`);
+  const blocks = [...p.blocked.entries()];
+  if (blocks.length) {
+    console.log(`  blocked on the way:`);
+    for (const [why, n] of blocks) console.log(`    ${String(n).padStart(3)}x  ${why}`);
+  }
+
+  strandedReport(seed);
+}
+
+/**
+ * Ride out with the fare and nothing else, and see how long it takes to scrape
+ * the way home together. "Getting stranded should be possible, survivable and
+ * memorable" is a design claim in the scope; this is the part that checks the
+ * middle word.
+ */
+function strandedReport(seed: number): void {
+  const p = new Player(seed + 1);
+  const s = p.s;
+  s.cash = 40;
+  p.waitUntil(8);
+  p.goto("busStop");
+  p.commuteTo("brokedale");
+  // Everything but the shirt on your back.
+  s.cash = 0;
+  s.inventory = {};
+
+  console.log(`\n  stranded in Brokedale at ${formatClock(s.time)} with nothing:`);
+
+  const arrived = dayOf(s.time);
+  let home = false;
+  for (let d = 0; d < 8 && !home; d++) {
+    playDay(p);
+    home = s.player.town === STARTING_TOWN;
+    const last = p.days[p.days.length - 1]!;
+    console.log(
+      `    day ${last.day}: $${Math.round(s.cash)} in hand · ` +
+        `low hun ${Math.round(last.low.hunger!)} thi ${Math.round(last.low.thirst!)} hea ${Math.round(last.low.health!)} · ` +
+        `${home ? "got home" : "still there"}`,
+    );
+  }
+  console.log(
+    home
+      ? `  home after ${dayOf(s.time) - arrived} day(s), ${s.collapses} collapse(s).`
+      : `  STILL STRANDED after 8 days — that is a soft lock, not a bad night.`,
+  );
 }
 
 const TRACE_DAYS = 25;
-const seeds = process.argv.slice(2).map(Number).filter((n: number) => !Number.isNaN(n));
-for (const seed of seeds.length ? seeds : [2026, 7, 11, 99]) report(seed, 400);
+const args = process.argv.slice(2);
+const seeds = args.map(Number).filter((n: number) => !Number.isNaN(n));
+
+/**
+ * Ten, not four.
+ *
+ * Run length swings from 114 to 284 days on identical code depending only on
+ * the seed — a standard deviation near 40. Four seeds cannot see a change
+ * smaller than that, and one nearly did real damage: the encounter roll moving
+ * from 0.4 to 0.28 looked like it had doubled a run, and across ten seeds it
+ * moves the mean by a single day. Four seconds of compute is a cheap price for
+ * not tuning the game against noise.
+ */
+const DEFAULT_SEEDS = [2026, 7, 11, 99, 3, 42, 77, 500, 1234, 8888];
+
+if (args.includes("--crossing")) {
+  for (const seed of seeds.length ? seeds : [2026]) crossingReport(seed);
+} else {
+  const runs = seeds.length ? seeds : DEFAULT_SEEDS;
+  const lengths = runs.map((seed) => report(seed, 400));
+  if (lengths.length > 1) summarise(lengths);
+}
+
+/** The line that says whether a change moved anything, or moved one seed. */
+function summarise(lengths: number[]): void {
+  const mean = lengths.reduce((a, b) => a + b, 0) / lengths.length;
+  const sorted = [...lengths].sort((a, b) => a - b);
+  const median = sorted[Math.floor(sorted.length / 2)]!;
+  const sd = Math.sqrt(lengths.reduce((a, b) => a + (b - mean) ** 2, 0) / lengths.length);
+  console.log(`\n${"=".repeat(72)}`);
+  console.log(
+    `ACROSS ${lengths.length} SEEDS — mean ${mean.toFixed(0)} days, median ${median}, ` +
+      `range ${sorted[0]}–${sorted[sorted.length - 1]}, sd ${sd.toFixed(0)}`,
+  );
+  console.log(`Anything smaller than about ${(sd / 2).toFixed(0)} days is inside the noise. Do not tune on it.`);
+}
