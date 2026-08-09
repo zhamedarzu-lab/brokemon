@@ -15,6 +15,7 @@ import { removeItem } from "./items";
  */
 export type Interrupt =
   | { kind: "collapse"; cost: number }
+  | { kind: "headInjury"; cost: number }
   | { kind: "police"; zone: Zone; reason: string; fine: number; escorted: boolean }
   | { kind: "sick" }
   | { kind: "rent"; amount: number; paid: boolean }
@@ -58,6 +59,19 @@ export function advance(s: GameState, rng: Rng, opts: TickOptions): Interrupt[] 
 
     if (outdoors && weather.moralePerHourOutdoors !== 0) {
       s.meters.morale = Math.max(0, s.meters.morale + (weather.moralePerHourOutdoors * step) / 60);
+    }
+
+    // Head injury: riding without a suitable helmet.
+    if (outdoors && !asleep) {
+      const risk = bareheadRisk(s);
+      const injuryDay = s.flags.headInjuryDay ?? -1;
+      if (risk > 0 && injuryDay !== dayOf(s.time) && rng.chance(risk * (step / 60))) {
+        s.flags.headInjuryDay = dayOf(s.time);
+        const inj = headInjury(s, rng, interrupts);
+        interrupts.push(inj);
+        remaining = 0;
+        break;
+      }
     }
 
     // Falling ill: exposure now, fever later.
@@ -319,6 +333,46 @@ function chargeRentIn(s: GameState, town: TownId, day: number, out: Interrupt[])
       pushLog(s, `You've been served notice${where} and the locks are changed. Back to the street.`, "bad");
     }
   }
+}
+
+/**
+ * Per-hour probability of a head injury while riding without a suitable helmet.
+ * Returns 0 when the player has no vehicle or is properly protected.
+ *
+ * Suitable helmet by vehicle:
+ *   rollerSkates / kickScooter — skateHelmet OR cyclingHelmet
+ *   bmxBike                    — skateHelmet OR cyclingHelmet
+ *   foldingBike / bicycle / roadBike — cyclingHelmet only
+ */
+function bareheadRisk(s: GameState): number {
+  const hasSk = hasItem(s, "skateHelmet");
+  const hasCy = hasItem(s, "cyclingHelmet");
+  const inv = s.inventory;
+  if ((inv.rollerSkates ?? 0) > 0 && !hasSk && !hasCy) return 0.006;
+  if ((inv.kickScooter  ?? 0) > 0 && !hasSk && !hasCy) return 0.008;
+  if ((inv.foldingBike  ?? 0) > 0 && !hasCy)           return 0.010;
+  if ((inv.bmxBike      ?? 0) > 0 && !hasSk && !hasCy) return 0.015;
+  if ((inv.bicycle      ?? 0) > 0 && !hasCy)           return 0.012;
+  if ((inv.roadBike     ?? 0) > 0 && !hasCy)           return 0.018;
+  return 0;
+}
+
+function headInjury(s: GameState, rng: Rng, out: Interrupt[]): Interrupt {
+  const cost = Math.min(s.cash, rng.int(60, 140));
+  s.cash -= cost;
+  if (cost < 60) s.debt += 140 - cost;
+  s.meters.health = Math.min(s.meters.health, 32);
+  s.meters.morale = Math.max(0, s.meters.morale - 24);
+  s.sick = true; // concussion counts as sick
+
+  // Skip forward 3 hours (hospital time).
+  const dayBefore = dayOf(s.time);
+  s.time += 180;
+  const dayAfter = dayOf(s.time);
+  for (let d = dayBefore + 1; d <= dayAfter; d++) onNewDay(s, rng, d, out);
+
+  pushLog(s, "You go down hard. You wake up in the emergency room, hours gone.", "bad");
+  return { kind: "headInjury", cost };
 }
 
 function collapse(s: GameState, rng: Rng, out: Interrupt[]): Interrupt {

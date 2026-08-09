@@ -392,6 +392,23 @@ function interruptPrompt(i: Interrupt, ctx: ActionCtx): Prompt | null {
       );
     }
 
+    case "headInjury": {
+      const cc = markerPos(townOf(ctx.state), "communityCenter");
+      ctx.teleport(cc.x, cc.y);
+      return menu(
+        "Emergency Room",
+        [
+          "You don't remember the fall. Just the sound.",
+          "You come round under fluorescent lights with a bag of ice where your head was and a nurse asking if you know what day it is.",
+          i.cost > 0
+            ? `Emergency treatment: $${i.cost}. They hand you a leaflet about helmets on the way out.`
+            : "No cash on you. The bill goes on a ledger somewhere.",
+        ],
+        [{ label: "Get up slowly" }],
+        "bad",
+      );
+    }
+
     case "sick":
       return say(
         "You don't feel right",

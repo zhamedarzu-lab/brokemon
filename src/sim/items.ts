@@ -22,6 +22,8 @@ export type ItemId =
   | "bmxBike"
   | "bicycle"
   | "roadBike"
+  | "skateHelmet"
+  | "cyclingHelmet"
   | "phone"
   | "recyclables"
   | "staffBadge"
@@ -224,6 +226,22 @@ export const ITEMS: Record<ItemId, ItemDef> = {
     name: "Road Bike",
     price: 145,
     desc: "Dropped handlebars, 21 gears, tyres thin as patience. Three times faster than walking.",
+    consumable: false,
+    gear: true,
+  },
+  skateHelmet: {
+    id: "skateHelmet",
+    name: "Skate Helmet",
+    price: 18,
+    desc: "Round shell, thick foam. Covers roller skates, kick scooter, and BMX. Cheaper than one night in the emergency room.",
+    consumable: false,
+    gear: true,
+  },
+  cyclingHelmet: {
+    id: "cyclingHelmet",
+    name: "Cycling Helmet",
+    price: 25,
+    desc: "Ventilated shell, snug fit. Required for any proper bike. Also works on a BMX.",
     consumable: false,
     gear: true,
   },

@@ -2098,6 +2098,29 @@ const bikeShop: Venue = (ctx) => {
   const s = ctx.state;
   const owned = FLEET.find(v => (s.inventory[v.id] ?? 0) > 0) ?? null;
 
+  // ── helmet helper ──────────────────────────────────────────────
+  const addHelmetChoices = (choices: Choice[]) => {
+    const hasSk = hasItem(s, "skateHelmet");
+    const hasCy = hasItem(s, "cyclingHelmet");
+    const mkHelmet = (id: ItemId, label: string, hint: string): Choice => {
+      const price = ITEMS[id]!.price!;
+      return s.cash >= price
+        ? {
+            label: `${label} — $${price}`,
+            hint,
+            run: () => {
+              s.cash -= price;
+              addItem(s.inventory, id);
+              pushLog(s, `${label} on. Cheaper than the emergency room.`, "good");
+              return null;
+            },
+          }
+        : { label: `${label} — $${price}`, hint, locked: `Need $${price - s.cash} more` };
+    };
+    if (!hasSk) choices.push(mkHelmet("skateHelmet",  "Skate helmet",   "skates / scooter / BMX"));
+    if (!hasCy) choices.push(mkHelmet("cyclingHelmet", "Cycling helmet", "all bikes, BMX"));
+  };
+
   // ── owns something ─────────────────────────────────────────────
   if (owned) {
     const ownedName = ITEMS[owned.id]!.name;
@@ -2142,6 +2165,7 @@ const bikeShop: Venue = (ctx) => {
         return null;
       },
     });
+    addHelmetChoices(choices);
     choices.push(BACK);
 
     return menu("Bob's Bikes", [
@@ -2165,6 +2189,7 @@ const bikeShop: Venue = (ctx) => {
         } satisfies Choice
       : { label: `${v.label} — $${price}`, locked: `Need $${price - s.cash} more` } satisfies Choice;
   });
+  addHelmetChoices(choices);
   choices.push(BACK);
 
   return menu("Bob's Bikes", [
