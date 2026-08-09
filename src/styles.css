@@ -97,6 +97,11 @@ body {
   :root {
     --ui: clamp(12px, 2.2cqh, 18px);
   }
+  /* On narrow frames (portrait phone) the h1 at 3.4em + 0.28em letter-spacing
+     overflows. Cap it so it always fits within the frame width. */
+  .title-card h1 {
+    font-size: min(3.4em, 8cqw);
+  }
 }
 
 #screen {
