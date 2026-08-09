@@ -52,7 +52,7 @@ export function advance(s: GameState, rng: Rng, opts: TickOptions): Interrupt[] 
 
     const outdoors = !opts.sheltered && !asleep && isOutdoors(townOf(s), s.player.pos.x, s.player.pos.y);
     const weather = WEATHER[s.weather];
-    const soaked = outdoors && weather.wet && !hasItem(s, "poncho");
+    const soaked = outdoors && weather.wet && !hasItem(s, "poncho") && !hasItem(s, "raincoat") && !hasItem(s, "umbrella");
 
     decay(s.meters, { minutes: step, asleep, exertion, soaked, sick: s.sick });
 

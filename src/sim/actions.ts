@@ -356,6 +356,8 @@ export const DOOR_SIGNS: Record<string, string> = {
   estate: "FOR SALE",
   college: "COLLEGE",
   bank: "BANK",
+  church: "ST. JUDE'S",
+  hospital: "HOSPITAL",
   laundromat: "LAUNDRY",
   recycling: "DEPOT",
   diner: "DINER",

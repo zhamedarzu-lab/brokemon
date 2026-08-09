@@ -11,6 +11,8 @@ export type ItemId =
   | "razor"
   | "medicine"
   | "poncho"
+  | "raincoat"
+  | "umbrella"
   | "sleepingBag"
   | "lotteryTicket"
   | "busPass"
@@ -132,6 +134,22 @@ export const ITEMS: Record<ItemId, ItemDef> = {
     consumable: false,
     gear: true,
   },
+  raincoat: {
+    id: "raincoat",
+    name: "Raincoat",
+    price: 38,
+    desc: "Waxed canvas, full-length. You stop being soaked and start being someone who planned ahead.",
+    consumable: false,
+    gear: true,
+  },
+  umbrella: {
+    id: "umbrella",
+    name: "Umbrella",
+    price: 14,
+    desc: "Keeps the rain off your shoulders. Doesn't help much with the wind.",
+    consumable: false,
+    gear: true,
+  },
   sleepingBag: {
     id: "sleepingBag",
     name: "Sleeping Bag",
@@ -205,6 +223,8 @@ export const SHOP_STOCK: ItemId[] = [
   "razor",
   "medicine",
   "poncho",
+  "raincoat",
+  "umbrella",
   "sleepingBag",
   "busPass",
   "bicycle",

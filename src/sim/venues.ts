@@ -2091,6 +2091,196 @@ const bikeShop: Venue = (ctx) => {
   );
 };
 
+/* --------------------------------------------------------------- church */
+
+const church: Venue = (ctx) => {
+  const s = ctx.state;
+  const choices: Choice[] = [];
+
+  // Soup kitchen — once per day, same pattern as the food bank
+  const soupKey = "churchSoupDay";
+  const today = Math.floor(s.time / 1440);
+  const hadSoup = (s.flags[soupKey] ?? -1) === today;
+  const kitchenOpen = withinHours(s.time, 10, 20);
+
+  if (kitchenOpen) {
+    choices.push(
+      hadSoup
+        ? { label: "Soup kitchen", hint: "one meal a day", locked: "You've already eaten here today" }
+        : {
+            label: "Soup kitchen",
+            hint: "free, 20 min",
+            run: () => {
+              ctx.advance(20, { sheltered: true });
+              s.flags[soupKey] = today;
+              addItem(s.inventory, "sandwich", 1);
+              addItem(s.inventory, "waterBottle", 1);
+              if (ctx.rng.chance(0.4)) addItem(s.inventory, "instantNoodles", 1);
+              applyDelta(s.meters, { morale: +5 });
+              pushLog(s, "Had a meal at St. Jude's soup kitchen.", "good");
+              return menu(
+                "St. Jude's",
+                [
+                  "A fold-out table, a ladle, and someone who looks you in the eye.",
+                  "You sit with three others. Nobody asks anything.",
+                ],
+                [BACK],
+                "good",
+              );
+            },
+          },
+    );
+  } else {
+    choices.push({ label: "Soup kitchen", hint: "10AM–8PM", locked: "The kitchen is closed right now" });
+  }
+
+  // Prayer — always available, small morale and health restore
+  choices.push({
+    label: "Sit quietly for a while",
+    hint: "20 min, free",
+    run: () => {
+      ctx.advance(20, { sheltered: true });
+      applyDelta(s.meters, { morale: +14, health: +5, energy: +6 });
+      pushLog(s, "Rested at St. Jude's.", "good");
+      return menu(
+        "St. Jude's",
+        [
+          "The pews are hard but dry. Nobody comes to move you on.",
+          "You stay until you feel slightly less like you're losing.",
+        ],
+        [BACK],
+      );
+    },
+  });
+
+  // Donate — optional, available when you have something to give
+  const canDonate = s.cash >= 5;
+  choices.push(
+    canDonate
+      ? {
+          label: "Leave a donation",
+          hint: "$5",
+          run: () => {
+            s.cash -= 5;
+            applyDelta(s.meters, { morale: +10 });
+            pushLog(s, "Donated $5 at St. Jude's.", "money");
+            return menu(
+              "St. Jude's",
+              ["You drop a five into the box by the door.", "It's not much. It still counts."],
+              [BACK],
+              "money",
+            );
+          },
+        }
+      : { label: "Leave a donation", locked: "You don't have $5 to spare" },
+  );
+
+  choices.push(BACK);
+  return menu(
+    "St. Jude's",
+    ["A stone building that has been absorbing people's worst days for a hundred years.", "The door is open."],
+    choices,
+  );
+};
+
+/* ------------------------------------------------------------- hospital */
+
+const hospital: Venue = (ctx) => {
+  const s = ctx.state;
+  const healthy = s.meters.health >= 80 && !s.sick;
+
+  if (healthy) {
+    return menu(
+      "Brokemon General",
+      [
+        "The A&E waiting room smells of disinfectant and old coffee.",
+        "A triage nurse glances at you. \"You look fine. We're busy.\"",
+      ],
+      [BACK],
+    );
+  }
+
+  const choices: Choice[] = [];
+
+  // Cost tiers: full ($80), reduced ($30), free stabilisation (adds $60 debt)
+  const fullCost = 80;
+  const reducedCost = 30;
+
+  if (s.cash >= fullCost) {
+    choices.push({
+      label: "Get treated",
+      hint: `$${fullCost}`,
+      run: () => {
+        ctx.advance(120, { sheltered: true });
+        s.cash -= fullCost;
+        s.sick = false;
+        s.meters.health = Math.min(100, Math.max(s.meters.health, 85));
+        applyDelta(s.meters, { morale: +8 });
+        pushLog(s, `Treated at Brokemon General. Paid $${fullCost}.`, "good");
+        return menu(
+          "Brokemon General",
+          [
+            "Two hours, a curtained bay, a drip, and a doctor who explains nothing.",
+            `Paid $${fullCost}. You leave feeling like a person again.`,
+          ],
+          [BACK],
+          "good",
+        );
+      },
+    });
+  } else if (s.cash >= reducedCost) {
+    choices.push({
+      label: "Get treated — sliding scale",
+      hint: `$${reducedCost}`,
+      run: () => {
+        ctx.advance(120, { sheltered: true });
+        s.cash -= reducedCost;
+        s.sick = false;
+        s.meters.health = Math.min(100, Math.max(s.meters.health, 68));
+        pushLog(s, `Treated at Brokemon General (sliding scale). Paid $${reducedCost}.`, "good");
+        return menu(
+          "Brokemon General",
+          [
+            "You tell the desk you can't afford full price. They put you down for sliding scale.",
+            `$${reducedCost} and three hours. You come out stable.`,
+          ],
+          [BACK],
+          "good",
+        );
+      },
+    });
+  } else {
+    choices.push({
+      label: "Emergency treatment — can't pay",
+      hint: "+$60 debt",
+      run: () => {
+        ctx.advance(120, { sheltered: true });
+        s.sick = false;
+        s.debt += 60;
+        s.meters.health = Math.min(100, Math.max(s.meters.health, 50));
+        pushLog(s, "Stabilised at Brokemon General. $60 added to your debt.", "bad");
+        return menu(
+          "Brokemon General",
+          [
+            "They stabilise you. They have to — it's the law.",
+            "A letter will follow. It always does.",
+          ],
+          [BACK],
+          "bad",
+        );
+      },
+    });
+  }
+
+  choices.push(BACK);
+
+  const conditionLines = s.sick
+    ? ["You're running a fever. The triage nurse waves you through quickly."]
+    : ["Your health stats have the nurse frowning at her clipboard."];
+
+  return menu("Brokemon General", conditionLines, choices);
+};
+
 /* --------------------------------------------------------------- registry */
 
 export const VENUES: Record<string, Venue> = {
@@ -2110,6 +2300,8 @@ export const VENUES: Record<string, Venue> = {
   diner,
   outskirtsBusStop,
   bikeShop,
+  church,
+  hospital,
   coachTerminal,
   agency,
   nightMarket,

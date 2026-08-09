@@ -79,7 +79,7 @@ export function decay(meters: Meters, ctx: DecayContext): MeterDelta {
   meters.hunger = clamp(meters.hunger - DECAY_PER_HOUR.hunger * hours * (ctx.asleep ? 0.7 : 1));
   meters.thirst = clamp(meters.thirst - DECAY_PER_HOUR.thirst * hours * restMul);
   meters.hygiene = clamp(
-    meters.hygiene - DECAY_PER_HOUR.hygiene * hours * (ctx.asleep ? 0.6 : ctx.exertion) - (ctx.soaked ? 1.5 * hours : 0),
+    meters.hygiene - DECAY_PER_HOUR.hygiene * hours * (ctx.asleep ? 0.6 : ctx.exertion) - (ctx.soaked ? 2.5 * hours : 0),
   );
   if (!ctx.asleep) {
     meters.energy = clamp(meters.energy - DECAY_PER_HOUR.energy * hours * ctx.exertion);

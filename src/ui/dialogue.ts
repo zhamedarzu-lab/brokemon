@@ -222,6 +222,7 @@ export class Dialogue {
       return;
     }
 
+    const buttons: HTMLButtonElement[] = [];
     list.forEach((choice, i) => {
       const el = document.createElement("button");
       el.type = "button";
@@ -232,16 +233,19 @@ export class Dialogue {
         <span class="choice-label">${escapeHtml(choice.label)}</span>
         ${choice.hint ? `<span class="choice-hint">${escapeHtml(choice.hint)}</span>` : ""}
       `;
+      // Click: confirm immediately without a full re-render first.
       el.addEventListener("click", () => {
+        if (choice.locked) { this.flashLock(choice.locked); return; }
         this.index = i;
-        this.render();
         this.confirm();
       });
+      // Hover: just toggle the CSS class; no DOM rebuild needed.
       el.addEventListener("mouseenter", () => {
         if (choice.locked) return;
         this.index = i;
-        this.render();
+        buttons.forEach((b, bi) => b.classList.toggle("selected", bi === i));
       });
+      buttons.push(el);
       this.choicesEl.appendChild(el);
     });
 
