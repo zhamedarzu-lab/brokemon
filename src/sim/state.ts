@@ -32,7 +32,8 @@ export interface Assignment {
   /** Set once every stop is done and you go back to the board to get paid. */
   ready: boolean;
   pay: number;
-  expiresAtDay: number;
+  /** Absolute game-minute at which the job expires. 0 = no deadline. */
+  deadlineMin: number;
 }
 
 export interface Player {

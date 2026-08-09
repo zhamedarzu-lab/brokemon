@@ -255,7 +255,7 @@ export function startAssignment(ctx: ActionCtx, gig: GigId, targets: { x: number
     targets: targets.slice(0, def.stops),
     ready: false,
     pay: def.basePay,
-    expiresAtDay: Math.floor(s.time / MINUTES_PER_DAY) + 2,
+    deadlineMin: def.deadlineMinutes ? s.time + def.deadlineMinutes : 0,
   };
   if (gig === "flyers") s.inventory.flyers = 1;
   pushLog(s, `Took a job: ${label}.`);
@@ -273,9 +273,8 @@ export function workAssignmentStop(ctx: ActionCtx, index: number): Prompt | null
   const a = s.assignment;
   if (!a) return null;
 
-  // Expire stale assignments so they can't be completed days later.
-  const currentDay = Math.floor(s.time / MINUTES_PER_DAY) + 1;
-  if (currentDay > a.expiresAtDay) {
+  // Expire stale assignments (tick.ts fires this first, but guard here too).
+  if (a.deadlineMin > 0 && s.time >= a.deadlineMin) {
     pushLog(s, `The ${a.label} job expired. The board has moved on.`, "bad");
     removeItem(s.inventory, "flyers", 1);
     s.assignment = null;

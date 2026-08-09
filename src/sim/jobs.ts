@@ -52,6 +52,11 @@ export interface GigDef {
   fromJobBoard: boolean;
   /** Once per day. */
   dailyLimit?: number;
+  /**
+   * Hard time window in minutes from the moment the assignment is accepted.
+   * Missing or 0 means no deadline.
+   */
+  deadlineMinutes?: number;
 }
 
 export const GIGS: Record<GigId, GigDef> = {
@@ -79,6 +84,7 @@ export const GIGS: Record<GigId, GigDef> = {
     basePay: 22,
     fromJobBoard: true,
     dailyLimit: 2,
+    deadlineMinutes: 180, // 3 in-game hours to reach all four drops
   },
   yardWork: {
     id: "yardWork",
@@ -92,6 +98,7 @@ export const GIGS: Record<GigId, GigDef> = {
     basePay: 35,
     fromJobBoard: true,
     dailyLimit: 2,
+    deadlineMinutes: 180, // 3 in-game hours including travel to the yard
   },
   siteWork: {
     id: "siteWork",

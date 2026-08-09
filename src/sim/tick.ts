@@ -23,7 +23,8 @@ export type Interrupt =
   | { kind: "newDay"; day: number }
   | { kind: "income"; lines: string[] }
   | { kind: "weather"; text: string }
-  | { kind: "victory"; ending: Ending };
+  | { kind: "victory"; ending: Ending }
+  | { kind: "jobExpired"; label: string };
 
 export interface TickOptions {
   /** In-game minutes to advance. */
@@ -86,6 +87,18 @@ export function advance(s: GameState, rng: Rng, opts: TickOptions): Interrupt[] 
     if (s.sick && s.meters.health > 80 && rng.chance(0.05 * (step / 60))) {
       s.sick = false;
       pushLog(s, "Whatever it was, you've shaken it off.", "good");
+    }
+
+    // Assignment deadline: fire once when the clock crosses the window.
+    if (s.assignment && !s.assignment.ready) {
+      const dl = s.assignment.deadlineMin ?? 0;
+      if (dl > 0 && s.time >= dl) {
+        const label = s.assignment.label;
+        pushLog(s, `${label} — time's up. The board reassigned it.`, "bad");
+        removeItem(s.inventory, "flyers", 1);
+        s.assignment = null;
+        interrupts.push({ kind: "jobExpired", label });
+      }
     }
 
     maybeChangeWeather(s, rng, interrupts);

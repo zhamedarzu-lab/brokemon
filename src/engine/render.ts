@@ -68,7 +68,7 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState, timeMs: 
   drawLighting(ctx, state, cam);
   drawWeather(ctx, state, timeMs);
   drawFacingCursor(ctx, state, cam, timeMs);
-  if (minimapOpen) drawMinimap(ctx, state, cam);
+  if (minimapOpen) drawMinimap(ctx, state, cam, timeMs);
 }
 
 /* ------------------------------------------------------------------ tiles */
@@ -622,7 +622,7 @@ function minimapTileColor(glyph: string | undefined): string {
   return MINIMAP_COLOR[glyph] ?? tileAt(glyph).color;
 }
 
-function drawMinimap(ctx: CanvasRenderingContext2D, s: GameState, cam: Camera): void {
+function drawMinimap(ctx: CanvasRenderingContext2D, s: GameState, cam: Camera, timeMs: number): void {
   const town = townOf(s);
   const mapW = town.width;
   const mapH = town.height;
@@ -660,6 +660,23 @@ function drawMinimap(ctx: CanvasRenderingContext2D, s: GameState, cam: Camera): 
     ctx.fillRect(cx + pos.x * SCALE, cy + pos.y * SCALE, SCALE, SCALE);
   }
 
+  // Active assignment: blinking gold stop markers
+  const asgn = s.assignment;
+  if (asgn && !asgn.ready && asgn.targets.length > 0) {
+    const blink = Math.floor(timeMs / 500) % 2 === 0;
+    if (blink) {
+      ctx.fillStyle = "#f0c85a";
+      for (const stop of asgn.targets) {
+        ctx.fillRect(cx + stop.x * SCALE - 1, cy + stop.y * SCALE - 1, SCALE + 2, SCALE + 2);
+      }
+    }
+    // Always draw a cross-hair centre so the dot is legible even when dark
+    ctx.fillStyle = blink ? "#fffbe0" : "#f0c85a";
+    for (const stop of asgn.targets) {
+      ctx.fillRect(cx + stop.x * SCALE, cy + stop.y * SCALE, SCALE, SCALE);
+    }
+  }
+
   // Viewport rectangle
   const vx = Math.floor(cam.px / TILE);
   const vy = Math.floor(cam.py / TILE);
@@ -675,11 +692,23 @@ function drawMinimap(ctx: CanvasRenderingContext2D, s: GameState, cam: Camera): 
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(pdx, pdy, SCALE, SCALE);
 
-  // Town name above the panel
+  // Town name above the panel (with deadline if active)
   const townLabel = s.player.town.toUpperCase();
   const labelW = bitmapTextWidth(townLabel);
   ctx.fillStyle = "rgba(240,232,200,0.75)";
-  drawBitmapText(ctx, townLabel, cx + Math.round((mw - labelW) / 2), cy - 10);
+  drawBitmapText(ctx, townLabel, cx + Math.round((mw - labelW) / 2), cy - 18);
+
+  if (asgn && !asgn.ready && (asgn.deadlineMin ?? 0) > 0) {
+    const minsLeft = Math.max(0, Math.ceil((asgn.deadlineMin ?? 0) - s.time));
+    const hh = Math.floor(minsLeft / 60);
+    const mm = minsLeft % 60;
+    const timeStr = hh > 0 ? `${hh}H ${mm < 10 ? "0" : ""}${mm}M` : `${mm}M`;
+    const deadlineLabel = `${timeStr} LEFT`;
+    const dlW = bitmapTextWidth(deadlineLabel);
+    // Red when < 30 min, amber otherwise
+    ctx.fillStyle = minsLeft < 30 ? "rgba(240,80,60,0.95)" : "rgba(240,200,80,0.9)";
+    drawBitmapText(ctx, deadlineLabel, cx + Math.round((mw - dlW) / 2), cy - 10);
+  }
 
   // "M · CLOSE" hint below the panel
   const hint = "M  CLOSE";

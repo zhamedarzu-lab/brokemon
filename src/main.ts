@@ -454,6 +454,17 @@ function interruptPrompt(i: Interrupt, ctx: ActionCtx): Prompt | null {
         "bad",
       );
 
+    case "jobExpired":
+      return menu(
+        "Job Board",
+        [
+          `"${i.label}" — window closed.`,
+          "The board doesn't hold slots. It's already been reassigned to someone else.",
+        ],
+        [{ label: "Got it" }],
+        "bad",
+      );
+
     case "victory":
       return victoryPrompt(ctx.state, i.ending);
   }
