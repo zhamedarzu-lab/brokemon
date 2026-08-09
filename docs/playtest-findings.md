@@ -2,8 +2,8 @@
 
 From a headless bot that walks the real grid at the real per-tile rate, takes
 police checks and street encounters on the way, and records where each day
-actually goes (`npm run playtest`). Numbers below are from four seeds run to a
-win.
+actually goes (`npm run playtest`). Numbers below are from ten seeds run to a
+win — four was not enough to tell a change from the noise, which is finding 20.
 
 Everything under **Fixed** is merged to `main`, with the commit and the test
 that guards it. Check there before picking up a follow-up task — two items on
