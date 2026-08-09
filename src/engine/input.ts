@@ -1,4 +1,4 @@
-export type Button = "up" | "down" | "left" | "right" | "confirm" | "cancel" | "menu" | "log" | "save";
+export type Button = "up" | "down" | "left" | "right" | "confirm" | "cancel" | "menu" | "log" | "save" | "map";
 
 const BINDINGS: Record<string, Button> = {
   ArrowUp: "up",
@@ -20,6 +20,7 @@ const BINDINGS: Record<string, Button> = {
   KeyC: "menu",
   KeyL: "log",
   KeyP: "save",
+  KeyM: "map",
 };
 
 export class Input {

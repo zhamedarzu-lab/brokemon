@@ -44,7 +44,7 @@ function clamp(v: number, lo: number, hi: number): number {
   return v < lo ? lo : v > hi ? hi : v;
 }
 
-export function render(ctx: CanvasRenderingContext2D, state: GameState, timeMs: number): void {
+export function render(ctx: CanvasRenderingContext2D, state: GameState, timeMs: number, minimapOpen = false): void {
   const town = townOf(state);
   const cam = cameraFor(state);
   ctx.imageSmoothingEnabled = false;
@@ -68,7 +68,7 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState, timeMs: 
   drawLighting(ctx, state, cam);
   drawWeather(ctx, state, timeMs);
   drawFacingCursor(ctx, state, cam, timeMs);
-  drawMinimap(ctx, state, cam);
+  if (minimapOpen) drawMinimap(ctx, state, cam);
 }
 
 /* ------------------------------------------------------------------ tiles */
@@ -588,7 +588,7 @@ function drawFacingCursor(ctx: CanvasRenderingContext2D, s: GameState, cam: Came
 /* ----------------------------------------------------------------- minimap */
 
 /**
- * Minimap colours tuned for 1 px per tile — needs higher contrast than the
+ * Minimap colours tuned for small scale — needs higher contrast than the
  * full-size tile palette because detail decoration never fires at this scale.
  */
 const MINIMAP_COLOR: Record<string, string> = {
@@ -624,43 +624,66 @@ function minimapTileColor(glyph: string | undefined): string {
 
 function drawMinimap(ctx: CanvasRenderingContext2D, s: GameState, cam: Camera): void {
   const town = townOf(s);
-  const tw = town.width;
-  const th = town.height;
+  const mapW = town.width;
+  const mapH = town.height;
 
-  const INSET = 2;   // padding between panel edge and tile pixels
-  const MARGIN = 3;  // gap from canvas edge
+  // Scale to fit within the canvas with a margin, max 3px per tile.
+  const MARGIN = 8;
+  const SCALE = Math.min(3, Math.floor(
+    Math.min((CANVAS_W - MARGIN * 2) / mapW, (CANVAS_H - MARGIN * 2) / mapH),
+  ));
 
-  // Panel top-left
-  const panelX = CANVAS_W - tw - INSET * 2 - MARGIN;
-  const panelY = CANVAS_H - th - INSET * 2 - MARGIN;
-  const tilesX = panelX + INSET;
-  const tilesY = panelY + INSET;
+  const mw = mapW * SCALE;
+  const mh = mapH * SCALE;
+  const cx = Math.round((CANVAS_W - mw) / 2);
+  const cy = Math.round((CANVAS_H - mh) / 2);
 
-  // Background panel + 1 px border
-  ctx.fillStyle = "rgba(0,0,0,0.75)";
-  ctx.fillRect(panelX - 1, panelY - 1, tw + INSET * 2 + 2, th + INSET * 2 + 2);
+  // Full-canvas dim overlay
+  ctx.fillStyle = "rgba(0,0,0,0.82)";
+  ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
 
-  // Tile pixels — 1 px per tile
-  for (let y = 0; y < th; y++) {
-    for (let x = 0; x < tw; x++) {
-      const glyph = glyphAt(town, x, y);
-      ctx.fillStyle = minimapTileColor(glyph);
-      ctx.fillRect(tilesX + x, tilesY + y, 1, 1);
+  // Map panel border
+  ctx.fillStyle = "rgba(255,255,255,0.07)";
+  ctx.fillRect(cx - 2, cy - 2, mw + 4, mh + 4);
+
+  // Tile pixels
+  for (let y = 0; y < mapH; y++) {
+    for (let x = 0; x < mapW; x++) {
+      ctx.fillStyle = minimapTileColor(glyphAt(town, x, y));
+      ctx.fillRect(cx + x * SCALE, cy + y * SCALE, SCALE, SCALE);
     }
   }
 
-  // Viewport rectangle (what the main camera currently shows)
+  // Venue dots — white pixel at every marker door
+  ctx.fillStyle = "rgba(255,255,255,0.65)";
+  for (const pos of Object.values(town.markers)) {
+    ctx.fillRect(cx + pos.x * SCALE, cy + pos.y * SCALE, SCALE, SCALE);
+  }
+
+  // Viewport rectangle
   const vx = Math.floor(cam.px / TILE);
   const vy = Math.floor(cam.py / TILE);
-  ctx.strokeStyle = "rgba(255,255,255,0.35)";
+  ctx.strokeStyle = "rgba(255,255,255,0.45)";
   ctx.lineWidth = 1;
-  ctx.strokeRect(tilesX + vx + 0.5, tilesY + vy + 0.5, VIEW_W, VIEW_H);
+  ctx.strokeRect(cx + vx * SCALE + 0.5, cy + vy * SCALE + 0.5, VIEW_W * SCALE, VIEW_H * SCALE);
 
-  // Player dot — bright so it reads at 1 px
-  const px = tilesX + s.player.pos.x;
-  const py = tilesY + s.player.pos.y;
-  ctx.fillStyle = "#f5e642"; // yellow; contrast against both dark and light tiles
-  ctx.fillRect(px - 1, py - 1, 3, 3);
+  // Player dot
+  const pdx = cx + s.player.pos.x * SCALE;
+  const pdy = cy + s.player.pos.y * SCALE;
+  ctx.fillStyle = "#f5e642";
+  ctx.fillRect(pdx - 1, pdy - 1, SCALE + 2, SCALE + 2);
   ctx.fillStyle = "#ffffff";
-  ctx.fillRect(px, py, 1, 1);
+  ctx.fillRect(pdx, pdy, SCALE, SCALE);
+
+  // Town name above the panel
+  const townLabel = s.player.town.toUpperCase();
+  const labelW = bitmapTextWidth(townLabel);
+  ctx.fillStyle = "rgba(240,232,200,0.75)";
+  drawBitmapText(ctx, townLabel, cx + Math.round((mw - labelW) / 2), cy - 10);
+
+  // "M · CLOSE" hint below the panel
+  const hint = "M  CLOSE";
+  const hintW = bitmapTextWidth(hint);
+  ctx.fillStyle = "rgba(180,170,145,0.55)";
+  drawBitmapText(ctx, hint, cx + Math.round((mw - hintW) / 2), cy + mh + 6);
 }

@@ -776,6 +776,31 @@ kbd {
   font-size: 0.94em;
 }
 
+/* ----------------------------------------------------------- map toggle */
+
+#map-toggle {
+  position: absolute;
+  bottom: 5px;
+  right: 5px;
+  z-index: 25;
+  pointer-events: auto;
+  background: rgba(0, 0, 0, 0.62);
+  color: rgba(240, 232, 200, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 3px;
+  font: inherit;
+  font-size: calc(var(--ui) * 0.78);
+  letter-spacing: 0.08em;
+  padding: 3px 7px;
+  min-height: 0;
+  cursor: pointer;
+  touch-action: manipulation;
+  line-height: 1.4;
+}
+#map-toggle:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
 /* ------------------------------------------------------- touch controls */
 
 #touch {

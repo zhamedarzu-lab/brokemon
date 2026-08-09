@@ -55,8 +55,10 @@ class Game {
   private running = false;
 
   private padEl: HTMLElement | null = null;
+  private mapBtn: HTMLButtonElement | null = null;
 
   private padHidden = false;
+  private minimapOpen = false;
 
   /**
    * Tracks whether the victory screen has already been shown for this run.
@@ -85,6 +87,7 @@ class Game {
 
     this.wireTouchControls();
     this.wireLifecycle();
+    this.wireMapToggle();
   }
 
   private actionCtx(): ActionCtx {
@@ -129,6 +132,7 @@ class Game {
   start(): void {
     this.running = true;
     this.titleEl.classList.add("hidden");
+    this.mapBtn?.classList.remove("hidden");
     this.lastFrame = performance.now();
     requestAnimationFrame((t) => this.frame(t));
   }
@@ -148,7 +152,7 @@ class Game {
     // stays visible — up/down/A already route to dialogue.move/confirm, and
     // hiding it leaves the player with no visible controls.
     this.setPadHidden(this.journal.isOpen());
-    render(this.ctx2d, this.state, now);
+    render(this.ctx2d, this.state, now, this.minimapOpen);
 
     this.sinceAutosave += dt;
     if (this.sinceAutosave >= AUTOSAVE_EVERY_MS) {
@@ -187,6 +191,11 @@ class Game {
       if (i.justPressed("up")) this.journal.moveCursor(-1);
       if (i.justPressed("down")) this.journal.moveCursor(1);
       if (i.justPressed("confirm")) this.journal.confirm();
+      return;
+    }
+
+    if (i.justPressed("map")) {
+      this.toggleMinimap();
       return;
     }
 
@@ -340,6 +349,16 @@ class Game {
       // Stops iPadOS turning a quick double tap on a button into a page zoom.
       el.addEventListener("dblclick", (e) => e.preventDefault());
     });
+  }
+
+  private toggleMinimap(): void {
+    this.minimapOpen = !this.minimapOpen;
+    if (this.mapBtn) this.mapBtn.textContent = this.minimapOpen ? "×" : "MAP";
+  }
+
+  private wireMapToggle(): void {
+    this.mapBtn = document.querySelector<HTMLButtonElement>("#map-toggle");
+    this.mapBtn?.addEventListener("click", () => this.toggleMinimap());
   }
 
   /** iPadOS discards backgrounded tabs without warning. Save before it does. */
