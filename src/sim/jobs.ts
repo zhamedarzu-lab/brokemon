@@ -1,4 +1,4 @@
-import type { TownId } from "../world/map";
+import { hasMarker, markerPos, townById, zoneAt, type TownId } from "../world/map";
 import type { ItemId } from "./items";
 import { MORALE_BREAKDOWN, type MeterDelta } from "./meters";
 import type { OutfitId } from "./social";
@@ -370,6 +370,20 @@ export function employmentIn(town: TownId): EmploymentId[] {
 
 export function isEmployment(id: JobId): id is EmploymentId {
   return id in EMPLOYMENT;
+}
+
+/**
+ * Is this job worked behind the Heights barrier?
+ *
+ * Derived from where the workplace actually sits, not written down, so moving
+ * a job or redrawing the hill cannot leave this saying something that was true
+ * a year ago.
+ */
+export function worksBehindTheGate(id: EmploymentId): boolean {
+  const def = EMPLOYMENT[id];
+  const town = townById(def.town);
+  if (!hasMarker(town, def.location)) return false;
+  return zoneAt(town, markerPos(town, def.location).y).id === "heights";
 }
 
 /**

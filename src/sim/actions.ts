@@ -1,5 +1,6 @@
 import { glyphAt, zoneAt, type Town, type Vec2 } from "../world/map";
 import { tileAt } from "../world/tiles";
+import { countOf } from "./items";
 import { applyDelta } from "./meters";
 import { menu, say, type Choice, type Prompt } from "./prompt";
 import { currentAppearance, pushLog, townOf, type GameState } from "./state";
@@ -242,6 +243,19 @@ function heightsGate(ctx: ActionCtx, cell: Vec2): Prompt {
     return say("Security gate", "The gate opens outward without asking anything of you.");
   }
 
+  // A pass beats the dress code, because a pass answers the question the
+  // guard is actually asking. Every tier-3 job in this town is worked on the
+  // far side of this barrier, so without it the gate was stricter than any of
+  // those jobs and their own appearance requirements were dead text.
+  if (countOf(s.inventory, "staffBadge") > 0) {
+    ctx.teleport(cell.x, cell.y - 1);
+    pushLog(s, "Showed your pass at the Heights gate.");
+    return say("Security gate", [
+      "You hold up the lanyard without breaking stride and he is already looking past you.",
+      "The barrier lifts.",
+    ]);
+  }
+
   if (look >= HEIGHTS_GATE_LOOK) {
     ctx.teleport(cell.x, cell.y - 1);
     pushLog(s, "Passed the Heights security gate.");
@@ -258,7 +272,7 @@ function heightsGate(ctx: ActionCtx, cell: Vec2): Prompt {
     [
       "The guard steps out of the box before you reach the barrier.",
       `"Residents and guests. Are you either?"`,
-      `You look like a ${look}. The gate wants a ${HEIGHTS_GATE_LOOK}.`,
+      `You look like a ${look}. The gate wants a ${HEIGHTS_GATE_LOOK}, or a pass from somebody up there.`,
     ],
     "bad",
   );

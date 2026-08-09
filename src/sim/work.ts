@@ -1,4 +1,4 @@
-import { EMPLOYMENT, GIGS, type EmploymentId, type GigId } from "./jobs";
+import { EMPLOYMENT, GIGS, worksBehindTheGate, type EmploymentId, type GigId } from "./jobs";
 import { applyDelta, type MeterDelta } from "./meters";
 import { menu, say, type Choice, type Prompt } from "./prompt";
 import type { Rng } from "./rng";
@@ -7,7 +7,8 @@ import { canDoGig, changeReputation, checkRequirements, currentAppearance, earnC
 import { zoneAt } from "../world/map";
 import { dayOf, hourOf, minuteOfDay, MINUTES_PER_DAY, minutesUntilHour, withinHours } from "./time";
 import { WEATHER } from "./weather";
-import { ITEMS, removeItem, type ItemId } from "./items";
+import { addItem, countOf, ITEMS, removeItem, type ItemId } from "./items";
+import { rollWorkEvent } from "./events-work";
 
 export interface ActionCtx {
   state: GameState;
@@ -118,7 +119,33 @@ export function workShift(ctx: ActionCtx, job: EmploymentId): Prompt {
 
   lines.push(`Paid: $${pay}.`);
   pushLog(s, `Worked ${def.name} — $${pay}.`, "money");
-  return maybeFire(s, menu(def.employer, lines, [{ label: "Clock out" }], "money"));
+  // Whatever else happened today comes after the wage, on the way out. The
+  // mid-game is spent on shift, so the shift is where the variety has to live
+  // — street encounters cannot reach somebody who is indoors and working.
+  return maybeFire(
+    s,
+    menu(def.employer, lines, [{ label: "Clock out", run: () => rollWorkEvent(ctx, job) }], "money"),
+  );
+}
+
+/**
+ * The pass, and who holds one.
+ *
+ * The Heights barrier wants appearance 70 every single morning, and every
+ * tier-3 job in Brokemon is worked on the far side of it — so the gate was
+ * stricter than any of those jobs' own requirements, and the Field
+ * Technician's appearance 60 was dead text. An employer up there issues staff
+ * a pass, because that is what employers do, and the guard is not being asked
+ * to judge somebody who works there.
+ *
+ * It is the job that opens the barrier, not the clothes. Lose the job and the
+ * lanyard goes back.
+ */
+export function grantOrTakeBadge(s: GameState, job: EmploymentId | null): void {
+  const entitled = job !== null && worksBehindTheGate(job);
+  const held = countOf(s.inventory, "staffBadge") > 0;
+  if (entitled && !held) addItem(s.inventory, "staffBadge");
+  if (!entitled && held) removeItem(s.inventory, "staffBadge", countOf(s.inventory, "staffBadge"));
 }
 
 function maybeFire(s: GameState, prompt: Prompt): Prompt {
@@ -126,6 +153,7 @@ function maybeFire(s: GameState, prompt: Prompt): Prompt {
   const job = EMPLOYMENT[s.employment];
   s.employment = null;
   s.strikes = 0;
+  grantOrTakeBadge(s, null);
   changeReputation(s, -5);
   s.meters.morale = Math.max(0, s.meters.morale - 15);
   pushLog(s, `You were let go from ${job.employer}.`, "bad");

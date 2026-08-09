@@ -19,7 +19,7 @@ import { interact } from "./actions";
 import { boardingReasons, rideCoach, serviceFrom } from "./coach";
 import { EVENT_CHANCE, EVENT_STEP_INTERVAL, rollEvent } from "./events";
 import { countOf, type ItemId } from "./items";
-import { EMPLOYMENT, EMPLOYMENT_ORDER, employmentIn, type EmploymentId } from "./jobs";
+import { EMPLOYMENT, EMPLOYMENT_ORDER, employmentIn, MAX_CREDITS, type EmploymentId } from "./jobs";
 import type { Choice, Prompt } from "./prompt";
 import { Rng } from "./rng";
 import {
@@ -116,6 +116,8 @@ class Player {
   coachMinutes = 0;
   coachFares = 0;
   blocked = new Map<string, number>();
+  /** What turned up on shift, by the venue it turned up at. */
+  workEvents = new Map<string, number>();
   stepsSinceEvent = 0;
   low = { hunger: 100, thirst: 100, hygiene: 100, energy: 100, morale: 100, health: 100 };
 
@@ -246,6 +248,34 @@ class Player {
     return this.s.player.town === town;
   }
 
+  /**
+   * Answer whatever the shift threw up on the way out. Same first-live-choice
+   * policy the street encounters get — the bot is not trying to play well, it
+   * is trying to pay for everything a player would pay for.
+   */
+  atWork(p: Prompt | null): void {
+    if (!p) return;
+    // Counted rather than read back out of the log: `pushLog` keeps the last
+    // two hundred lines, so anything that happened before the final fortnight
+    // of a two-hundred-day run is not there to count.
+    this.workEvents.set(p.title, (this.workEvents.get(p.title) ?? 0) + 1);
+
+    // One piece of judgement the blind first-live-choice policy does not have:
+    // two hours of overtime finishes at seven, and night class starts at seven
+    // and is the only door to phase 3. A player with credits still to earn
+    // turns the overtime down. A bot that never does spends a run's worth of
+    // evenings earning $60 instead of the thing the run is gated on.
+    // ...and it turns overtime down when it has nothing left to give it. Two
+    // hours on an empty tank is how you arrive under the door requirement
+    // tomorrow, get sent home, and start the strike spiral of open finding 4.
+    const tooTired = this.s.meters.energy < 45;
+    if ((this.s.education < MAX_CREDITS || tooTired) && this.choiceFor(p, "go home")) {
+      this.resolve(this.drive(p, "go home"));
+      return;
+    }
+    this.resolve(p);
+  }
+
   blockedBy(what: string, why: string): void {
     const key = `${what}: ${why}`;
     this.blocked.set(key, (this.blocked.get(key) ?? 0) + 1);
@@ -268,7 +298,7 @@ class Player {
   }
 
   /** Auto-answer an interrupt/event prompt by taking its first live choice. */
-  private resolve(p: Prompt | null): void {
+  resolve(p: Prompt | null): void {
     let cur = p;
     for (let i = 0; i < 6 && cur?.choices?.length; i++) {
       const c = cur.choices.find((q) => !q.locked);
@@ -303,7 +333,7 @@ class Player {
     return true;
   }
 
-  private choiceFor(p: Prompt | null, step: string): Choice | undefined {
+  choiceFor(p: Prompt | null, step: string): Choice | undefined {
     const c = p?.choices?.find((q) => !q.locked && q.label.toLowerCase().includes(step.toLowerCase()));
     if (!c) {
       const why = this.lockReason(p, step);
@@ -723,8 +753,8 @@ function workShift(p: Player): boolean {
   const before = s.shiftsWorked[job] ?? 0;
   const prompt = p.press();
   const t0 = s.time;
-  if (p.can(prompt, "clock in")) p.drive(prompt, "clock in", "clock out");
-  else if (p.can(prompt, "go up to your floor")) p.drive(prompt, "go up to your floor", "clock out");
+  if (p.can(prompt, "clock in")) p.atWork(p.drive(prompt, "clock in", "clock out"));
+  else if (p.can(prompt, "go up to your floor")) p.atWork(p.drive(prompt, "go up to your floor", "clock out"));
   p.workMinutes += s.time - t0;
 
   const after = s.shiftsWorked[job] ?? 0;
@@ -901,6 +931,14 @@ function report(seed: number, days: number): number {
   const avgWork = p.days.reduce((a, d) => a + d.workMinutes, 0) / Math.max(1, p.days.length);
   console.log(`worked ${workedDays}/${p.days.length} days · avg ${avgWalk.toFixed(0)} min walking, ${avgWork.toFixed(0)} min on shift`);
 
+  const incidents = [...p.workEvents.values()].reduce((a, b) => a + b, 0);
+  const shifts = Object.values(s.shiftsWorked).reduce((a, b) => a + b, 0);
+  if (shifts > 0) {
+    console.log(
+      `on shift: ${incidents} incidents over ${shifts} shifts (${((incidents / shifts) * 100).toFixed(0)}% of days had one)`,
+    );
+  }
+
   const coachDays = p.days.filter((d) => d.coachMinutes > 0);
   if (coachDays.length > 0) {
     const mins = coachDays.reduce((a, d) => a + d.coachMinutes, 0);
@@ -1015,7 +1053,7 @@ function brokedaleDay(p: Player): void {
     p.goto("depot");
     if (shiftWindow(s, job) === "early") p.waitUntil(d.shiftStart);
     const before = s.shiftsWorked[job] ?? 0;
-    p.drive(p.press(), "clock in", "clock out");
+    p.atWork(p.drive(p.press(), "clock in", "clock out"));
     worked = (s.shiftsWorked[job] ?? 0) > before;
     if (!worked) p.note(`MISSED ${d.name} (${shiftWindow(s, job)}, hyg ${s.meters.hygiene.toFixed(0)})`);
   } else {

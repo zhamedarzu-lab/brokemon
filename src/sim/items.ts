@@ -17,6 +17,7 @@ export type ItemId =
   | "bicycle"
   | "phone"
   | "recyclables"
+  | "staffBadge"
   | "flyers";
 
 export interface ItemDef {
@@ -176,6 +177,13 @@ export const ITEMS: Record<ItemId, ItemDef> = {
     name: "Recyclables",
     sellPrice: 1,
     desc: "Cans and bottles. A dollar each at the depot.",
+    consumable: false,
+    gear: true,
+  },
+  staffBadge: {
+    id: "staffBadge",
+    name: "Staff Pass",
+    desc: "A photograph of you looking startled, laminated, on a blue lanyard. It opens the Heights barrier.",
     consumable: false,
     gear: true,
   },

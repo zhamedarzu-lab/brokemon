@@ -68,8 +68,15 @@ has already been made once, on ten minutes of evidence.
 ## Things worth knowing before changing balance
 
 - The Heights (rows 0–13) are sealed behind one security gate that wants
-  appearance 70. The corporate plaza — where every tier-3+ job is worked — is up
-  there, so that gate is a daily tax on the whole career track.
+  appearance 70 — **or a staff pass**, which any employer up there issues you on
+  hire and takes back when you lose the job. Without the pass the gate was
+  stricter than every job behind it, which made those jobs' own appearance
+  requirements dead text.
+- **Anything that costs a little energy can cost a run 150 days.** Arriving
+  under a job's door requirement is a strike, three strikes drop you the length
+  of the ladder, and the climb back is most of a run. Ninety minutes of overtime
+  at -16 energy moved the worst of twenty seeds from 217 days to 368. Measure
+  energy costs against the whole distribution, not one seed. See open finding 2.
 - Credit is capped at 600 while any debt is outstanding, and the apartment lease
   wants 620. Clearing the debt is the real lever; say so in any new gate text.
 - Night class is the only door to phase 3. Anything that costs energy in the

@@ -20,6 +20,7 @@ import {
   EMPLOYMENT,
   employmentIn,
   hiringRequirements,
+  worksBehindTheGate,
   GIGS,
   MAX_CREDITS,
   type EmploymentDef,
@@ -47,6 +48,7 @@ import { withinHours } from "./time";
 import {
   caffeineCup,
   collectAssignment,
+  grantOrTakeBadge,
   fmtHour,
   lockedChoice,
   shiftWindow,
@@ -1056,6 +1058,7 @@ function hire(ctx: ActionCtx, id: EmploymentId): Prompt {
   const previous = s.employment;
   s.employment = id;
   s.strikes = 0;
+  grantOrTakeBadge(s, id);
   changeReputation(s, 3);
   s.meters.morale = Math.min(100, s.meters.morale + 25);
   if (def.tier >= 3) s.peakPhase = Math.max(s.peakPhase, 3) as 3 | 4;
@@ -1066,6 +1069,10 @@ function hire(ctx: ActionCtx, id: EmploymentId): Prompt {
     `Shift: ${fmtHour(def.shiftStart)}–${fmtHour(def.shiftEnd)} at ${def.employer}. $${def.pay} a shift.`,
   ];
   if (previous) lines.push(`You hand in your notice at ${EMPLOYMENT[previous].employer}.`);
+  if (worksBehindTheGate(id)) {
+    lines.push("They photograph you against a white wall and hand you a pass on a blue lanyard.");
+    lines.push("It gets you through the barrier on the hill. You are staff now, and staff go up.");
+  }
   return menu("You're hired", lines, [BACK], "good");
 }
 
@@ -1193,7 +1200,8 @@ const YARD_SPOTS: YardSpot[] = [
  * only yard slot to a job they could never finish.
  */
 function yardSpotsFor(s: GameState): YardSpot[] {
-  const usable = YARD_SPOTS.filter((spot) => !spot.heights || currentAppearance(s) >= HEIGHTS_GATE_LOOK);
+  const canGetUp = currentAppearance(s) >= HEIGHTS_GATE_LOOK || countOf(s.inventory, "staffBadge") > 0;
+  const usable = YARD_SPOTS.filter((spot) => !spot.heights || canGetUp);
   return usable.length > 0 ? usable : YARD_SPOTS.filter((spot) => !spot.heights);
 }
 
