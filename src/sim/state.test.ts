@@ -26,7 +26,7 @@ describe("createState", () => {
   it("starts you broke, dirty and in debt", () => {
     const s = createState(1);
     expect(s.cash).toBeLessThan(10);
-    expect(s.debt).toBeGreaterThan(0);
+    expect(s.debt).toBe(0); // debt starts at zero — the hospital bill arrives only on collapse
     expect(s.meters.hygiene).toBeLessThan(40);
     expect(housingIn(s)).toBe("street");
     expect(s.employment).toBeNull();

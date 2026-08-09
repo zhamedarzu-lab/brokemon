@@ -82,6 +82,8 @@ describe("diner venue", () => {
   it("shows hot meal, coffee, and tap water when open", () => {
     const bot = new Player(3);
     bot.s.cash = 50;
+    bot.s.bodyClean = 70;
+    bot.s.clothesClean = 70;
     bot.waitUntil(9);
     bot.goto("diner");
     const p = bot.press();
@@ -93,6 +95,8 @@ describe("diner venue", () => {
   it("hot meal is locked when player can't afford it", () => {
     const bot = new Player(4);
     bot.s.cash = 0;
+    bot.s.bodyClean = 70;
+    bot.s.clothesClean = 70;
     bot.waitUntil(9);
     bot.goto("diner");
     const p = bot.press();
@@ -104,6 +108,8 @@ describe("diner venue", () => {
   it("eating a hot meal raises hunger and morale", () => {
     const bot = new Player(5);
     bot.s.cash = 50;
+    bot.s.bodyClean = 70;
+    bot.s.clothesClean = 70;
     bot.s.meters.hunger = 30;
     bot.s.meters.morale = 30;
     bot.waitUntil(9);
@@ -117,6 +123,8 @@ describe("diner venue", () => {
   it("getting coffee raises energy", () => {
     const bot = new Player(6);
     bot.s.cash = 10;
+    bot.s.bodyClean = 70;
+    bot.s.clothesClean = 70;
     bot.s.meters.energy = 40;
     bot.waitUntil(9);
     bot.goto("diner");
@@ -128,6 +136,8 @@ describe("diner venue", () => {
   it("tap water is free and raises thirst", () => {
     const bot = new Player(7);
     bot.s.cash = 0;
+    bot.s.bodyClean = 70;
+    bot.s.clothesClean = 70;
     bot.s.meters.thirst = 20;
     bot.waitUntil(9);
     bot.goto("diner");
@@ -139,6 +149,8 @@ describe("diner venue", () => {
   it("logs the purchase", () => {
     const bot = new Player(8);
     bot.s.cash = 20;
+    bot.s.bodyClean = 70;
+    bot.s.clothesClean = 70;
     bot.waitUntil(9);
     bot.goto("diner");
     bot.drive(bot.press(), "hot meal");
@@ -243,6 +255,8 @@ describe("bus pass expiry", () => {
     const bot = new Player(23);
     bot.s.cash = 50;
     bot.s.meters = { hunger: 80, thirst: 80, hygiene: 70, energy: 80, morale: 70, health: 80 };
+    bot.s.bodyClean = 70;
+    bot.s.clothesClean = 70;
     bot.s.wearing = "thrift";
     bot.s.wardrobe.push("thrift");
     bot.waitUntil(9);

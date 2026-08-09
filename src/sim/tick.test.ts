@@ -241,6 +241,8 @@ describe("shift rota", () => {
       advance: (m: number, o?: Parameters<typeof advance>[2]) => {
         advance(s, rng, { ...o, minutes: m });
         s.meters = { hunger: 100, thirst: 100, hygiene: 90, energy: 100, morale: 80, health: 100 };
+        s.bodyClean = 90;
+        s.clothesClean = 90;
       },
       teleport: () => {},
     };

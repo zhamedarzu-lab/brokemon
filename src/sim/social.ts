@@ -24,7 +24,7 @@ export const OUTFITS: Record<OutfitId, OutfitDef> = {
   thrift: {
     id: "thrift",
     name: "Thrift Store Clothes",
-    price: 15,
+    price: 20,
     presentation: 35,
     desc: "Clean, ill-fitting, and enough to get served in a shop.",
   },
@@ -45,7 +45,7 @@ export const OUTFITS: Record<OutfitId, OutfitDef> = {
   tailored: {
     id: "tailored",
     name: "Tailored Suit",
-    price: 900,
+    price: 500,
     presentation: 100,
     desc: "Fitted. People you have never met begin the conversation deferentially.",
   },

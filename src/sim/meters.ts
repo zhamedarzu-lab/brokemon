@@ -55,6 +55,19 @@ export function applyDelta(meters: Meters, delta: MeterDelta): void {
   }
 }
 
+/**
+ * The two halves of cleanliness. Body is restored by showering; clothes by
+ * laundry or buying new. Clothes decay slower with a better outfit.
+ * `meters.hygiene` is always derived: Math.round((bodyClean + clothesClean) / 2).
+ */
+export interface HygieneSub {
+  bodyClean: number;
+  clothesClean: number;
+}
+
+/** Clothes-cleanliness points lost per in-game hour, indexed by outfit rank (0=rags … 4=tailored). */
+const CLOTHES_DECAY_BY_RANK = [3.0, 1.8, 1.2, 0.8, 0.5];
+
 export interface DecayContext {
   /** In-game minutes elapsed. */
   minutes: number;
@@ -65,22 +78,30 @@ export interface DecayContext {
   /** Standing in the rain without a poncho. */
   soaked: boolean;
   sick: boolean;
+  /** Outfit rank 0 (rags) – 4 (tailored). Governs clothes-cleanliness decay. */
+  outfitRank: number;
 }
 
 /**
  * Advance the meters. Returns the delta actually applied so callers can
  * report "you are starving" only on the tick where it first bites.
  */
-export function decay(meters: Meters, ctx: DecayContext): MeterDelta {
+export function decay(meters: Meters, ctx: DecayContext, hygieneSub: HygieneSub): MeterDelta {
   const hours = ctx.minutes / 60;
   const before: Meters = { ...meters };
 
   const restMul = ctx.asleep ? 0.45 : 1;
   meters.hunger = clamp(meters.hunger - DECAY_PER_HOUR.hunger * hours * (ctx.asleep ? 0.7 : 1));
   meters.thirst = clamp(meters.thirst - DECAY_PER_HOUR.thirst * hours * restMul);
-  meters.hygiene = clamp(
-    meters.hygiene - DECAY_PER_HOUR.hygiene * hours * (ctx.asleep ? 0.6 : ctx.exertion) - (ctx.soaked ? 2.5 * hours : 0),
-  );
+  // Body cleanliness: sweat, exertion, and soaking all hit the skin.
+  const bodyDecayRate = DECAY_PER_HOUR.hygiene * (ctx.asleep ? 0.6 : ctx.exertion) + (ctx.soaked ? 2.5 : 0);
+  hygieneSub.bodyClean = clamp(hygieneSub.bodyClean - bodyDecayRate * hours);
+  // Clothes cleanliness: quality determines how quickly they pick up dirt.
+  const clothesDecayRate =
+    (CLOTHES_DECAY_BY_RANK[Math.min(4, ctx.outfitRank)] ?? 3.0) * (ctx.asleep ? 0.4 : 1) + (ctx.soaked ? 1.0 : 0);
+  hygieneSub.clothesClean = clamp(hygieneSub.clothesClean - clothesDecayRate * hours);
+  // Combined display meter — average of the two halves.
+  meters.hygiene = Math.round((hygieneSub.bodyClean + hygieneSub.clothesClean) / 2);
   if (!ctx.asleep) {
     meters.energy = clamp(meters.energy - DECAY_PER_HOUR.energy * hours * ctx.exertion);
   }

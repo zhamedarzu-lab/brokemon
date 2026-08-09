@@ -40,8 +40,11 @@ import {
   pushLog,
   housingIn,
   reputationIn,
+  restoreBody,
+  restoreClothes,
   setHousing,
   setWon,
+  syncHygiene,
   townOf,
   type GameState,
 } from "./state";
@@ -105,7 +108,8 @@ const communityCenter: Venue = (ctx) => {
     hint: "20 min, free",
     run: () => {
       ctx.advance(20, { sheltered: true });
-      applyDelta(s.meters, { hygiene: +42, morale: +8 });
+      restoreBody(s, 70);
+      applyDelta(s.meters, { morale: +8 });
       pushLog(s, "Washed up at the community center.", "good");
       return menu(
         "Community Center",
@@ -333,7 +337,8 @@ const laundromat: Venue = (ctx) => {
           run: () => {
             s.cash -= 6;
             ctx.advance(45, { sheltered: true });
-            applyDelta(s.meters, { hygiene: +30, morale: +10 });
+            restoreClothes(s, 80);
+            applyDelta(s.meters, { morale: +10 });
             pushLog(s, "Did laundry.", "good");
             return menu(
               "Wash & Wear",
@@ -384,6 +389,8 @@ function buyOutfit(ctx: ActionCtx, id: OutfitId): Prompt {
   s.cash -= def.price;
   s.wardrobe.push(id);
   s.wearing = id;
+  s.clothesClean = 90; // Brand-new clothes are clean.
+  syncHygiene(s);
   s.meters.morale = Math.min(100, s.meters.morale + (outfitRank(id) >= 3 ? 18 : 8));
   pushLog(s, `Bought ${def.name} for $${def.price}.`, "money");
   return menu(
@@ -461,7 +468,8 @@ const hostel: Venue = (ctx) => {
           run: () => {
             s.cash -= 2;
             ctx.advance(20, { sheltered: true });
-            applyDelta(s.meters, { hygiene: +28, morale: +6 });
+            restoreBody(s, 55);
+            applyDelta(s.meters, { morale: +6 });
             return menu("Hostel", ["Two dollars for eight minutes of hot water. Worth it."], [BACK], "good");
           },
         }
@@ -492,7 +500,8 @@ const trailer: Venue = (ctx) => {
           hint: "25 min",
           run: () => {
             ctx.advance(25, { sheltered: true });
-            applyDelta(s.meters, { hygiene: +32, morale: +6 });
+            restoreBody(s, 60);
+            applyDelta(s.meters, { morale: +6 });
             return menu("Your trailer", ["The water runs brown for a second and then it's fine."], [BACK], "good");
           },
         },
@@ -546,7 +555,9 @@ const apartment: Venue = (ctx) => {
           hint: "30 min",
           run: () => {
             ctx.advance(30, { sheltered: true });
-            applyDelta(s.meters, { hygiene: +45, morale: +8 });
+            restoreBody(s, 75);
+            restoreClothes(s, 50);
+            applyDelta(s.meters, { morale: +8 });
             return menu("Your apartment", ["Your own bathroom. You take your time."], [BACK], "good");
           },
         },
@@ -1496,7 +1507,8 @@ const weeklyRooms: Venue = (ctx) => {
           hint: "15 min",
           run: () => {
             ctx.advance(15, { sheltered: true });
-            applyDelta(s.meters, { hygiene: +14, morale: +2 });
+            restoreBody(s, 25);
+            applyDelta(s.meters, { morale: +2 });
             return menu("Your room", ["Cold tap, one flannel. It is not a wash and you know it."], [BACK]);
           },
         },
@@ -1647,7 +1659,8 @@ const washhouse: Venue = (ctx) => {
             run: () => {
               s.cash -= WASHHOUSE_PRICE;
               ctx.advance(30, { sheltered: true });
-              applyDelta(s.meters, { hygiene: +46, morale: +9 });
+              restoreBody(s, 75);
+              applyDelta(s.meters, { morale: +9 });
               pushLog(s, `Washed at the Eastgate — $${WASHHOUSE_PRICE}.`, "good");
               return menu(
                 "Eastgate Washhouse",
@@ -1788,7 +1801,8 @@ const gym: Venue = (ctx) => {
             run: () => {
               s.cash -= GYM_PRICE;
               ctx.advance(90, { sheltered: true, exertion: 2 });
-              applyDelta(s.meters, { hygiene: +48, health: +9, morale: +14, energy: -14 });
+              restoreBody(s, 80);
+              applyDelta(s.meters, { health: +9, morale: +14, energy: -14 });
               pushLog(s, `A session and a shower at the Wharf Club — $${GYM_PRICE}.`, "good");
               return menu(
                 "The Wharf Club",
@@ -1907,7 +1921,8 @@ const dossHouse: Venue = (ctx) => {
           run: () => {
             s.cash -= 4;
             ctx.advance(20, { sheltered: true });
-            applyDelta(s.meters, { hygiene: +30, morale: +6 });
+            restoreBody(s, 60);
+            applyDelta(s.meters, { morale: +6 });
             return menu("St Giles Rooms", ["Four dollars, and the door does not lock."], [BACK], "good");
           },
         }
@@ -1930,6 +1945,22 @@ const dossHouse: Venue = (ctx) => {
 const diner: Venue = (ctx) => {
   const s = ctx.state;
   if (!withinHours(s.time, 6, 22)) return say("Route 1 Diner", "Closed. Open 6AM to 10PM.");
+
+  if (s.meters.hygiene < 30) {
+    applyDelta(s.meters, { morale: -5 });
+    pushLog(s, "Turned away from the diner.", "bad");
+    return say(
+      "Route 1 Diner",
+      [
+        "She comes out from behind the counter before you reach a stool.",
+        '"I\'m sorry, love. You\'ll have to clean up first."',
+        s.bodyClean < s.clothesClean
+          ? "You can smell yourself. She definitely can."
+          : "The state of your clothes. She's got other customers.",
+      ],
+      "bad",
+    );
+  }
 
   const hotMeal = ITEMS.hotMeal;
   const coffee = ITEMS.coffee;

@@ -3,7 +3,7 @@ import { applyDelta, type MeterDelta } from "./meters";
 import { menu, say, type Choice, type Prompt } from "./prompt";
 import type { Rng } from "./rng";
 import { HOUSING, type HousingId } from "./social";
-import { canDoGig, changeReputation, checkRequirements, currentAppearance, earnCash, pushLog, townOf, type GameState } from "./state";
+import { canDoGig, changeReputation, checkRequirements, currentAppearance, earnCash, pushLog, syncHygiene, townOf, type GameState } from "./state";
 import { zoneAt } from "../world/map";
 import { dayOf, hourOf, minuteOfDay, MINUTES_PER_DAY, minutesUntilHour, withinHours } from "./time";
 import { WEATHER } from "./weather";
@@ -359,7 +359,7 @@ export function sleep(ctx: ActionCtx, where: HousingId, untilHour = 7): Prompt {
   if (s.caffeine >= 4) lines.push("You lie there wide awake for a long time with your heart going.");
   s.caffeine = 0;
   s.meters.morale = Math.min(100, s.meters.morale + (def.restQuality >= 0.7 ? 10 : 2) * share);
-  if (def.hasShower) s.meters.hygiene = Math.min(100, s.meters.hygiene + 8 * share);
+  if (def.hasShower) { s.bodyClean = Math.min(100, s.bodyClean + 12 * share); syncHygiene(s); }
 
   lines.push(
     overnight

@@ -4,7 +4,7 @@ import { addItem } from "./items";
 import { EMPLOYMENT } from "./jobs";
 import { applyDelta } from "./meters";
 import { menu, type Choice, type Prompt } from "./prompt";
-import { changeReputation, checkRequirements, currentAppearance, earnCash, phaseOf, pushLog, reputationIn, townOf, type GameState } from "./state";
+import { changeReputation, checkRequirements, currentAppearance, dirtySelf, earnCash, phaseOf, pushLog, reputationIn, restoreBody, townOf, type GameState } from "./state";
 import { hourOf } from "./time";
 import type { ActionCtx } from "./work";
 
@@ -480,7 +480,8 @@ const BROKEMON_EVENTS: EventDef[] = [
                 pushLog(s, `Pop-up sale find — sold on for $${cashGain}.`, "money");
                 return menu("Pop-up sale", [`The tip was good. You flip a jacket for $${cashGain}.`], [close], "money");
               }
-              applyDelta(s.meters, { hygiene: +10, morale: +4 });
+              restoreBody(s, 14);
+              applyDelta(s.meters, { morale: +4 });
               return menu("Pop-up sale", ["Too late for the good stuff.", "You get a bar of soap and a towel for nothing, which is not nothing."], [close], "good");
             },
           },
@@ -553,7 +554,8 @@ const BROKEMON_EVENTS: EventDef[] = [
           {
             label: "Keep moving — you're already wet",
             run: () => {
-              applyDelta(s.meters, { hygiene: -14, health: -6, morale: -10 });
+              dirtySelf(s, 14, 0.3);
+              applyDelta(s.meters, { health: -6, morale: -10 });
               return menu("The sky opens", ["By the time it stops you're soaked through.", "Everything feels heavier."], [close], "bad");
             },
           },
@@ -1046,7 +1048,8 @@ const BROKEMON_EVENTS: EventDef[] = [
             hint: `1h, $${pay}`,
             run: () => {
               ctx.advance(60, { exertion: 2.0 });
-              applyDelta(s.meters, { energy: -14, hygiene: -8, thirst: -12, hunger: -8, morale: +6 });
+              dirtySelf(s, 8);
+              applyDelta(s.meters, { energy: -14, thirst: -12, hunger: -8, morale: +6 });
               earnCash(s, pay);
               changeReputation(s, 2);
               addItem(s.inventory, "trashFood", 1);
@@ -1191,7 +1194,8 @@ const BROKEMON_EVENTS: EventDef[] = [
             hint: `1h, $${pay}`,
             run: () => {
               ctx.advance(60, { exertion: 2.1 });
-              applyDelta(s.meters, { energy: -16, hygiene: -12, thirst: -14, morale: +4 });
+              dirtySelf(s, 12);
+              applyDelta(s.meters, { energy: -16, thirst: -14, morale: +4 });
               earnCash(s, pay);
               pushLog(s, `An hour on somebody else's hedge — $${pay}.`, "money");
               return menu(
@@ -1564,7 +1568,8 @@ const BROKEMON_EVENTS: EventDef[] = [
             hint: `$${pay}`,
             run: () => {
               ctx.advance(120, { exertion: 2.2 });
-              applyDelta(s.meters, { energy: -30, hygiene: -15, hunger: -18, thirst: -20 });
+              dirtySelf(s, 15);
+              applyDelta(s.meters, { energy: -30, hunger: -18, thirst: -20 });
               if (ctx.rng.chance(0.22)) {
                 changeReputation(s, -8);
                 const fine = 120;
@@ -1606,7 +1611,8 @@ const BROKEMON_EVENTS: EventDef[] = [
     weight: (s, z) => (z === "downtown" && hourOf(s.time) === 6 ? 6 : 0),
     build: (ctx) => {
       const s = ctx.state;
-      applyDelta(s.meters, { hygiene: +6, morale: -8, health: -3 });
+      restoreBody(s, 8);
+      applyDelta(s.meters, { morale: -8, health: -3 });
       return menu("Six AM", ["The sprinklers come on. They are timed for exactly this.", "You are soaked to the knee before you are properly awake."], [close], "bad");
     },
   },
@@ -1904,7 +1910,7 @@ const BROKEMON_EVENTS: EventDef[] = [
               return menu("Caught in it", ["You stand just close enough not to be wet.", "Neither of you says anything. The bus comes. She goes. That's all it was."], [close], "good");
             },
           },
-          { label: "Walk on in the rain", run: () => { applyDelta(s.meters, { hygiene: -8, morale: -6 }); return menu("Caught in it", ["You're wet before the end of the road."], [close], "bad"); } },
+          { label: "Walk on in the rain", run: () => { dirtySelf(s, 8, 0.3); applyDelta(s.meters, { morale: -6 }); return menu("Caught in it", ["You're wet before the end of the road."], [close], "bad"); } },
         ],
       );
     },
@@ -1926,7 +1932,8 @@ const BROKEMON_EVENTS: EventDef[] = [
             hint: `$${pay}`,
             run: () => {
               ctx.advance(55, { exertion: 1.6 });
-              applyDelta(s.meters, { energy: -10, hygiene: -6, morale: +6 });
+              dirtySelf(s, 6);
+              applyDelta(s.meters, { energy: -10, morale: +6 });
               earnCash(s, pay);
               pushLog(s, `Window washing — $${pay}.`, "money");
               return menu("A shop owner with a bucket", [`Three windows, squeegee and a chamois, $${pay} cash.`, '"Same deal Fridays, if you want."'], [close], "money");
@@ -2413,7 +2420,7 @@ const BROKEMON_EVENTS: EventDef[] = [
             hint: "10 min",
             run: () => {
               ctx.advance(10, { exertion: 1.2 });
-              applyDelta(s.meters, { hygiene: -4 });
+              dirtySelf(s, 4);
               if (ctx.rng.chance(0.6)) {
                 const cash = ctx.rng.int(5, 22);
                 earnCash(s, cash);
@@ -2620,7 +2627,8 @@ const BROKEMON_EVENTS: EventDef[] = [
             hint: `30 min, $${pay}`,
             run: () => {
               ctx.advance(30, { exertion: 1.8 });
-              applyDelta(s.meters, { energy: -8, hygiene: -4, morale: +8 });
+              dirtySelf(s, 4);
+              applyDelta(s.meters, { energy: -8, morale: +8 });
               earnCash(s, pay);
               pushLog(s, `Shifted boxes for a shop — $${pay}.`, "money");
               return menu("A delivery arrived", [`Thirty minutes, eighteen boxes.`, `$${pay} cash and a bottle of water.`, '"You free tomorrow?" You say you\'ll see.'], [close], "money");
@@ -2739,7 +2747,8 @@ const BROKEMON_EVENTS: EventDef[] = [
             label: "Drink",
             hint: "free",
             run: () => {
-              applyDelta(s.meters, { thirst: +38, hygiene: +4 });
+              restoreBody(s, 6);
+              applyDelta(s.meters, { thirst: +38 });
               return menu("An outside tap", ["Cold and clean and free.", "You drink until it hurts and then a bit more."], [close], "good");
             },
           },
@@ -2748,7 +2757,8 @@ const BROKEMON_EVENTS: EventDef[] = [
             hint: "5 min",
             run: () => {
               ctx.advance(5);
-              applyDelta(s.meters, { thirst: +38, hygiene: +14, morale: +6 });
+              restoreBody(s, 20);
+              applyDelta(s.meters, { thirst: +38, morale: +6 });
               return menu("An outside tap", ["Cold and clean.", "Your hands are warmer after than before, which makes no sense and is true anyway."], [close], "good");
             },
           },

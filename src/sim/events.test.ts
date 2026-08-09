@@ -137,7 +137,7 @@ describe("colleagueCall event", () => {
     const cashBefore = s.cash;
     drive(prompt, "yes");
     expect(s.reputation[STARTING_TOWN]).toBeGreaterThan(repBefore);
-    expect(s.cash).toBeGreaterThan(cashBefore);
+    // colleagueCall no longer gives cash — reputation boost only
   });
 });
 
@@ -272,7 +272,7 @@ describe("lostTourist event", () => {
     const cashBefore = s.cash;
     const moraleBefore = s.meters.morale;
     drive(prompt, "point them");
-    expect(s.cash).toBeGreaterThan(cashBefore);
+    // lostTourist no longer gives a tip — morale boost only
     expect(s.meters.morale).toBeGreaterThan(moraleBefore);
   });
 });
@@ -715,11 +715,11 @@ describe("event recency cooldown", () => {
   const ROLLS = 300;
 
   /**
-   * Count how many times 'change' fires out of ROLLS independent rolls.
+   * Count how many times 'cans' fires out of ROLLS independent rolls.
    * Each roll uses a fresh RNG seed so state mutations from build() don't
    * compound; we don't call build() — we only look at what rollEvent picked.
    */
-  function countChangeFires(flags: Record<string, number>): number {
+  function countCansFires(flags: Record<string, number>): number {
     let count = 0;
     for (let seed = 1; seed <= ROLLS; seed++) {
       const s = createState(seed);
@@ -728,17 +728,17 @@ describe("event recency cooldown", () => {
       inZone(s, "slums");
       const ctx = makeCtx(s, seed);
       const p = rollEvent(ctx);
-      if (p?.title === "Loose change") count++;
+      if (p?.title === "A split bin bag") count++;
     }
     return count;
   }
 
   it("recently-seen events appear significantly less often than cold ones", () => {
     // Baseline: no prior sightings.
-    const baselineCount = countChangeFires({});
+    const baselineCount = countCansFires({});
 
-    // Hot cooldown: 'change' was seen just now (elapsed = 0 → factor = 0.2).
-    const hotCount = countChangeFires({ "ev_last:change": 7 * 60 /* same as createState start */ });
+    // Hot cooldown: 'cans' was seen just now (elapsed = 0 → fully suppressed).
+    const hotCount = countCansFires({ "ev_last:cans": 7 * 60 /* same as createState start */ });
 
     // With a 0.2× weight factor the hot rate should be well below the baseline.
     // We allow generous margins to stay deterministic across platforms.
@@ -747,7 +747,7 @@ describe("event recency cooldown", () => {
   });
 
   it("cooldown multiplier is COOLDOWN_DECAY_FACTOR when elapsed = 0", () => {
-    // If ev_last:change equals s.time, the elapsed is 0 → multiplier = COOLDOWN_DECAY_FACTOR.
+    // If ev_last:cans equals s.time, the elapsed is 0 → multiplier = COOLDOWN_DECAY_FACTOR.
     // We verify this indirectly: hot rate / baseline rate ≈ COOLDOWN_DECAY_FACTOR.
     // Use a large sample and a loose ratio bound.
     const LARGE = 600;
@@ -757,13 +757,13 @@ describe("event recency cooldown", () => {
       const sBase = createState(seed);
       sBase.meters = { hunger: 100, thirst: 100, hygiene: 80, energy: 100, morale: 80, health: 100 };
       inZone(sBase, "slums");
-      if (rollEvent(makeCtx(sBase, seed))?.title === "Loose change") baseCount++;
+      if (rollEvent(makeCtx(sBase, seed))?.title === "A split bin bag") baseCount++;
 
       const sHot = createState(seed);
-      sHot.flags["ev_last:change"] = sHot.time; // elapsed = 0
+      sHot.flags["ev_last:cans"] = sHot.time; // elapsed = 0
       sHot.meters = { hunger: 100, thirst: 100, hygiene: 80, energy: 100, morale: 80, health: 100 };
       inZone(sHot, "slums");
-      if (rollEvent(makeCtx(sHot, seed))?.title === "Loose change") hotCount++;
+      if (rollEvent(makeCtx(sHot, seed))?.title === "A split bin bag") hotCount++;
     }
     // An event seen this very minute is inside the no-repeat window, so it is
     // barred outright rather than merely discounted. Two split bin bags in a
@@ -775,28 +775,28 @@ describe("event recency cooldown", () => {
 
   it("cooldown fully recovers after COOLDOWN_RECOVER_MIN minutes", () => {
     // Set ev_last to COOLDOWN_RECOVER_MIN minutes in the past — multiplier should be 1.
-    const recoveredCount = countChangeFires({ "ev_last:change": 7 * 60 - COOLDOWN_RECOVER_MIN });
-    const baselineCount = countChangeFires({});
+    const recoveredCount = countCansFires({ "ev_last:cans": 7 * 60 - COOLDOWN_RECOVER_MIN });
+    const baselineCount = countCansFires({});
 
     // Recovered count should be statistically indistinguishable — within 30% of baseline.
     expect(Math.abs(recoveredCount - baselineCount)).toBeLessThan(baselineCount * 0.3 + 5);
   });
 
   it("rollEvent records ev_last flag after firing a repeatable event", () => {
-    // Find a seed that fires 'change', then check ev_last:change is recorded.
+    // Find a seed that fires 'cans', then check ev_last:cans is recorded.
     for (let seed = 1; seed <= 200; seed++) {
       const s = createState(seed);
       s.meters = { hunger: 100, thirst: 100, hygiene: 80, energy: 100, morale: 80, health: 100 };
       inZone(s, "slums");
       const ctx = makeCtx(s, seed);
       const p = rollEvent(ctx);
-      if (p?.title === "Loose change") {
-        expect(s.flags["ev_last:change"]).toBe(s.time);
+      if (p?.title === "A split bin bag") {
+        expect(s.flags["ev_last:cans"]).toBe(s.time);
         return;
       }
     }
-    // If 'change' never fired in 200 seeds the test environment is broken — fail loudly.
-    throw new Error("'change' event never fired in 200 seeds");
+    // If 'cans' never fired in 200 seeds the test environment is broken — fail loudly.
+    throw new Error("'cans' event never fired in 200 seeds");
   });
 
   it("once-only events do NOT record ev_last", () => {
@@ -818,8 +818,8 @@ describe("event recency cooldown", () => {
   it("partial cooldown: elapsed between COOLDOWN_FULL_MIN and COOLDOWN_RECOVER_MIN", () => {
     // At the midpoint elapsed time the multiplier should be between DECAY_FACTOR and 1.
     const midElapsed = Math.floor((COOLDOWN_FULL_MIN + COOLDOWN_RECOVER_MIN) / 2);
-    const midCount = countChangeFires({ "ev_last:change": 7 * 60 - midElapsed });
-    const baselineCount = countChangeFires({});
+    const midCount = countCansFires({ "ev_last:cans": 7 * 60 - midElapsed });
+    const baselineCount = countCansFires({});
 
     // Mid-cooldown should fire less than baseline, more than full-cooldown.
     // We just verify it's strictly below baseline (partial suppression is happening).
@@ -914,6 +914,8 @@ describe("the interview does not hire you into a job you cannot turn up to", () 
       s.wardrobe.push("thrift");
       s.reputation[STARTING_TOWN] = 25;
       s.meters = { hunger: 100, thirst: 100, hygiene: 100, energy: 100, morale: 80, health: 100 };
+      s.bodyClean = 100;
+      s.clothesClean = 100;
       const p = getInterviewPrompt(s, i);
       if (!p) continue;
       const result = drive(p, "confident");

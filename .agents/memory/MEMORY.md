@@ -1,2 +1,3 @@
 - [Vite + Replit proxy white screen](vite-replit-proxy.md) — set `hmr.clientPort: 443`; stale port mappings in .replit silently break the bare URL.
 - [Map expansion balance test alignment](map-balance-test-alignment.md) — when the map changes, balance.test.ts hardcoded tile coords (fountain, dumpsters, sleep, gate) must be updated to match.
+- [Hygiene sub-meter pattern](hygiene-sub-meter.md) — meters.hygiene = avg(bodyClean, clothesClean); tests that set meters.hygiene and advance time must also set both sub-values or decay overwrites them.

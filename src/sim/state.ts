@@ -67,6 +67,10 @@ export interface GameState {
   inventory: Inventory;
   wearing: OutfitId;
   wardrobe: OutfitId[];
+  /** Body cleanliness 0-100. Restored by showering. Decays from sweat/exertion. */
+  bodyClean: number;
+  /** Clothes cleanliness 0-100. Restored by laundry or buying new clothes. Decays slower with better outfits. */
+  clothesClean: number;
 
   /**
    * Where you live, per town. You can hold a room in more than one place; the
@@ -182,6 +186,8 @@ export function createState(seed = Date.now() >>> 0): GameState {
     inventory: {},
     wearing: "rags",
     wardrobe: ["rags"],
+    bodyClean: 22,
+    clothesClean: 22,
 
     housing: perTown<HousingId>("street"),
     rentDueDay: perTown(0),
@@ -530,4 +536,35 @@ export function checkPostWinGoal(s: GameState): void {
     pushLog(s, `Net worth hit $${s.postWinGoal.toLocaleString()}. The numbers say you have arrived.`, "good");
     s.postWinGoal = 0;
   }
+}
+
+// ----------------------------------------------------------------- hygiene
+
+/** Restore body cleanliness (showering). Syncs the combined hygiene meter. */
+export function restoreBody(s: GameState, amount: number): void {
+  s.bodyClean = Math.min(100, Math.max(0, s.bodyClean + amount));
+  s.meters.hygiene = Math.round((s.bodyClean + s.clothesClean) / 2);
+}
+
+/** Restore clothes cleanliness (laundry / new outfit). Syncs the combined hygiene meter. */
+export function restoreClothes(s: GameState, amount: number): void {
+  s.clothesClean = Math.min(100, Math.max(0, s.clothesClean + amount));
+  s.meters.hygiene = Math.round((s.bodyClean + s.clothesClean) / 2);
+}
+
+/** Recompute the combined hygiene meter. Call after any direct write to bodyClean or clothesClean. */
+export function syncHygiene(s: GameState): void {
+  s.meters.hygiene = Math.round((s.bodyClean + s.clothesClean) / 2);
+}
+
+/**
+ * Apply a hygiene hit from dirt, work or weather. Defaults to 65 % clothes / 35 % body
+ * (labour gets clothes dirty faster). Pass clothesFraction 0.3 for soaking rain.
+ */
+export function dirtySelf(s: GameState, total: number, clothesFraction = 0.65): void {
+  const clothesHit = Math.round(total * clothesFraction);
+  const bodyHit = total - clothesHit;
+  s.clothesClean = Math.max(0, s.clothesClean - clothesHit);
+  s.bodyClean = Math.max(0, s.bodyClean - bodyHit);
+  s.meters.hygiene = Math.round((s.bodyClean + s.clothesClean) / 2);
 }

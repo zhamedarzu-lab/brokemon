@@ -4,7 +4,7 @@ import { changeReputation, checkPostWinGoal, hasItem, phaseOf, pushLog, setWon, 
 import { decay, WARN_THRESHOLDS, type MeterId } from "./meters";
 import { dayOf, minuteOfDay, MINUTES_PER_DAY } from "./time";
 import { rollWeather, WEATHER, weatherDuration } from "./weather";
-import { HOUSING } from "./social";
+import { HOUSING, outfitRank } from "./social";
 import type { Rng } from "./rng";
 import { currentAppearance } from "./state";
 import { addItem, removeItem } from "./items";
@@ -57,7 +57,7 @@ export function advance(s: GameState, rng: Rng, opts: TickOptions): Interrupt[] 
     const weather = WEATHER[s.weather];
     const soaked = outdoors && weather.wet && !hasItem(s, "poncho") && !hasItem(s, "raincoat") && !hasItem(s, "umbrella");
 
-    decay(s.meters, { minutes: step, asleep, exertion, soaked, sick: s.sick });
+    decay(s.meters, { minutes: step, asleep, exertion, soaked, sick: s.sick, outfitRank: outfitRank(s.wearing) }, s);
 
     if (outdoors && weather.moralePerHourOutdoors !== 0) {
       s.meters.morale = Math.max(0, s.meters.morale + (weather.moralePerHourOutdoors * step) / 60);

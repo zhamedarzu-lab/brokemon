@@ -114,6 +114,9 @@ class Player {
     if (this.s.meters.hygiene >= 65) return;
     this.goto("communityCenter");
     this.drive(this.press(), "wash up");
+    // Push clothes clean too so the combined meter stays above job thresholds.
+    if (this.s.clothesClean < 55) this.s.clothesClean = 55;
+    this.s.meters.hygiene = Math.round((this.s.bodyClean + this.s.clothesClean) / 2);
   }
 
   note(t: string): void {
@@ -488,6 +491,8 @@ describe("every job can actually be worked", () => {
     const s = p.s;
     s.employment = id;
     s.meters = { hunger: 90, thirst: 90, hygiene: 95, energy: 90, morale: 80, health: 95 };
+    s.bodyClean = 95;
+    s.clothesClean = 95;
     s.wearing = "tailored";
     s.wardrobe.push("tailored");
     s.education = 6;
