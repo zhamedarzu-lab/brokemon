@@ -111,6 +111,14 @@ export interface GameState {
 
   businessOwned: boolean;
   mayor: boolean;
+  /**
+   * A pitch at the night market, let to somebody who trades on it.
+   *
+   * Brokedale's only compounding asset, and a deliberate rehearsal for the
+   * ending: the first time you make money from a thing rather than a shift is
+   * the first time somebody pays you for standing where they stand.
+   */
+  stallOwned: boolean;
   /** The building on St Giles Row. Brokedale's apex. */
   blockOwned: boolean;
   won: boolean;
@@ -198,6 +206,7 @@ export function createState(seed = Date.now() >>> 0): GameState {
 
     businessOwned: false,
     mayor: false,
+    stallOwned: false,
     blockOwned: false,
     won: false,
     endings: [],

@@ -3,10 +3,14 @@
 A second place, reachable by coach. Dense, well supplied, and expensive in
 every way that matters.
 
-Phases 0, 0b, 1 and 2 are done and merged. The coach runs, Brokedale is four
-districts deep, and it has a career ladder of its own that nobody is judged on
-their clothes for. Phase 3 — the encounters and the second apex — is still a
-plan.
+**All six phases are done and merged.** The coach runs, Brokedale is four
+districts deep, it has a career ladder nobody is judged on their clothes for,
+its own encounters, and its own ending. The two apexes land in the same family:
+the estate at 114–284 days, the block at 119–237.
+
+What is left is listed at the bottom of each phase and in
+`docs/playtest-findings.md` — a named thread, the university, the auction
+house, and the Brokemon items that predate all of this.
 
 ---
 
@@ -341,10 +345,39 @@ both compounding, and both already belong to the city.
 Still open from the phase: a named thread. `bd_collector` plants Aldiss and
 `bd_askedWhoOwns` records that you asked, which is the hook for one.
 
-### Phase 4 — balance
+### Phase 4 — balance ✅ DONE
 
-The walking rig must model the coach and both towns, or every number it prints
-after this is fiction — exactly as it was through the 48x50 → 72x72 expansion.
+The rig requirement was met before the content landed, which is why there are
+numbers to balance against at all: it rides the coach, walks both towns, and
+has `--crossing` and `--brokedale` modes of its own.
+
+**The gap, closed in the fiction.** Open finding 1 said the block was landing
+around day 280 against the estate's 165, and that the cause was not the price:
+Brokemon compounds three ways — franchise, mayoral salary, index fund — and
+Brokedale compounded not at all, so every dollar toward the building was earned
+by turning up to a shift.
+
+**A pitch at the night market**, $1,400, let to residents whose name is worth 25
+here. You do not stand on it; Nadia does, and has for six years, and has never
+been able to buy it. It returns $45 plus your reputation a night. It is the
+ending in miniature and the game does not pretend otherwise — the first money
+you make without working for it comes out of somebody else's night.
+
+Measured on the same six seeds, before and after:
+
+| | to the block |
+|---|---|
+| before | 168, 238, 274, 289, 296, and one still 60 days short at 400 |
+| first pass at $190 a night | 103, 126, 143, 154, 157 — *past* the estate, and reliably |
+| shipped, at half that | **119, 145, 189, 194, 217, 237** |
+
+Mean 184 against the estate's 165, ranges overlapping, all six arriving. Nineteen
+days apart is inside the noise floor, which is the definition of the same
+family. Collapses fell from 4–13 a run to 4–7.
+
+The first pass is worth keeping on the record: $190 a night did not level the
+two apexes, it inverted them, and it did so on every seed. Compounding is
+violent over two hundred days and the only way to size it is to measure twice.
 
 ---
 

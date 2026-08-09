@@ -1048,6 +1048,13 @@ function brokedaleDay(p: Player): void {
     beg(p, 3);
   }
 
+  // The pitch pays every night from the night it is bought, so it is worth
+  // buying the moment it is affordable — which is what the block is waiting on.
+  if (!s.stallOwned && housingIn(s) === "room" && s.cash + s.bank >= 1600) {
+    p.goto("nightMarket");
+    if (p.took(p.press(), "take on a pitch")) p.note("TOOK ON a pitch");
+  }
+
   // The block, the moment Aldiss will hear it. Everything above this line is
   // how you get to be somebody he will sell to.
   if (!s.blockOwned && housingIn(s) === "room" && s.cash + s.bank >= 28_000) {

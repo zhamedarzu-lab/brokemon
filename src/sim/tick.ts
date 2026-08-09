@@ -231,6 +231,14 @@ function payPassiveIncome(s: GameState, out: Interrupt[]): void {
     s.bank += MAYOR_SALARY;
     lines.push(`Your mayoral salary landed: $${MAYOR_SALARY}.`);
   }
+  if (s.stallOwned) {
+    // A pitch you do not stand on. It is a small number and it arrives every
+    // night, which is the entire difference between Brokedale's economy and
+    // Brokemon's — see open finding 1.
+    const take = STALL_BASE + Math.round(reputationIn(s, "brokedale") * STALL_PER_REPUTATION);
+    s.bank += take;
+    lines.push(`Nadia's takings from the pitch: $${take}.`);
+  }
   if (s.blockOwned) {
     // Eleven doors, and it arrives whether or not anybody could spare it.
     s.bank += BLOCK_RENT_ROLL;
@@ -247,6 +255,23 @@ export const MAYOR_SALARY = 320;
 
 /** What eleven doors on St Giles Row bring in overnight. */
 export const BLOCK_RENT_ROLL = 245;
+
+/**
+ * What a let pitch at the night market returns a night.
+ *
+ * Sized against the measured gap rather than picked: the block was landing
+ * around day 280 against the estate's 165, because Brokemon compounds three
+ * ways — franchise, mayoral salary, index fund — and Brokedale compounded not
+ * at all. This is the city's one answer to that, and it is deliberately much
+ * smaller than the franchise, because it is one stall.
+ *
+ * First pass was 95 + rep*1.2, about $190 a night, and it took the block from
+ * day 280 to day 137 — past the estate rather than level with it, and reliably
+ * so on every seed, which would have made Brokemon the long way round to a
+ * smaller number. Half of that lands the two apexes in the same family.
+ */
+export const STALL_BASE = 45;
+export const STALL_PER_REPUTATION = 0.6;
 
 /**
  * Rent, in every town you hold a key to.

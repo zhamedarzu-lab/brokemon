@@ -18,10 +18,10 @@ import { loadGame, saveGame } from "./save";
 import { ITEMS } from "./items";
 import { EMPLOYMENT, employmentIn } from "./jobs";
 import { HOUSING } from "./social";
-import { createState, housingIn, phaseOf, reputationIn, setWon, type GameState } from "./state";
-import { advance, BLOCK_RENT_ROLL } from "./tick";
+import { createState, housingIn, phaseOf, REPUTATION_CEILING, reputationIn, setWon, type GameState } from "./state";
+import { advance, BLOCK_RENT_ROLL, STALL_BASE, STALL_PER_REPUTATION } from "./tick";
 import { rollEvent } from "./events";
-import { BLOCK_PRICE, BLOCK_REPUTATION } from "./venues";
+import { BLOCK_PRICE, BLOCK_REPUTATION, PITCH_PRICE } from "./venues";
 import { minuteOfDay } from "./time";
 import { type ActionCtx } from "./work";
 
@@ -647,5 +647,53 @@ describe("Brokedale's encounters", () => {
       if (prompt) seen.add(prompt.title);
     }
     expect(seen.size).toBeGreaterThan(20);
+  });
+});
+
+/* ------------------------------------------------------------- the pitch */
+
+describe("a pitch at the night market", () => {
+  it("is not let to somebody with no address in the city", () => {
+    const p = new Player();
+    p.rideOut(9);
+    p.s.cash = 10_000;
+    p.s.reputation.brokedale = 90;
+    p.goto("nightMarket");
+    const stalls = p.press();
+    expect(p.took(stalls, "take on a pitch")).toBe(false);
+    expect(p.lockReason(stalls, "take on a pitch")).toMatch(/address/i);
+  });
+
+  it("pays every night once it is yours, and scales with your name here", () => {
+    const p = new Player();
+    p.rideOut(9);
+    p.s.housing.brokedale = "room";
+    p.s.reputation.brokedale = 50;
+    p.s.cash = PITCH_PRICE;
+    p.goto("nightMarket");
+    expect(p.took(p.press(), "take on a pitch")).toBe(true);
+    expect(p.s.stallOwned).toBe(true);
+
+    const before = p.s.bank;
+    p.ctx.advance(24 * 60, { sheltered: true, asleep: true });
+    const oneNight = p.s.bank - before;
+    expect(oneNight).toBeGreaterThanOrEqual(STALL_BASE);
+    // Taking on the pitch is worth 5 reputation, so the payout is above the
+    // floor by roughly what the name is worth.
+    expect(oneNight).toBeCloseTo(STALL_BASE + Math.round(reputationIn(p.s, "brokedale") * STALL_PER_REPUTATION), 0);
+  });
+
+  it("is much smaller than the franchise, because it is one stall", () => {
+    // Brokemon's franchise is 350 + rep*3. If the pitch ever approaches that,
+    // Brokedale stops being the slower, smaller road and the fork collapses.
+    const atCeiling = STALL_BASE + REPUTATION_CEILING * STALL_PER_REPUTATION;
+    expect(atCeiling).toBeLessThan(200);
+  });
+
+  it("does not pay anything to somebody who never took one on", () => {
+    const p = new Player();
+    const before = p.s.bank;
+    p.ctx.advance(24 * 60, { sheltered: true, asleep: true });
+    expect(p.s.bank).toBe(before);
   });
 });

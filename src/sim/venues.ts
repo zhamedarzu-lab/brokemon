@@ -1377,6 +1377,7 @@ const nightMarket: Venue = (ctx) => {
           },
         }
       : { label: "Coffee, black", hint: `$${brew}`, locked: "You can't afford it" },
+    pitchChoice(ctx),
     BACK,
   ];
 
@@ -1774,6 +1775,75 @@ const gym: Venue = (ctx) => {
     ],
   );
 };
+
+/* ------------------------------------------------- Brokedale: the pitch */
+
+export const PITCH_PRICE = 1400;
+/** The committee sells to a name it knows, same as everything else here. */
+export const PITCH_REPUTATION = 25;
+
+/**
+ * A pitch at the night market, and the person already standing on it.
+ *
+ * This exists because the measurement said it had to: the block was landing
+ * around day 280 against the estate's 165, and the reason was not the price.
+ * Brokemon compounds three ways — the franchise, the mayor's salary, the index
+ * fund — and Brokedale compounded not at all, so every dollar toward the
+ * building was earned by turning up to a shift. This is the city's answer, and
+ * it is the right shape for the city: not a business you run, a thing you own
+ * that somebody else stands behind.
+ *
+ * It is also the ending in miniature, on purpose. The first money you make
+ * without working for it comes out of Nadia's night, and the game does not
+ * pretend otherwise.
+ */
+function pitchChoice(ctx: ActionCtx): Choice {
+  const s = ctx.state;
+  if (s.stallOwned) {
+    return {
+      label: "Look in on the pitch",
+      run: () =>
+        say("Your pitch", [
+          "Nadia has it laid out better than you would have. She has traded here six years.",
+          "She counts your share off before her own without being asked, and asks after your room.",
+        ]),
+    };
+  }
+
+  const reasons: string[] = [];
+  if (housingIn(s, "brokedale") === "street") reasons.push("the committee lets pitches to residents, and you have no address here");
+  if (s.cash + s.bank < PITCH_PRICE) reasons.push(`the pitch is $${PITCH_PRICE.toLocaleString()} and you have $${(s.cash + s.bank).toLocaleString()}`);
+  if (reputationIn(s, "brokedale") < PITCH_REPUTATION) {
+    reasons.push(`the committee lets to names it knows (yours is worth ${reputationIn(s, "brokedale")}, they want ${PITCH_REPUTATION})`);
+  }
+
+  if (reasons.length > 0) return lockedChoice("Take on a pitch", reasons, `$${PITCH_PRICE.toLocaleString()}`);
+
+  return {
+    label: "Take on a pitch",
+    hint: `$${PITCH_PRICE.toLocaleString()}`,
+    run: () => {
+      const fromCash = Math.min(s.cash, PITCH_PRICE);
+      s.cash -= fromCash;
+      s.bank -= PITCH_PRICE - fromCash;
+      s.stallOwned = true;
+      changeReputation(s, 5, "brokedale");
+      pushLog(s, `Took on a pitch at the night market — $${PITCH_PRICE}.`, "money");
+      return menu(
+        "Night Market",
+        [
+          "The committee takes the money and gives you a laminated number.",
+          "Nadia has traded on that number for six years and has never once been able to buy it.",
+          "She shakes your hand and says it is good it went to somebody off the Row.",
+          "",
+          "You will take a cut of every night from now on, and you will not be standing here for any of them.",
+        ],
+        [BACK],
+        "money",
+      );
+    },
+  };
+}
 
 /* --------------------------------------------------- Brokedale: doss house */
 
