@@ -74,7 +74,7 @@ export function appearance(hygiene: number, outfit: OutfitId): number {
   return Math.round(hygiene < 25 ? raw * 0.7 : raw);
 }
 
-export type HousingId = "street" | "bench" | "hostel" | "trailer" | "apartment" | "estate";
+export type HousingId = "street" | "bench" | "hostel" | "room" | "trailer" | "apartment" | "estate";
 
 /**
  * Worst address to best. Once you can hold a room in more than one town, the
@@ -82,7 +82,7 @@ export type HousingId = "street" | "bench" | "hostel" | "trailer" | "apartment" 
  * has to be explicit rather than inferred from rest quality, where the
  * apartment and the estate tie.
  */
-export const HOUSING_ORDER: HousingId[] = ["street", "bench", "hostel", "trailer", "apartment", "estate"];
+export const HOUSING_ORDER: HousingId[] = ["street", "bench", "hostel", "room", "trailer", "apartment", "estate"];
 
 export function housingRank(id: HousingId): number {
   return HOUSING_ORDER.indexOf(id);
@@ -139,6 +139,22 @@ export const HOUSING: Record<HousingId, HousingDef> = {
     hasShower: true,
     storage: false,
     desc: "Nine dollars, lights out at eleven, twelve other people breathing.",
+  },
+  room: {
+    id: "room",
+    name: "A room on St Giles Row",
+    // Dearer than the trailer and worse, and it is still the best decision in
+    // the game once you work in Brokedale: it buys back the 250 minutes and
+    // $26 the crossing takes off a commuter every single day.
+    rent: 95,
+    rentEvery: 7,
+    restQuality: 0.82,
+    risk: 0.06,
+    // The bathroom is two floors down and shared with eleven people. The
+    // washhouse across the road is what you actually use, and it charges.
+    hasShower: false,
+    storage: true,
+    desc: "Fourth floor, no lift, and a window that looks at another window.",
   },
   trailer: {
     id: "trailer",

@@ -210,9 +210,45 @@ it prints is a number about Brokemon.
 
 ### Phase 2 — Brokedale proper
 
-Districts, venues, jobs, rooms. See section 7. The stub grid grows rather than
-gets replaced: the terminal and St Giles Row stay where they are, the High
-Street and Riverside go in beside them.
+**2a — the move. ✅ DONE.** The city is 40x40 and four districts deep: Terminal
+Quarter, The Blocks, The High Street, Riverside. Policed harder the further you
+walk from the coach station, and Riverside wants a dress code — Brokedale's
+Heights, except the prices do the work instead of a gate.
+
+What you can do there now:
+
+| | |
+|---|---|
+| **Ardwell Labour** (Terminal) | Site work, six hours, ~$88, cash in hand. Muster 6–11AM: turn up or the vans have gone. The only job in the city, and the only one anywhere that asks nothing at all |
+| **St Giles Row rooms** (Blocks) | $95 a week, two weeks up front, no credit check. Fourth floor, no lift, no shower. The decision the whole city is built around |
+| **Eastgate Washhouse** (Blocks) | $5 for 30 minutes of hot water, 24 hours. There is no free wash in Brokedale |
+| **Vance & Son** (High Street) | Pawn — four in ten of what you paid, and he will not take your lunch |
+| **The Wharf Club** (Riverside) | $12 a day: a session, and as long as you like in the showers |
+
+**Measured, and it works.** A bot arriving with $54 takes a room on day two,
+works 21/21 days on site, ends 21 days later with $1,200–1,300, no collapses,
+and — the number the whole design rests on — **93 minutes a day walking against
+Brokemon's 164**. Density is doing what it was supposed to do.
+
+Two things the rig found on the way, both of which would have shipped:
+
+- **All the water was at the wrong end of town.** A standpipe at the coach
+  station and a river at the far edge, with nowhere to drink between them.
+  Exactly finding 17 in Brokemon, repeated at full size. There is a standpipe on
+  St Giles Row now.
+- **The morale floor on site work was a death spiral.** Every other gig has one
+  because Brokemon has a food bank and a free wash to climb back with. Brokedale
+  has neither, so one bad day compounded: 13 "you cannot make yourself do this
+  today" in a row, 8 collapses, reputation on the floor. Site work asks for
+  energy and nothing else now, which is what "no questions" is supposed to mean.
+
+**2b — the ladder.** A second career track worked from Brokedale addresses: the
+job centre on the High Street, and jobs that do not run through an appearance
+checkpoint. This is what makes Brokedale a real alternative rather than a
+grind, and it retires open finding 1.
+
+Still to come from section 7: the university, the hospital, the auction house,
+the night bus, and something to spend money on between $200 and $12,000.
 
 ### Phase 3 — encounters, threads, and the second apex
 

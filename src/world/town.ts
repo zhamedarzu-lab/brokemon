@@ -27,7 +27,7 @@ export type TownId = "brokemon" | "brokedale";
  * rather than altitudes — the terminal takes you as you are, the blocks do not
  * much care, and everything else there is priced rather than gated.
  */
-export type ZoneId = "heights" | "downtown" | "slums" | "terminal" | "blocks";
+export type ZoneId = "heights" | "downtown" | "slums" | "terminal" | "blocks" | "highStreet" | "riverside";
 
 export interface Zone {
   id: ZoneId;

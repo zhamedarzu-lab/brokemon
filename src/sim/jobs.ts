@@ -2,7 +2,7 @@ import type { ItemId } from "./items";
 import { MORALE_BREAKDOWN, type MeterDelta } from "./meters";
 import type { OutfitId } from "./social";
 
-export type GigId = "panhandle" | "flyers" | "yardWork" | "dayLabor";
+export type GigId = "panhandle" | "flyers" | "yardWork" | "dayLabor" | "siteWork";
 export type EmploymentId = "martClerk" | "nightStock" | "landscaper" | "technician" | "officeAdmin" | "executive";
 export type JobId = GigId | EmploymentId;
 
@@ -80,6 +80,30 @@ export const GIGS: Record<GigId, GigDef> = {
     basePay: 35,
     fromJobBoard: true,
     dailyLimit: 2,
+  },
+  siteWork: {
+    id: "siteWork",
+    name: "Site work",
+    desc: "A van at seven, a site somewhere, and cash in your hand at the end of it.",
+    // Six hours, and you have to be at the agency door in the morning to get
+    // it — the muster is the cost. Pays better than anything in Brokemon that
+    // does not ask for clothes, which is the whole reason to be in this city
+    // without an address yet.
+    minutes: 360,
+    // Energy only, and deliberately. Every other gig has a morale floor,
+    // because Brokemon has a food bank and a free wash to climb back out with.
+    // Brokedale has neither, so a morale floor on the only job in the city is
+    // a spiral rather than a speed bump: the walking rig lost a fortnight to
+    // it on both seeds, thirteen "you cannot make yourself do this today" in a
+    // row. An agency whose entire pitch is that it asks no questions does not
+    // get to ask that one.
+    requires: { energy: 30 },
+    cost: { energy: -55, hygiene: -34, thirst: -44, hunger: -38, morale: -4 },
+    exertion: 2.8,
+    stops: 0,
+    basePay: 88,
+    fromJobBoard: false,
+    dailyLimit: 1,
   },
   dayLabor: {
     id: "dayLabor",

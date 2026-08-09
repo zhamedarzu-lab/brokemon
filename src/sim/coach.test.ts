@@ -15,6 +15,7 @@ import {
 import type { Choice, Prompt } from "./prompt";
 import { Rng } from "./rng";
 import { loadGame, saveGame } from "./save";
+import { ITEMS } from "./items";
 import { HOUSING } from "./social";
 import { createState, housingIn, reputationIn, type GameState } from "./state";
 import { advance } from "./tick";
@@ -324,5 +325,98 @@ describe("boardingReasons", () => {
     p.setClock(9);
     p.s.cash = 100;
     expect(boardingReasons(p.s, OUT)).toEqual([]);
+  });
+});
+
+/* --------------------------------------------------------- living there */
+
+describe("Brokedale, as somewhere to live", () => {
+  it("takes anyone at the agency muster, and only in the morning", () => {
+    const p = new Player();
+    p.rideOut(7);
+    p.goto("agency");
+    // Deliberately wretched: no clothes, no reputation, morale on the floor.
+    p.s.meters.morale = 1;
+    p.s.meters.energy = 60;
+    p.setClock(8);
+    expect(p.took(p.press(), "put your name down", "leave"), "turned away at 8AM").toBe(true);
+
+    const later = new Player(2);
+    later.rideOut(9);
+    later.setClock(15);
+    later.goto("agency");
+    expect(later.press()?.lines.join(" ")).toMatch(/vans have gone/i);
+  });
+
+  it("pays site work in cash and knows your face a little better for it", () => {
+    const p = new Player();
+    p.rideOut(7);
+    p.setClock(8);
+    p.s.cash = 0;
+    p.s.meters.energy = 80;
+    p.goto("agency");
+    p.drive(p.press(), "put your name down");
+    expect(p.s.cash).toBeGreaterThan(50);
+    expect(reputationIn(p.s, "brokedale")).toBeGreaterThan(0);
+    // Six hours of it, and it takes six hours off you.
+    expect(p.s.meters.energy).toBeLessThan(40);
+  });
+
+  it("lets a room by the week, two weeks up front, without running your credit", () => {
+    const p = new Player();
+    p.rideOut(9);
+    p.s.credit = 300;
+    p.s.cash = HOUSING.room.rent * 2;
+    p.goto("weeklyRooms");
+    expect(p.took(p.press(), "take it")).toBe(true);
+    expect(housingIn(p.s, "brokedale")).toBe("room");
+    // And it is a Brokedale address, not a Brokemon one.
+    expect(housingIn(p.s, "brokemon")).toBe("street");
+  });
+
+  it("charges that rent every week, in Brokedale, wherever you are standing", () => {
+    const p = new Player();
+    p.rideOut(9);
+    p.s.cash = HOUSING.room.rent * 2;
+    p.goto("weeklyRooms");
+    expect(p.took(p.press(), "take it")).toBe(true);
+    p.goto("coachTerminal");
+    p.s.cash = 500;
+    p.drive(p.press(), "Brokemon Town", "Get off");
+    expect(p.s.player.town).toBe("brokemon");
+
+    const before = p.s.cash;
+    // Sit at home in Brokemon until the rent day comes round.
+    for (let i = 0; i < 9; i++) p.ctx.advance(24 * 60, { sheltered: true, asleep: true });
+    expect(p.s.cash).toBeLessThan(before);
+    expect(p.s.log.some((l) => /Rent taken/.test(l.text) && /Brokedale/.test(l.text))).toBe(true);
+  });
+
+  it("has no free wash — the cheapest way to be clean costs money", () => {
+    const p = new Player();
+    p.rideOut(9);
+    p.s.meters.hygiene = 10;
+    p.s.cash = 0;
+    p.goto("washhouse");
+    expect(p.took(p.press(), "buy a token")).toBe(false);
+
+    p.s.cash = 20;
+    expect(p.took(p.press(), "buy a token")).toBe(true);
+    expect(p.s.meters.hygiene).toBeGreaterThan(50);
+  });
+
+  it("buys your things back at a loss, and will not take your lunch", () => {
+    const p = new Player();
+    p.rideOut(9);
+    p.setClock(12);
+    p.s.inventory = { bicycle: 1, sandwich: 2 };
+    p.s.cash = 0;
+    p.goto("pawnShop");
+    const counter = p.press();
+    expect(p.took(counter, "sell second-hand bicycle")).toBe(true);
+    expect(p.s.cash).toBeGreaterThan(0);
+    expect(p.s.cash).toBeLessThan(ITEMS.bicycle.price!);
+    // Consumables are not stock.
+    expect(p.took(p.press(), "sell deli sandwich")).toBe(false);
   });
 });

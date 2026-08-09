@@ -271,7 +271,7 @@ export function phaseOf(s: GameState): Phase {
   if (home === "estate" || s.mayor || s.businessOwned) return 4;
   if (home === "apartment" && s.employment && EMPLOYMENT[s.employment].tier >= 3) return 3;
   // Any address with a door on it is out of phase 1, career or not.
-  if (home === "hostel" || home === "trailer" || home === "apartment") return 2;
+  if (home === "hostel" || home === "room" || home === "trailer" || home === "apartment") return 2;
   return 1;
 }
 

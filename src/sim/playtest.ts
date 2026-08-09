@@ -34,6 +34,7 @@ import {
   type GameState,
 } from "./state";
 import { advance, policeCheck } from "./tick";
+import type { HousingId } from "./social";
 import { dayOf, formatClock, hourOf, minuteOfDay, withinHours } from "./time";
 import { consume, shiftWindow, type ActionCtx } from "./work";
 
@@ -404,8 +405,22 @@ const AMENITIES: Record<TownId, Amenities> = {
     // The concourse never shuts, which is the only thing in the city that
     // doesn't want money off you.
     refuge: { marker: "coachTerminal", take: ["concourse", "get up"], fromHour: 0, toHour: 24 },
-    wash: { marker: "dossHouse", take: ["use the shower"] },
+    // $5 for +46 hygiene beats the doss house shower on both counts, and it
+    // never closes.
+    wash: { marker: "washhouse", take: ["buy a token"] },
   },
+};
+
+/**
+ * The door you sleep behind, for an address that has one. Housing ids and
+ * marker ids happen to match in Brokemon and do not in Brokedale, which is
+ * exactly the sort of thing that quietly stops working.
+ */
+const HOME_MARKER: Partial<Record<HousingId, string>> = {
+  trailer: "trailer",
+  apartment: "apartment",
+  estate: "estate",
+  room: "weeklyRooms",
 };
 
 function drink(p: Player): void {
@@ -661,8 +676,9 @@ function banking(p: Player): void {
 
 function sleep(p: Player): void {
   const s = p.s;
-  if (housingIn(s) === "apartment" || housingIn(s) === "estate" || housingIn(s) === "trailer") {
-    p.goto(housingIn(s));
+  const home = HOME_MARKER[housingIn(s)];
+  if (home) {
+    p.goto(home);
     if (p.took(p.press(), "sleep", "get up")) return;
   }
 
@@ -925,6 +941,110 @@ function report(seed: number, days: number): number {
   return dayOf(s.time);
 }
 
+/* ------------------------------------------------------ living over there */
+
+/**
+ * A day lived in Brokedale rather than survived in it: the agency muster in
+ * the morning, the washhouse, the night market, and a room if the deposit is
+ * in reach.
+ *
+ * There is no career here yet — site work is the whole economy until the jobs
+ * ladder lands. What this measures is whether the floor holds: can you eat,
+ * stay clean enough, and hold a room on $88 a day, in a city with no food bank
+ * and no free wash?
+ */
+function brokedaleDay(p: Player): void {
+  const s = p.s;
+  const day = dayOf(s.time);
+  const cashStart = s.cash + s.bank;
+  p.walkMinutes = 0;
+  p.workMinutes = 0;
+  p.coachMinutes = 0;
+  p.coachFares = 0;
+  p.low = { hunger: 100, thirst: 100, hygiene: 100, energy: 100, morale: 100, health: 100 };
+  const notesBefore = p.notes.length;
+
+  p.waitUntil(7);
+  drink(p);
+  p.eat();
+
+  // The muster is 6AM–11AM and there is nothing else reliable in the city.
+  const t0 = s.time;
+  p.goto("agency");
+  const worked = p.took(p.press(), "put your name down", "leave");
+  p.workMinutes += s.time - t0;
+  if (!worked) p.note(`NO WORK (${formatClock(s.time)})`);
+
+  wash(p);
+  buyFood(p);
+
+  // Two weeks up front, the moment it is in reach. This is the decision the
+  // whole city is built around.
+  if (housingIn(s) !== "room") {
+    p.goto("weeklyRooms");
+    if (p.took(p.press(), "take it")) p.note("TOOK a room on St Giles Row");
+  }
+
+  // Only on a day with no shift. Begging costs morale, site work has a morale
+  // floor, and a bot that begged on working days too talked itself out of the
+  // only job in the city inside a week — 14 collapses and reputation on the
+  // floor. Filling an empty afternoon is not the same as filling every one.
+  if (!worked) {
+    scavenge(p);
+    beg(p, 3);
+  }
+
+  buyFood(p);
+  drink(p);
+  p.eat();
+  p.waitUntil(20);
+  sleep(p);
+
+  p.days.push(dayLog(p, day, cashStart, worked, notesBefore));
+}
+
+/** Can you actually live in Brokedale? Run with `npm run playtest -- --brokedale`. */
+function brokedaleReport(seed: number, days: number): void {
+  const p = new Player(seed);
+  const s = p.s;
+
+  // Arrive the way a player would: with the fare and a bit of a stake.
+  s.cash = 60;
+  p.waitUntil(8);
+  p.goto("busStop");
+  p.commuteTo("brokedale");
+
+  console.log(`\n${"=".repeat(72)}\nLIVING IN BROKEDALE — seed ${seed}\n${"=".repeat(72)}`);
+  console.log(`arrived ${formatClock(s.time)} on day ${dayOf(s.time)} with $${s.cash}`);
+  console.log(`  day   cash  walk work  | low: hun thi hyg ene mor hea   notes`);
+
+  for (let d = 0; d < days; d++) {
+    brokedaleDay(p);
+    const l = p.days[p.days.length - 1]!;
+    console.log(
+      `  ${String(l.day).padStart(3)} ${String("$" + fmt(s.cash + s.bank)).padStart(7)}` +
+        ` ${String(Math.round(l.walkMinutes)).padStart(4)}${String(Math.round(l.workMinutes)).padStart(5)}  |` +
+        ` ${[l.low.hunger, l.low.thirst, l.low.hygiene, l.low.energy, l.low.morale, l.low.health]
+          .map((v) => String(Math.round(v!)).padStart(4))
+          .join("")}` +
+        (l.notes.length ? `   ${l.notes.map((n) => n.replace(/^d\d+ [\d:]+ [AP]M\s+/, "")).join(" | ")}` : ""),
+    );
+  }
+
+  const shifts = p.days.filter((d) => d.worked).length;
+  console.log(
+    `\n  ${shifts}/${p.days.length} days on site · housing ${housingIn(s)} · ` +
+      `$${fmt(s.cash + s.bank)} · ${s.collapses} collapse(s) · rep ${reputationIn(s)}`,
+  );
+  const walk = p.days.reduce((a, d) => a + d.walkMinutes, 0) / Math.max(1, p.days.length);
+  console.log(`  ${walk.toFixed(0)} min a day walking — against ${164} in Brokemon, which is the point of moving.`);
+  const blocks = [...p.blocked.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8);
+  if (blocks.length) {
+    console.log(`\n  most common blocks:`);
+    for (const [why, n] of blocks) console.log(`    ${String(n).padStart(4)}x  ${why}`);
+  }
+}
+
 /* -------------------------------------------------------- the crossing */
 
 /**
@@ -1036,6 +1156,8 @@ const DEFAULT_SEEDS = [2026, 7, 11, 99, 3, 42, 77, 500, 1234, 8888];
 
 if (args.includes("--crossing")) {
   for (const seed of seeds.length ? seeds : [2026]) crossingReport(seed);
+} else if (args.includes("--brokedale")) {
+  for (const seed of seeds.length ? seeds : [2026, 7]) brokedaleReport(seed, 21);
 } else {
   const runs = seeds.length ? seeds : DEFAULT_SEEDS;
   const lengths = runs.map((seed) => report(seed, 400));

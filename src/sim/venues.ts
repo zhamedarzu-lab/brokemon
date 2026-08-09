@@ -1367,6 +1367,252 @@ const nightMarket: Venue = (ctx) => {
   );
 };
 
+/* ----------------------------------------------------- Brokedale: agency */
+
+/** You have to be at the door in the morning. That is the whole cost of it. */
+const AGENCY_OPEN = 6;
+const AGENCY_CLOSE = 11;
+
+const agency: Venue = (ctx) => {
+  const s = ctx.state;
+  const def = GIGS.siteWork;
+
+  if (!withinHours(s.time, AGENCY_OPEN, AGENCY_CLOSE)) {
+    return say("Ardwell Labour", [
+      `The muster is ${fmtHour(AGENCY_OPEN)} to ${fmtHour(AGENCY_CLOSE)}. The vans have gone.`,
+      "Whatever was going today went to whoever was standing here at seven.",
+    ]);
+  }
+
+  const gate = canDoGig(s, "siteWork");
+  return menu(
+    "Ardwell Labour — same day, cash",
+    [
+      "A counter, a whiteboard of sites, and thirty people who got here before you.",
+      `Six hours, about $${def.basePay}, and nobody writes your name down.`,
+    ],
+    [
+      gate.ok
+        ? { label: "Put your name down", hint: `6h, ~$${def.basePay}`, run: () => doSiteWork(ctx) }
+        : lockedChoice("Put your name down", gate.reasons, `6h, ~$${def.basePay}`),
+      BACK,
+    ],
+  );
+};
+
+function doSiteWork(ctx: ActionCtx): Prompt {
+  const s = ctx.state;
+  const def = GIGS.siteWork;
+  ctx.advance(def.minutes, { exertion: def.exertion });
+  applyDelta(s.meters, def.cost);
+  const pay = def.basePay + ctx.rng.int(-14, 18);
+  earnCash(s, pay);
+  s.gigsToday.siteWork = (s.gigsToday.siteWork ?? 0) + 1;
+  // A day's graft in a town that does not know you is how it starts knowing you.
+  changeReputation(s, 1);
+  pushLog(s, `Site work through the agency — $${pay}.`, "money");
+  return menu(
+    "The site",
+    [
+      "Lifting, carrying, and standing in the way of a man who is shouting.",
+      `Cash in hand at the gate: $${pay}.`,
+    ],
+    [BACK],
+    "money",
+  );
+}
+
+/* ------------------------------------------------ Brokedale: weekly rooms */
+
+const weeklyRooms: Venue = (ctx) => {
+  const s = ctx.state;
+  const def = HOUSING.room;
+
+  if (housingIn(s) === "room") {
+    return menu(
+      "Your room",
+      [def.desc, `Rent of $${def.rent} is due on day ${s.rentDueDay[s.player.town]}.`],
+      [
+        { label: "Sleep until morning", run: () => sleep(ctx, "room", 7) },
+        {
+          label: "Wash at the sink",
+          hint: "15 min",
+          run: () => {
+            ctx.advance(15, { sheltered: true });
+            applyDelta(s.meters, { hygiene: +14, morale: +2 });
+            return menu("Your room", ["Cold tap, one flannel. It is not a wash and you know it."], [BACK]);
+          },
+        },
+        BACK,
+      ],
+    );
+  }
+
+  // Two weeks up front is the whole barrier. It is deliberately more than a
+  // stranded player can scrape and less than a fortnight of site work.
+  const deposit = def.rent * 2;
+  return menu(
+    "St Giles Row — ROOM TO LET",
+    [
+      "Fourth floor, no lift. Shared bathroom, shared kitchen, your own lock.",
+      `$${def.rent} a week. Two weeks up front and they do not run your credit.`,
+      "Miss a week and the lock changes. There is no notice period in this building.",
+    ],
+    [
+      s.cash + s.bank >= deposit
+        ? {
+            label: "Take it",
+            hint: `$${deposit}`,
+            run: () => {
+              const fromCash = Math.min(s.cash, deposit);
+              s.cash -= fromCash;
+              s.bank -= deposit - fromCash;
+              setHousing(s, "room");
+              s.rentDueDay[s.player.town] = Math.floor(s.time / 1440) + 1 + def.rentEvery;
+              s.meters.morale = Math.min(100, s.meters.morale + 20);
+              changeReputation(s, 4);
+              pushLog(s, "Took a room on St Giles Row.", "good");
+              return menu(
+                "Your room",
+                [
+                  "He counts the notes twice, writes nothing down, and gives you a key on a bit of wire.",
+                  "The window looks at another window. You are eleven minutes from everything in this city.",
+                ],
+                [BACK],
+                "good",
+              );
+            },
+          }
+        : lockedChoice("Take it", [`they want $${deposit} up front and you have $${s.cash + s.bank}`], `$${deposit}`),
+      BACK,
+    ],
+  );
+};
+
+/* -------------------------------------------------- Brokedale: washhouse */
+
+export const WASHHOUSE_PRICE = 5;
+
+const washhouse: Venue = (ctx) => {
+  const s = ctx.state;
+  return menu(
+    "Eastgate Washhouse — 24 HOURS",
+    [
+      "Six cubicles, a token machine, and a man asleep on the bench by the radiator.",
+      `$${WASHHOUSE_PRICE} a token. It is the cheapest way to be clean in this city.`,
+    ],
+    [
+      s.cash >= WASHHOUSE_PRICE
+        ? {
+            label: "Buy a token and get clean",
+            hint: `$${WASHHOUSE_PRICE}, 30 min`,
+            run: () => {
+              s.cash -= WASHHOUSE_PRICE;
+              ctx.advance(30, { sheltered: true });
+              applyDelta(s.meters, { hygiene: +46, morale: +9 });
+              pushLog(s, `Washed at the Eastgate — $${WASHHOUSE_PRICE}.`, "good");
+              return menu(
+                "Eastgate Washhouse",
+                ["Hot water for as long as the token lasts, which is eleven minutes.", "You come out looking like a person."],
+                [BACK],
+                "good",
+              );
+            },
+          }
+        : { label: "Buy a token and get clean", hint: `$${WASHHOUSE_PRICE}`, locked: `You're $${WASHHOUSE_PRICE - s.cash} short` },
+      BACK,
+    ],
+  );
+};
+
+/* -------------------------------------------------- Brokedale: pawn shop */
+
+/** What you get back for something you paid full price for. */
+const PAWN_RATE = 0.4;
+
+function pawnValue(id: ItemId): number {
+  return Math.max(1, Math.floor((ITEMS[id].price ?? 0) * PAWN_RATE));
+}
+
+const pawnShop: Venue = (ctx) => {
+  const s = ctx.state;
+  if (!withinHours(s.time, 9, 19)) return say("Vance & Son", "Grille down. Open 9AM to 7PM.");
+
+  const sellable = (Object.keys(s.inventory) as ItemId[])
+    .filter((id) => countOf(s.inventory, id) > 0 && (ITEMS[id].price ?? 0) > 0 && !ITEMS[id].consumable)
+    .sort((a, b) => pawnValue(b) - pawnValue(a));
+
+  const choices: Choice[] = sellable.map((id) => ({
+    label: `Sell ${ITEMS[id].name}`,
+    hint: `$${pawnValue(id)}`,
+    run: () => {
+      const paid = pawnValue(id);
+      removeItem(s.inventory, id, 1);
+      earnCash(s, paid);
+      ctx.advance(10, { sheltered: true });
+      pushLog(s, `Pawned ${ITEMS[id].name} for $${paid}.`, "money");
+      return menu(
+        "Vance & Son",
+        [`He turns it over once, names a number, and does not move when you hesitate.`, `$${paid}.`],
+        [BACK],
+        "money",
+      );
+    },
+  }));
+
+  if (choices.length === 0) {
+    return say("Vance & Son", ["Guitars, drills, three wedding rings and a saxophone.", "You have nothing he wants."]);
+  }
+
+  choices.push(BACK);
+  return menu(
+    "Vance & Son — Pawnbrokers",
+    ["Guitars on the wall, drills in the case, and a man who has heard every story once already.", "He pays about four in ten."],
+    choices,
+  );
+};
+
+/* -------------------------------------------------------- Brokedale: gym */
+
+export const GYM_PRICE = 12;
+
+const gym: Venue = (ctx) => {
+  const s = ctx.state;
+  if (!withinHours(s.time, 6, 22)) return say("The Wharf Club", "Closed. Members 6AM to 10PM.");
+
+  return menu(
+    "The Wharf Club",
+    [
+      "Glass, river light, and towels folded by somebody whose job that is.",
+      `$${GYM_PRICE} on the door. Nobody here has ever asked what you do.`,
+    ],
+    [
+      s.cash >= GYM_PRICE
+        ? {
+            label: "Pay the day rate",
+            hint: `$${GYM_PRICE}, 90 min`,
+            run: () => {
+              s.cash -= GYM_PRICE;
+              ctx.advance(90, { sheltered: true, exertion: 2 });
+              applyDelta(s.meters, { hygiene: +48, health: +9, morale: +14, energy: -14 });
+              pushLog(s, `A session and a shower at the Wharf Club — $${GYM_PRICE}.`, "good");
+              return menu(
+                "The Wharf Club",
+                [
+                  "An hour on the machines and as long as you like in the showers afterwards.",
+                  "You are tired in the way people choose to be tired.",
+                ],
+                [BACK],
+                "good",
+              );
+            },
+          }
+        : { label: "Pay the day rate", hint: `$${GYM_PRICE}`, locked: `You're $${GYM_PRICE - s.cash} short` },
+      BACK,
+    ],
+  );
+};
+
 /* --------------------------------------------------- Brokedale: doss house */
 
 export const DOSS_HOUSE_RATE = 14;
@@ -1603,6 +1849,11 @@ export const VENUES: Record<string, Venue> = {
   outskirtsBusStop,
   bikeShop,
   coachTerminal,
+  agency,
   nightMarket,
+  weeklyRooms,
+  washhouse,
   dossHouse,
+  pawnShop,
+  gym,
 };
