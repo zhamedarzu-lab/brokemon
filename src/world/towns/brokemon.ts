@@ -7,7 +7,6 @@
  * take you in tonight is down in the gravel at the bottom of the map.
  */
 
-import { MARKERS } from "../tiles";
 import { buildTown, type Town } from "../town";
 
 // prettier-ignore
@@ -90,7 +89,29 @@ export const BROKEMON: Town = buildTown({
   id: "brokemon",
   name: "Brokemon Town",
   rows: ROWS,
-  requires: Object.values(MARKERS),
+  // Listed rather than taken from the whole marker vocabulary: the vocabulary
+  // is shared with Brokedale now, and Brokemon has no coach terminal of its
+  // own — the intercity service leaves from the Market Square stop.
+  requires: [
+    "spawn",
+    "communityCenter",
+    "mart",
+    "corporatePlaza",
+    "hostel",
+    "trailer",
+    "apartment",
+    "estate",
+    "college",
+    "recycling",
+    "busStop",
+    "outskirtsBusStop",
+    "jobBoard",
+    "bank",
+    "panhandleSpot",
+    "laundromat",
+    "diner",
+    "bikeShop",
+  ],
   zones: [
     {
       id: "heights",
@@ -101,6 +122,8 @@ export const BROKEMON: Town = buildTown({
       hygieneWatch: 60,
       requiresAttire: true,
       fineScale: 3,
+      // Back down the hill, on the pavement the far side of the gate.
+      escortTo: { x: 23, y: 18 },
     },
     {
       id: "downtown",
@@ -111,6 +134,7 @@ export const BROKEMON: Town = buildTown({
       hygieneWatch: 30,
       requiresAttire: false,
       fineScale: 1,
+      escortTo: { x: 26, y: 43 },
     },
     {
       id: "slums",

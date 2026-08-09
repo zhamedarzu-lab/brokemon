@@ -131,7 +131,10 @@ export class Hud {
     this.clockEl.dataset.part = dayPart(s.time);
     this.weatherEl.textContent = WEATHER[s.weather].name;
     this.weatherEl.classList.toggle("wet", WEATHER[s.weather].wet);
-    this.zoneEl.textContent = zoneAt(townOf(s), s.player.pos.y).name;
+    // Both halves, always. A district name alone stops meaning anything the
+    // moment there is more than one place with districts in it.
+    const town = townOf(s);
+    this.zoneEl.textContent = `${town.name} · ${zoneAt(town, s.player.pos.y).name}`;
 
     this.cashEl.textContent = `$${s.cash.toLocaleString()}`;
     const ledger: string[] = [];

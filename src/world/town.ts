@@ -18,10 +18,16 @@ export interface Vec2 {
   y: number;
 }
 
-export type TownId = "brokemon";
+export type TownId = "brokemon" | "brokedale";
 
-/** Social strata. Each band of a town behaves differently towards you. */
-export type ZoneId = "heights" | "downtown" | "slums";
+/**
+ * Social strata. Each band of a town behaves differently towards you.
+ *
+ * Brokemon's three run top to bottom by money. Brokedale's are districts
+ * rather than altitudes — the terminal takes you as you are, the blocks do not
+ * much care, and everything else there is priced rather than gated.
+ */
+export type ZoneId = "heights" | "downtown" | "slums" | "terminal" | "blocks";
 
 export interface Zone {
   id: ZoneId;
@@ -37,6 +43,13 @@ export interface Zone {
   requiresAttire: boolean;
   /** Multiplier on fines issued here. */
   fineScale: number;
+  /**
+   * Where an officer puts you down when they walk you out of this zone. Lives
+   * beside the rows it refers to rather than in a table in `tick.ts`, so it
+   * cannot go stale when a grid is redrawn; `buildTown` rejects one that has
+   * ended up inside a wall. Only zones that issue fines need it.
+   */
+  escortTo?: Vec2;
 }
 
 export interface Town {
@@ -100,7 +113,20 @@ export function buildTown(spec: TownSpec): Town {
     }
   }
 
-  return { id: spec.id, name: spec.name, width, height, grid, markers, zones };
+  const town: Town = { id: spec.id, name: spec.name, width, height, grid, markers, zones };
+
+  // A zone that fines people also escorts them, and the tile it escorts them to
+  // has to be one they can stand on. Checked here so a redrawn grid fails at
+  // load rather than teleporting the player into a wall months later.
+  for (const zone of zones) {
+    if (zone.fineScale === 0) continue;
+    if (!zone.escortTo) throw new Error(`${spec.id} zone "${zone.id}" issues fines but has no escortTo`);
+    if (isSolid(town, zone.escortTo.x, zone.escortTo.y)) {
+      throw new Error(`${spec.id} zone "${zone.id}" escorts to ${zone.escortTo.x},${zone.escortTo.y}, which is solid`);
+    }
+  }
+
+  return town;
 }
 
 /* --------------------------------------------------------------- queries */

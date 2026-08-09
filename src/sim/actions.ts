@@ -315,6 +315,9 @@ export const VENUE_LABELS: Record<string, string> = {
   diner: "Diner",
   jobBoard: "Job board",
   panhandleSpot: "The corner",
+  coachTerminal: "Coach station",
+  nightMarket: "Night market",
+  dossHouse: "Rooms",
 };
 
 /**
@@ -339,5 +342,8 @@ export const DOOR_SIGNS: Record<string, string> = {
   outskirtsBusStop: "BUS",
   jobBoard: "JOBS",
   bikeShop: "BIKES",
+  coachTerminal: "COACHES",
+  nightMarket: "MARKET",
+  dossHouse: "ROOMS",
 };
 

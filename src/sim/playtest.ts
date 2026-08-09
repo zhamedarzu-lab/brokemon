@@ -42,18 +42,23 @@ const STEP_MS = 180;
 const BIKE_STEP_MS = 95;
 const MS_PER_MINUTE = 260;
 
-/** The town the rig walks. Phase 1 will make this follow the player. */
+/**
+ * The town the day's routines are written against. The bot does not ride the
+ * coach yet — that is Phase 4, and until then every route it plans is a route
+ * around Brokemon. The pathfinding below takes a town regardless, so the day
+ * a routine does leave, it will not silently plan against the wrong grid.
+ */
 const TOWN: Town = townById(STARTING_TOWN);
 
-/** BFS from a tile to every reachable tile. Cached — the grid never changes. */
+/** BFS from a tile to every reachable tile. Cached — the grids never change. */
 const pathCache = new Map<string, number[][]>();
 
-function distanceField(from: Vec2): number[][] {
-  const k = `${from.x},${from.y}`;
+function distanceField(town: Town, from: Vec2): number[][] {
+  const k = `${town.id}:${from.x},${from.y}`;
   const hit = pathCache.get(k);
   if (hit) return hit;
 
-  const dist: number[][] = Array.from({ length: TOWN.height }, () => new Array<number>(TOWN.width).fill(-1));
+  const dist: number[][] = Array.from({ length: town.height }, () => new Array<number>(town.width).fill(-1));
   const queue: Vec2[] = [from];
   dist[from.y]![from.x] = 0;
   for (let head = 0; head < queue.length; head++) {
@@ -62,9 +67,9 @@ function distanceField(from: Vec2): number[][] {
     for (const [dx, dy] of [[0, -1], [0, 1], [-1, 0], [1, 0]] as const) {
       const nx = cur.x + dx;
       const ny = cur.y + dy;
-      if (nx < 0 || ny < 0 || nx >= TOWN.width || ny >= TOWN.height) continue;
+      if (nx < 0 || ny < 0 || nx >= town.width || ny >= town.height) continue;
       if (dist[ny]![nx] !== -1) continue;
-      if (isSolid(TOWN, nx, ny)) continue;
+      if (isSolid(town, nx, ny)) continue;
       dist[ny]![nx] = d + 1;
       queue.push({ x: nx, y: ny });
     }
@@ -73,10 +78,10 @@ function distanceField(from: Vec2): number[][] {
   return dist;
 }
 
-/** Tiles between two walkable cells, or -1 if there is no route at all. */
-export function tileDistance(a: Vec2, b: Vec2): number {
-  if (isSolid(TOWN, a.x, a.y) || isSolid(TOWN, b.x, b.y)) return -1;
-  return distanceField(a)[b.y]![b.x]!;
+/** Tiles between two walkable cells of one town, or -1 if there is no route. */
+export function tileDistance(town: Town, a: Vec2, b: Vec2): number {
+  if (isSolid(town, a.x, a.y) || isSolid(town, b.x, b.y)) return -1;
+  return distanceField(town, a)[b.y]![b.x]!;
 }
 
 /* ------------------------------------------------------------------ bot */
@@ -142,10 +147,12 @@ class Player {
    * The Heights are sealed off by a hedge with one security gate in it. The
    * gate tile is solid, so pathfinding cannot cross it — you have to stand at
    * it and be let through. Everything above row 14 is on the far side.
+   *
+   * Brokemon's hill only; no other town has a barrier like it.
    */
   walkTo(dest: Vec2): void {
     const upThere = (v: Vec2) => v.y <= 13;
-    if (upThere(dest) !== upThere(this.s.player.pos)) {
+    if (townOf(this.s).id === "brokemon" && upThere(dest) !== upThere(this.s.player.pos)) {
       const goingUp = upThere(dest);
       this.walkStraight({ x: 23, y: goingUp ? 15 : 13 });
       this.s.player.facing = goingUp ? "up" : "down";
@@ -160,7 +167,7 @@ class Player {
   }
 
   private walkStraight(dest: Vec2): void {
-    const tiles = tileDistance(this.s.player.pos, dest);
+    const tiles = tileDistance(townOf(this.s), this.s.player.pos, dest);
     if (tiles < 0) {
       this.note(`UNREACHABLE ${dest.x},${dest.y} from ${this.s.player.pos.x},${this.s.player.pos.y}`);
       this.s.player.pos = { ...dest };
@@ -288,22 +295,23 @@ const DUMPSTERS = approaches(TOWN, "dumpster");
 const LEGAL_BENCHES = sleepableBenches(TOWN);
 
 for (const [what, found] of [["water", FOUNTAINS], ["dumpsters", DUMPSTERS], ["a sleepable bench", LEGAL_BENCHES]] as const) {
-  if (found.length === 0) throw new Error(`the map has no ${what} — the playtest cannot model a phase-1 day without it`);
+  if (found.length === 0) throw new Error(`${TOWN.name} has no ${what} — the playtest cannot model a phase-1 day without it`);
 }
 
 function drink(p: Player): void {
   for (let i = 0; i < 3 && p.s.meters.thirst < 85; i++) {
-    p.approach(nearest(p.s.player.pos, FOUNTAINS));
+    p.approach(nearest(p, FOUNTAINS));
     if (!p.took(p.press(), "drink")) break;
   }
 }
 
-/** Whichever of these is fewest tiles away on foot. */
-function nearest(from: Vec2, options: Approach[]): Approach {
+/** Whichever of these is fewest tiles away on foot, from where the bot stands. */
+function nearest(p: Player, options: Approach[]): Approach {
+  const town = townOf(p.s);
   let best = options[0]!;
   let bestDist = Infinity;
   for (const option of options) {
-    const d = tileDistance(from, option.pos);
+    const d = tileDistance(town, p.s.player.pos, option.pos);
     if (d >= 0 && d < bestDist) {
       bestDist = d;
       best = option;
@@ -551,7 +559,7 @@ function sleep(p: Player): void {
     if (p.took(p.press(), "take a bed", "get up")) return;
   }
   // Last resort: a bench in the outskirts, where camping is not an offence.
-  p.approach(nearest(s.player.pos, LEGAL_BENCHES));
+  p.approach(nearest(p, LEGAL_BENCHES));
   if (p.took(p.press(), "sleep here", "get up")) return;
   p.note("NOWHERE TO SLEEP");
   p.ctx.advance(60 * 8, { asleep: true });

@@ -362,7 +362,7 @@ function interruptPrompt(i: Interrupt, ctx: ActionCtx): Prompt | null {
 
     case "police": {
       if (i.escorted) {
-        const dest = escortDestination(i.zone);
+        const dest = escortDestination(townOf(ctx.state), i.zone);
         ctx.teleport(dest.x, dest.y);
       }
       return menu(

@@ -172,6 +172,14 @@ The teleporting bot in `progression.test.ts` is still the regression net; it is
 fast and deterministic. It cannot find anything that costs time or distance,
 which is what the walking rig is for.
 
+**The rig does not ride the coach yet.** Brokedale exists and is reachable, but
+every route the bot plans is a route around Brokemon, so every number above is a
+number about Brokemon. Its pathfinding takes a town rather than assuming one, so
+the day a routine does leave it will not silently plan against the wrong grid —
+but until Phase 4 teaches it to commute, treat anything it prints about the
+crossing as unmeasured. This is the third time the rigs have been at risk of
+going blind to a map change; the first two are items 16 and 17 above.
+
 The "guarded by" column names the file and the test. To check one item:
 
 ```

@@ -69,6 +69,26 @@ describe("save migration", () => {
     expect(loaded.nightsPaid[STARTING_TOWN]).toBe(1);
   });
 
+  it("does not hand a legacy save a room in a town it never visited", () => {
+    // The scalar spread used to go to every town on the grounds that "the room
+    // you had is the room you still have". With one town that was true. With
+    // two it hands a pre-Brokedale save a free trailer in a city it has never
+    // heard of, and a rent clock to go with it.
+    const legacy = JSON.parse(JSON.stringify(createState(9))) as Record<string, any>;
+    legacy.housing = "apartment";
+    legacy.rentDueDay = 12;
+    legacy.nightsPaid = 3;
+    store.set("brokemon.save.v1", JSON.stringify(legacy));
+
+    const loaded = loadGame()!;
+    for (const town of Object.keys(loaded.housing) as Array<keyof typeof loaded.housing>) {
+      if (town === STARTING_TOWN) continue;
+      expect(housingIn(loaded, town), `${town} inherited an address`).toBe("street");
+      expect(loaded.rentDueDay[town], `${town} inherited a rent clock`).toBe(0);
+      expect(loaded.nightsPaid[town], `${town} inherited paid nights`).toBe(0);
+    }
+  });
+
   it("credits an old reputation to the town it was earned in", () => {
     const legacy = JSON.parse(JSON.stringify(createState(9))) as Record<string, any>;
     legacy.reputation = 64;

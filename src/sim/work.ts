@@ -3,7 +3,8 @@ import { applyDelta, type MeterDelta } from "./meters";
 import { menu, say, type Choice, type Prompt } from "./prompt";
 import type { Rng } from "./rng";
 import { HOUSING, type HousingId } from "./social";
-import { canDoGig, changeReputation, checkRequirements, currentAppearance, earnCash, pushLog, type GameState } from "./state";
+import { canDoGig, changeReputation, checkRequirements, currentAppearance, earnCash, pushLog, townOf, type GameState } from "./state";
+import { zoneAt } from "../world/map";
 import { dayOf, hourOf, minuteOfDay, MINUTES_PER_DAY, minutesUntilHour, withinHours } from "./time";
 import { WEATHER } from "./weather";
 import { ITEMS, removeItem, type ItemId } from "./items";
@@ -166,7 +167,8 @@ export function panhandle(ctx: ActionCtx): Prompt {
   if (traffic < 1) lines.push("The street is empty at this hour.");
 
   pushLog(s, `Panhandled for $${take}.`, take > 0 ? "money" : "plain");
-  return menu("Corner of Market Square", lines, [{ label: "Get up" }], take > 0 ? "money" : "plain");
+  // Titled by where you actually are — there is a corner in Brokedale too.
+  return menu(`Corner of ${zoneAt(townOf(s), s.player.pos.y).name}`, lines, [{ label: "Get up" }], take > 0 ? "money" : "plain");
 }
 
 export function scavenge(ctx: ActionCtx, key: string): Prompt {

@@ -10,6 +10,7 @@
  * reaching for a specific town by name.
  */
 
+import { BROKEDALE } from "./towns/brokedale";
 import { BROKEMON } from "./towns/brokemon";
 import type { Town, TownId, Vec2 } from "./town";
 
@@ -31,6 +32,7 @@ export {
 
 export const TOWNS: Record<TownId, Town> = {
   brokemon: BROKEMON,
+  brokedale: BROKEDALE,
 };
 
 /** Where a new run starts. */

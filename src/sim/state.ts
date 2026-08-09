@@ -213,6 +213,23 @@ export function townOf(s: GameState): Town {
   return townById(s.player.town);
 }
 
+/**
+ * Put the body down in another town.
+ *
+ * A position means nothing without the town it is in, so the two move
+ * together, and the half-finished step between two tiles is thrown away —
+ * otherwise the renderer would animate you sliding out of a tile forty
+ * minutes down the road.
+ */
+export function arriveIn(s: GameState, town: TownId, pos: Vec2): void {
+  s.player.town = town;
+  s.player.pos = { ...pos };
+  s.player.moveFrom = null;
+  s.player.moveProgress = 0;
+  // You have not loitered here yet; the local police start their clock now.
+  s.lastMovedTime = s.time;
+}
+
 export function netWorth(s: GameState): number {
   return s.cash + s.bank + s.investments - s.debt;
 }

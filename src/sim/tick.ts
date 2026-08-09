@@ -1,5 +1,5 @@
-import { isOutdoors, zoneAt, type Zone } from "../world/map";
-import { housingIn, reputationIn, setHousing, townOf } from "./state";
+import { isOutdoors, townById, TOWNS, zoneAt, type Town, type TownId, type Zone } from "../world/map";
+import { bestHousing, housingIn, reputationIn, setHousing, townOf } from "./state";
 import { changeReputation, checkPostWinGoal, hasItem, phaseOf, pushLog, setWon, type GameState, type Phase } from "./state";
 import { decay, WARN_THRESHOLDS, type MeterId } from "./meters";
 import { dayOf, minuteOfDay, MINUTES_PER_DAY } from "./time";
@@ -178,11 +178,13 @@ function onNewDay(s: GameState, rng: Rng, day: number, out: Interrupt[]): void {
   chargeRent(s, day, out);
   payPassiveIncome(s, out);
 
-  // A cot is paid for one night at a time. Come morning it isn't yours.
-  if (housingIn(s) === "hostel") {
-    if (s.nightsPaid[s.player.town] > 0) s.nightsPaid[s.player.town] -= 1;
+  // A cot is paid for one night at a time. Come morning it isn't yours —
+  // in whichever town you paid for it, whether or not you are standing in it.
+  for (const town of Object.keys(TOWNS) as TownId[]) {
+    if (housingIn(s, town) !== "hostel") continue;
+    if (s.nightsPaid[town] > 0) s.nightsPaid[town] -= 1;
     else {
-      setHousing(s, "street");
+      setHousing(s, "street", town);
       pushLog(s, "Your cot was paid to this morning. Everyone is out by eight.", "plain");
     }
   }
@@ -190,7 +192,9 @@ function onNewDay(s: GameState, rng: Rng, day: number, out: Interrupt[]): void {
   // Safety net: fire victory on the next new day if the player somehow reached
   // the win condition without triggering the immediate check (e.g. a loaded
   // save that already meets conditions).
-  if (housingIn(s) === "estate" && (s.businessOwned || s.mayor)) {
+  // `bestHousing`, not the town you happen to be standing in — you do not stop
+  // owning the estate by being forty minutes up the road when the day turns.
+  if (bestHousing(s) === "estate" && (s.businessOwned || s.mayor)) {
     const wasWon = s.won;
     setWon(s);
     if (!wasWon && s.won) out.push({ kind: "victory" });
@@ -231,17 +235,32 @@ function payPassiveIncome(s: GameState, out: Interrupt[]): void {
 
 export const MAYOR_SALARY = 320;
 
+/**
+ * Rent, in every town you hold a key to.
+ *
+ * This used to read the town you were standing in, which was the same thing
+ * while there was only one. It is not any more: a landlord does not stop
+ * wanting the money because you took the coach somewhere else, and reading
+ * `s.player.town` would have made a day trip the cheapest rent holiday in the
+ * game.
+ */
 function chargeRent(s: GameState, day: number, out: Interrupt[]): void {
-  const def = HOUSING[housingIn(s)];
+  for (const town of Object.keys(TOWNS) as TownId[]) chargeRentIn(s, town, day, out);
+}
+
+function chargeRentIn(s: GameState, town: TownId, day: number, out: Interrupt[]): void {
+  const def = HOUSING[housingIn(s, town)];
   if (def.rentEvery <= 0 || def.rent <= 0) return;
-  if (day < s.rentDueDay[s.player.town]) return;
+  if (day < s.rentDueDay[town]) return;
 
   const amount = def.rent;
-  s.rentDueDay[s.player.town] = day + def.rentEvery;
+  s.rentDueDay[town] = day + def.rentEvery;
+  // Only worth naming the place when you are not in it.
+  const where = town === s.player.town ? "" : ` in ${townById(town).name}`;
 
   if (s.cash >= amount) {
     s.cash -= amount;
-    pushLog(s, `Rent taken: $${amount} for ${def.name.toLowerCase()}.`, "money");
+    pushLog(s, `Rent taken: $${amount} for ${def.name.toLowerCase()}${where}.`, "money");
     out.push({ kind: "rent", amount, paid: true });
   } else if (s.bank >= amount - s.cash) {
     const fromBank = amount - s.cash;
@@ -252,12 +271,12 @@ function chargeRent(s: GameState, day: number, out: Interrupt[]): void {
   } else {
     s.debt += amount + 40;
     s.credit = Math.max(300, s.credit - 35);
-    pushLog(s, `You couldn't make rent. $${amount} plus a $40 late fee goes on the debt.`, "bad");
+    pushLog(s, `You couldn't make rent${where}. $${amount} plus a $40 late fee goes on the debt.`, "bad");
     out.push({ kind: "rent", amount, paid: false });
-    if (housingIn(s) === "apartment" || housingIn(s) === "trailer") {
-      setHousing(s, "street");
+    if (housingIn(s, town) === "apartment" || housingIn(s, town) === "trailer") {
+      setHousing(s, "street", town);
       s.flags.evicted = (s.flags.evicted ?? 0) + 1;
-      pushLog(s, "You've been served notice and the locks are changed. Back to the street.", "bad");
+      pushLog(s, `You've been served notice${where} and the locks are changed. Back to the street.`, "bad");
     }
   }
 }
@@ -334,7 +353,21 @@ export function policeCheck(s: GameState, rng: Rng): Interrupt | null {
   return { kind: "police", zone, reason, fine, escorted: true };
 }
 
-/** Where you get put down when the police walk you out of a zone. */
-export function escortDestination(zone: Zone): { x: number; y: number } {
-  return zone.id === "heights" ? { x: 23, y: 18 } : { x: 26, y: 43 };
+/**
+ * Where you get put down when the police walk you out of a zone.
+ *
+ * The two coordinates this used to hold lived in `tick.ts`, a thousand tiles
+ * from the grid they referred to. They belong to the zone now, beside the rows
+ * they point at, and `buildTown` refuses to build a town whose escort tile has
+ * ended up inside a wall.
+ */
+export function escortDestination(town: Town, zone: Zone): { x: number; y: number } {
+  return zone.escortTo ?? anyLanding(town);
+}
+
+/** A zone with no escort tile cannot issue fines, so this is unreachable — but
+ * putting the player nowhere is worse than putting them somewhere. */
+function anyLanding(town: Town): { x: number; y: number } {
+  const first = Object.values(town.markers)[0];
+  return first ?? { x: 1, y: 1 };
 }

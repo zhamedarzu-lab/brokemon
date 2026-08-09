@@ -47,8 +47,12 @@ change can pass all 233 tests and still make the game unwinnable.
 - `src/sim/` — the simulation. No DOM, no rendering. `tick.ts` owns the clock
   and everything that happens on it (rent, interest, credit, passive income);
   economy belongs here, not in the renderer, or nothing can test it.
-- `src/world/` — the map, as an ASCII grid in `map.ts`. Markers are single
-  glyphs stripped at load time into `TOWN.markers`.
+- `src/world/` — the world. `town.ts` holds the `Town` type and every query
+  that reads one; `towns/*.ts` hold the ASCII grids; `map.ts` is just the
+  registry (`TOWNS`, `STARTING_TOWN`). Markers are single glyphs stripped at
+  load time into `town.markers`, and the glyph vocabulary is shared, so a
+  second town writing `!` gets the same corner for free.
+- `src/sim/coach.ts` — the intercity link. Timetable, fares, journey time.
 - `src/engine/render.ts`, `src/ui/` — presentation only.
 - `docs/playtest-findings.md` — open balance and design items, ranked, with the
   numbers behind each. Keep it current when something on the list gets fixed.
@@ -62,3 +66,11 @@ change can pass all 233 tests and still make the game unwinnable.
   wants 620. Clearing the debt is the real lever; say so in any new gate text.
 - Night class is the only door to phase 3. Anything that costs energy in the
   evening competes with it directly.
+- **There are two towns now.** Housing, rent, hostel nights and reputation are
+  one value per town (`PerTown<T>`); reach them through `housingIn`,
+  `setHousing`, `bestHousing` and `reputationIn`, never by indexing directly on
+  the town you happen to be standing in. Anything charged on the clock — rent
+  especially — loops over `TOWNS`, because a landlord does not stop wanting the
+  money because you took the coach somewhere else.
+- The walking rig only walks Brokemon. Balance numbers about the crossing do
+  not exist yet; see `docs/brokedale-scope.md` Phase 4.

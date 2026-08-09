@@ -78,7 +78,15 @@ export const TILES: Record<Glyph, TileDef> = {
   I: { name: "floor", solid: false, color: "#8a7a63", accent: "#9a8a72", detail: "pavement" },
 };
 
-/** Marker glyph -> location id. Each of these appears exactly once in the map. */
+/**
+ * Marker glyph -> location id. Each of these appears at most once *per town*.
+ *
+ * The vocabulary is shared across towns, and deliberately so: a marker id is
+ * the key into `VENUES`, so a second town writing `!` gets the same corner and
+ * `%` the same dumpster without a line of new code. Ids that mean a specific
+ * building — `coachTerminal`, `dossHouse` — belong to whichever town draws
+ * them, and no town is required to draw them all.
+ */
 export const MARKERS: Record<Glyph, string> = {
   "1": "communityCenter",
   "2": "mart",
@@ -98,6 +106,9 @@ export const MARKERS: Record<Glyph, string> = {
   D: "diner",
   A: "outskirtsBusStop",
   B: "bikeShop",
+  C: "coachTerminal",
+  E: "dossHouse",
+  K: "nightMarket",
 };
 
 /**
@@ -123,6 +134,9 @@ export const MARKER_FLOOR: Record<Glyph, Glyph> = {
   D: "I",
   A: "r",
   B: "I",
+  C: "_",
+  E: "I",
+  K: "I",
 };
 
 export function tileAt(glyph: Glyph | undefined): TileDef {

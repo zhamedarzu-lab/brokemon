@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { glyphAt, isSolid, markerPos, spawnPoint, STARTING_TOWN, townById, zoneAt } from "./map";
+import { glyphAt, isSolid, markerPos, spawnPoint, STARTING_TOWN, townById, TOWNS, zoneAt, type Town } from "./map";
 
 /** Everything in here is about Brokemon Town specifically. */
 const TOWN = townById(STARTING_TOWN);
@@ -8,6 +8,11 @@ import { MARKERS, TILES } from "./tiles";
 import { approaches, sleepableBenches } from "./landmarks";
 import { DOOR_SIGNS } from "../sim/actions";
 import { VENUES } from "../sim/venues";
+
+const ALL_TOWNS: Town[] = Object.values(TOWNS);
+
+/** Every marker id placed anywhere in the world, whichever town drew it. */
+const PLACED = new Set(ALL_TOWNS.flatMap((t) => Object.keys(t.markers)));
 
 describe("town map", () => {
   it("is a complete rectangle", () => {
@@ -23,11 +28,9 @@ describe("town map", () => {
     }
   });
 
-  it("places every marker exactly once", () => {
-    const ids = Object.values(MARKERS);
-    for (const id of ids) expect(TOWN.markers[id], `marker ${id}`).toBeDefined();
+  it("places each of its markers on exactly one tile", () => {
     const positions = new Set(Object.values(TOWN.markers).map((p) => `${p.x},${p.y}`));
-    expect(positions.size).toBe(ids.length);
+    expect(positions.size).toBe(Object.keys(TOWN.markers).length);
   });
 
   it("is walled in on every edge", () => {
@@ -106,7 +109,7 @@ function reachableFromSpawn(): Set<string> {
 describe("connectivity", () => {
   const reachable = reachableFromSpawn();
 
-  it.each(Object.values(MARKERS).filter((id) => id !== "spawn"))("can walk from the park to %s", (id) => {
+  it.each(Object.keys(TOWN.markers).filter((id) => id !== "spawn"))("can walk from the park to %s", (id) => {
     const p = markerPos(TOWN, id);
     expect(reachable.has(`${p.x},${p.y}`)).toBe(true);
   });
@@ -155,9 +158,17 @@ describe("the town is legible from the street", () => {
     }
   });
 
-  it("only signs places that actually exist on the map", () => {
+  it("only signs places that actually exist somewhere in the world", () => {
     for (const id of Object.keys(DOOR_SIGNS)) {
-      expect(() => markerPos(TOWN, id), `${id} has a sign but no marker`).not.toThrow();
+      expect(PLACED.has(id), `${id} has a sign but no town draws it`).toBe(true);
+    }
+  });
+
+  it("uses every marker glyph in the vocabulary in at least one town", () => {
+    // The glyph table is shared between towns now. An id nobody draws is either
+    // a place that got deleted or a door somebody forgot to cut.
+    for (const id of Object.values(MARKERS)) {
+      expect(PLACED.has(id), `nothing in the world is marked "${id}"`).toBe(true);
     }
   });
 
@@ -189,6 +200,110 @@ describe("the town is legible from the street", () => {
         if (isSolid(TOWN, x, y) || seen.has(`${x},${y}`)) continue;
         expect(zoneAt(TOWN, y).id, `${x},${y} is walkable but cut off from spawn`).toBe("heights");
       }
+    }
+  });
+});
+
+/**
+ * Everything true of any town, checked against all of them. Brokemon had these
+ * as one-off assertions; a second grid is exactly when they stop being about
+ * one map and start being about the shape of a map.
+ */
+describe.each(ALL_TOWNS.map((t) => [t.id, t] as const))("%s, as a town", (_id, town) => {
+  it("is a complete rectangle of known glyphs", () => {
+    expect(town.grid).toHaveLength(town.height);
+    for (const [y, row] of town.grid.entries()) {
+      expect(row, `row ${y}`).toHaveLength(town.width);
+      for (const glyph of row) expect(TILES[glyph], `row ${y} glyph "${glyph}"`).toBeDefined();
+    }
+  });
+
+  it("is walled in on every edge", () => {
+    for (let x = 0; x < town.width; x++) {
+      expect(isSolid(town, x, 0), `top ${x}`).toBe(true);
+      expect(isSolid(town, x, town.height - 1), `bottom ${x}`).toBe(true);
+    }
+    for (let y = 0; y < town.height; y++) {
+      expect(isSolid(town, 0, y), `left ${y}`).toBe(true);
+      expect(isSolid(town, town.width - 1, y), `right ${y}`).toBe(true);
+    }
+  });
+
+  it("covers every row with exactly one zone", () => {
+    for (let y = 0; y < town.height; y++) {
+      const matches = town.zones.filter((z) => y >= z.from && y <= z.to);
+      expect(matches, `row ${y}`).toHaveLength(1);
+      expect(zoneAt(town, y)).toBe(matches[0]);
+    }
+  });
+
+  it("puts every marker on a tile you can stand on", () => {
+    for (const [id, p] of Object.entries(town.markers)) {
+      expect(isSolid(town, p.x, p.y), `${id} at ${p.x},${p.y} is inside a wall`).toBe(false);
+    }
+  });
+
+  it("has a venue behind every door it draws", () => {
+    // A marker with no venue is a door that opens onto nothing. `spawn` and
+    // `panhandleSpot` are places rather than premises and are handled in
+    // actions.ts directly.
+    for (const id of Object.keys(town.markers)) {
+      if (id === "spawn" || id === "panhandleSpot") continue;
+      expect(VENUES[id], `${id} is on the map but has no venue`).toBeDefined();
+    }
+  });
+
+  it("escorts out of every zone that fines people, onto ground they can stand on", () => {
+    for (const zone of town.zones) {
+      if (zone.fineScale === 0) continue;
+      expect(zone.escortTo, `${zone.id} fines but does not say where it puts you`).toBeDefined();
+      const to = zone.escortTo!;
+      expect(isSolid(town, to.x, to.y), `${zone.id} escorts into a wall at ${to.x},${to.y}`).toBe(false);
+    }
+  });
+});
+
+describe("Brokedale", () => {
+  const BROKEDALE = townById("brokedale");
+
+  it("can be walked end to end from where the coach drops you", () => {
+    const start = markerPos(BROKEDALE, "coachTerminal");
+    const seen = new Set([`${start.x},${start.y}`]);
+    const queue = [start];
+    for (let i = 0; i < queue.length; i++) {
+      const cell = queue[i]!;
+      for (const [dx, dy] of [[0, 1], [0, -1], [1, 0], [-1, 0]] as const) {
+        const next = { x: cell.x + dx, y: cell.y + dy };
+        const key = `${next.x},${next.y}`;
+        if (seen.has(key) || isSolid(BROKEDALE, next.x, next.y)) continue;
+        seen.add(key);
+        queue.push(next);
+      }
+    }
+    for (const [id, p] of Object.entries(BROKEDALE.markers)) {
+      expect(seen.has(`${p.x},${p.y}`), `${id} is cut off from the coach stand`).toBe(true);
+    }
+    // Nothing walkable stranded, either: Brokedale has no gate to justify it.
+    for (let y = 0; y < BROKEDALE.height; y++) {
+      for (let x = 0; x < BROKEDALE.width; x++) {
+        if (isSolid(BROKEDALE, x, y)) continue;
+        expect(seen.has(`${x},${y}`), `${x},${y} is walkable but cut off`).toBe(true);
+      }
+    }
+  });
+
+  it("has water and something to scavenge, but nowhere free to lie down", () => {
+    // Brokemon has a floor and no ceiling; Brokedale has a ceiling and no
+    // floor. Water and bins keep a stranded player alive; a bed costs money
+    // everywhere here, which is why the concourse exists.
+    expect(approaches(BROKEDALE, "water").length, "nothing to drink").toBeGreaterThan(0);
+    expect(approaches(BROKEDALE, "dumpster").length, "nothing to scavenge").toBeGreaterThan(0);
+    expect(sleepableBenches(BROKEDALE)).toHaveLength(0);
+  });
+
+  it("polices every district — there is no free corner", () => {
+    for (const zone of BROKEDALE.zones) {
+      expect(zone.fineScale, `${zone.id} lets you camp`).toBeGreaterThan(0);
     }
   });
 });

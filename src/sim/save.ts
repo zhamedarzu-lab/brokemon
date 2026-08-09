@@ -35,11 +35,13 @@ export function loadGame(): GameState | null {
     // are now one per town. A save from before that holds a *scalar* where a
     // record belongs — the wrong type, not merely a missing field — so these
     // have to be converted rather than filled in.
-    merged.housing = spreadToTowns(parsed.housing, fresh.housing, "street");
-    merged.rentDueDay = spreadToTowns(parsed.rentDueDay, fresh.rentDueDay, 0);
-    merged.nightsPaid = spreadToTowns(parsed.nightsPaid, fresh.nightsPaid, 0);
-    // Reputation is the one where it matters which town gets the old value:
-    // everything you built up before Brokedale existed you built in Brokemon.
+    // Every one of them lands in Brokemon: whatever a pre-Brokedale save holds,
+    // you earned, rented and slept in it there. Spreading a stored scalar
+    // across all towns would have handed the loader a free room in a city it
+    // had never heard of.
+    merged.housing = spreadToTowns(parsed.housing, fresh.housing, "street", STARTING_TOWN);
+    merged.rentDueDay = spreadToTowns(parsed.rentDueDay, fresh.rentDueDay, 0, STARTING_TOWN);
+    merged.nightsPaid = spreadToTowns(parsed.nightsPaid, fresh.nightsPaid, 0, STARTING_TOWN);
     merged.reputation = spreadToTowns(parsed.reputation, fresh.reputation, 0, STARTING_TOWN);
 
     // Migration: old saves with a bus pass but no counter get a fresh 7-day term.
@@ -57,9 +59,9 @@ export function loadGame(): GameState | null {
  *
  * Three shapes turn up: a proper record (keep it, filling any town it does not
  * mention), a bare scalar from before towns were plural, and nothing at all.
- * A scalar goes to `landsIn` if one is named — reputation you earned before
- * Brokedale existed you earned in Brokemon — or to every town otherwise, which
- * is right for housing, since the room you had is the room you still have.
+ * A scalar goes to `landsIn` if one is named, and to every town otherwise —
+ * which nothing wants today, but the shape is here for a field where holding
+ * the same value everywhere is genuinely right.
  */
 function spreadToTowns<T>(stored: unknown, fresh: PerTown<T>, empty: T, landsIn?: TownId): PerTown<T> {
   const out = { ...fresh };

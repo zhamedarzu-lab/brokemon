@@ -1,4 +1,14 @@
 import { markerPos } from "../world/map";
+import {
+  boardingReasons,
+  firstDeparture,
+  fmtDeparture,
+  lastDeparture,
+  nextDeparture,
+  rideCoach,
+  serviceFrom,
+  waitFor,
+} from "./coach";
 import { addItem, countOf, ITEMS, removeItem, SHOP_STOCK, type ItemId } from "./items";
 import {
   CLASS_COST,
@@ -33,6 +43,7 @@ import {
 } from "./state";
 import { withinHours } from "./time";
 import {
+  caffeineCup,
   collectAssignment,
   fmtHour,
   lockedChoice,
@@ -1189,6 +1200,7 @@ const busStop: Venue = (ctx) => {
     },
     makeRide(ctx, "The Outskirts", markerPos(townOf(s), "outskirtsBusStop"), hasPass, fare),
     makeRide(ctx, "The Heights gate", { x: 23, y: 15 }, hasPass, fare),
+    coachChoice(ctx),
     {
       label: "Wait",
       run: () => {
@@ -1200,9 +1212,206 @@ const busStop: Venue = (ctx) => {
 
   return menu(
     "Bus Stop — Market Square",
-    hasPass
-      ? ["You have a weekly pass. Show it and get on."]
-      : [`$${fare} a ride, exact change, or $${ITEMS.busPass.price} for a weekly pass at the Mart.`],
+    [
+      hasPass
+        ? "You have a weekly pass. Show it and get on."
+        : `$${fare} a ride, exact change, or $${ITEMS.busPass.price} for a weekly pass at the Mart.`,
+      ...coachTimetableLines(s),
+    ],
+    choices,
+  );
+};
+
+/* ------------------------------------------------------------ the coach */
+
+/**
+ * The intercity coach, offered wherever a service starts. The weekly bus pass
+ * is for the town buses and says so on it — the coach is a separate operator
+ * and wants cash every time.
+ */
+function coachChoice(ctx: ActionCtx): Choice {
+  const s = ctx.state;
+  const service = serviceFrom(s.player.town);
+  if (!service) return { label: "Intercity coach", locked: "No coach runs from here" };
+
+  const reasons = boardingReasons(s, service);
+  const wait = waitFor(service, s.time);
+  const hint = wait === null ? "last one gone" : wait <= 0 ? `$${service.fare}, now` : `$${service.fare}, ${Math.round(wait)} min wait`;
+
+  if (reasons.length > 0) return lockedChoice(`${service.destination} — intercity coach`, reasons, hint);
+
+  return {
+    label: `${service.destination} — intercity coach`,
+    hint,
+    run: () => {
+      const ride = rideCoach(ctx, service);
+      return menu(service.destination, ride.lines, [{ label: "Get off" }]);
+    },
+  };
+}
+
+/** The two lines of timetable printed on the shelter. */
+function coachTimetableLines(s: GameState): string[] {
+  const service = serviceFrom(s.player.town);
+  if (!service) return [];
+  const next = nextDeparture(service, s.time);
+  return [
+    `Intercity coach to ${service.destination}: $${service.fare}, ${service.minutes} minutes. ` +
+      `Last one ${fmtDeparture(lastDeparture(service))}.`,
+    next === null
+      ? `Nothing else tonight. First one back is ${fmtDeparture(firstDeparture(service))}.`
+      : `Next departure ${fmtDeparture(next)}.`,
+  ];
+}
+
+/* ------------------------------------------------------- Brokedale: coach */
+
+const coachTerminal: Venue = (ctx) => {
+  const s = ctx.state;
+  const choices: Choice[] = [coachChoice(ctx)];
+
+  // The concourse is the only thing in Brokedale that costs nothing, and it is
+  // not generosity — the station is open all night because the coaches are.
+  // Without it, arriving with the return fare spent would be a dead end rather
+  // than a bad night.
+  choices.push({
+    label: "Sit up in the concourse until morning",
+    hint: "free, poor rest",
+    run: () => {
+      const result = sleep(ctx, "bench", 7);
+      return {
+        ...result,
+        title: "Terminal concourse",
+        lines: [
+          "Moulded plastic seats with armrests every two feet, strip lights that never go off,",
+          "and the departure board resetting itself every few minutes.",
+          ...result.lines,
+        ],
+      };
+    },
+  });
+
+  choices.push(BACK);
+  return menu(
+    "Brokedale Coach Station",
+    [
+      "A concourse the size of the Brokemon Mart, open to the road at both ends.",
+      ...coachTimetableLines(s),
+    ],
+    choices,
+  );
+};
+
+/* ------------------------------------------------ Brokedale: night market */
+
+const nightMarket: Venue = (ctx) => {
+  const s = ctx.state;
+  const noodles = 6;
+  const water = 3;
+  const brew = 4;
+
+  const choices: Choice[] = [
+    s.cash >= noodles
+      ? {
+          label: "Noodles from the stall",
+          hint: `$${noodles}, 15 min`,
+          run: () => {
+            s.cash -= noodles;
+            ctx.advance(15, { sheltered: true });
+            applyDelta(s.meters, { hunger: +38, thirst: -6, morale: +7, health: +1 });
+            pushLog(s, `Ate at the night market — $${noodles}.`, "money");
+            return menu(
+              "Night Market",
+              ["Served in a paper tray, eaten standing up, too hot to taste for the first minute."],
+              [BACK],
+              "good",
+            );
+          },
+        }
+      : { label: "Noodles from the stall", hint: `$${noodles}`, locked: "You can't afford it" },
+    s.cash >= water
+      ? {
+          label: "Bottle of water",
+          hint: `$${water}`,
+          run: () => {
+            s.cash -= water;
+            addItem(s.inventory, "waterBottle");
+            return menu("Night Market", ["Three dollars. It is a dollar at home and you pay it anyway."], [BACK]);
+          },
+        }
+      : { label: "Bottle of water", hint: `$${water}`, locked: "You can't afford it" },
+    s.cash >= brew
+      ? {
+          label: "Coffee, black",
+          hint: `$${brew}, 5 min`,
+          run: () => {
+            s.cash -= brew;
+            ctx.advance(5, { sheltered: true });
+            const cup = caffeineCup(s);
+            applyDelta(s.meters, cup.delta);
+            s.caffeine += 1;
+            return menu("Night Market", [cup.flavor], [BACK]);
+          },
+        }
+      : { label: "Coffee, black", hint: `$${brew}`, locked: "You can't afford it" },
+    BACK,
+  ];
+
+  return menu(
+    "Night Market — St Giles Row",
+    [
+      "Six stalls under one awning, running off a generator. It never shuts and it never gets cheaper.",
+      `You have $${s.cash}.`,
+    ],
+    choices,
+  );
+};
+
+/* --------------------------------------------------- Brokedale: doss house */
+
+export const DOSS_HOUSE_RATE = 14;
+
+const dossHouse: Venue = (ctx) => {
+  const s = ctx.state;
+  const choices: Choice[] = [
+    s.cash >= DOSS_HOUSE_RATE
+      ? {
+          label: "Pay for a room",
+          hint: `$${DOSS_HOUSE_RATE}/night`,
+          run: () => {
+            s.cash -= DOSS_HOUSE_RATE;
+            setHousing(s, "hostel");
+            s.nightsPaid[s.player.town] = 1;
+            pushLog(s, `Paid $${DOSS_HOUSE_RATE} for a room at the doss house.`, "money");
+            return sleep(ctx, "hostel", 7);
+          },
+        }
+      : {
+          label: "Pay for a room",
+          hint: `$${DOSS_HOUSE_RATE}/night`,
+          locked: `You're $${DOSS_HOUSE_RATE - s.cash} short`,
+        },
+    s.cash >= 4
+      ? {
+          label: "Use the shower",
+          hint: "$4, 20 min",
+          run: () => {
+            s.cash -= 4;
+            ctx.advance(20, { sheltered: true });
+            applyDelta(s.meters, { hygiene: +30, morale: +6 });
+            return menu("St Giles Rooms", ["Four dollars, and the door does not lock."], [BACK], "good");
+          },
+        }
+      : { label: "Use the shower", hint: "$4", locked: "You can't afford it" },
+    BACK,
+  ];
+
+  return menu(
+    "St Giles Rooms",
+    [
+      "A hatch with a grille in it and a stairwell that smells of bleach over something else.",
+      `$${DOSS_HOUSE_RATE} a night, paid in advance, no questions and no receipt.`,
+    ],
     choices,
   );
 };
@@ -1393,4 +1602,7 @@ export const VENUES: Record<string, Venue> = {
   diner,
   outskirtsBusStop,
   bikeShop,
+  coachTerminal,
+  nightMarket,
+  dossHouse,
 };

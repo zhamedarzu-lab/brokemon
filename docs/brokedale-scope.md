@@ -3,7 +3,8 @@
 A second place, reachable by coach. Dense, well supplied, and expensive in
 every way that matters.
 
-Phase 0 is done and merged. Everything from Phase 0b on is still a plan.
+Phases 0, 0b and 1 are done and merged — the coach runs and Brokedale exists as
+a terminal and one street. Everything from Phase 2 on is still a plan.
 
 ---
 
@@ -174,17 +175,44 @@ doing both at once.
   before-and-after: reputation goes from 546–723 to 68–83, and runs from
   126–187 days to 138–210 — longer, but the endgame is no longer a formality.
 
-### Phase 1 — the coach, and a stub Brokedale
+### Phase 1 — the coach, and a stub Brokedale ✅ DONE
 
-- Intercity coach from the Market Square stop. Real fare, real journey time, a
-  timetable, a last coach.
-- Brokedale as a **terminal and one street** — enough to prove you can arrive,
-  walk, interact, sleep and come back.
-- Save/load across the link.
+The link exists and you can ride it.
+
+- **The coach.** Leaves Brokemon from the Market Square stop on the hour, 6AM
+  to 9PM; leaves Brokedale at half past, 6:30AM to 10:30PM, and one last one at
+  11PM. Forty minutes each way. **$6 out, $14 back** — deliberately lopsided, so
+  the fare out is affordable long before the fare home is comfortable (§8.3).
+  Turn up at 10:17 and you stand on the stand until eleven; the wait is real
+  minutes on the real clock, which is the entire point of having a timetable
+  rather than a button.
+- **Brokedale**, 40x24: the coach station and St Giles Row. A night market that
+  never shuts and is never cheap, rooms at $14, a standpipe, bins, a corner.
+  No food bank, no free wash, and no bench you can legally sleep on — the
+  concourse is the only free bed in the city and it barely counts. That is the
+  city's whole character in one screen: **a ceiling and no floor**.
+- **Save/load across the link**, plus the migration fix it exposed: a legacy
+  scalar `housing` was being spread to *every* town, which would have handed
+  every existing save a free room in a city it had never visited.
+- **Rent is now charged per town**, not for the town you happen to be standing
+  in. Without that, a day trip was the cheapest rent holiday in the game.
+- **Escort tiles moved into the zones that own them**, and `buildTown` rejects
+  one that has ended up inside a wall — the third instance of the stale-
+  coordinate problem, closed by construction this time.
+
+**Gate passed.** 293 tests (up from 273 — twenty new coach and world tests) and
+playtest output byte-identical to a baseline captured beforehand: nothing about
+a Brokemon-only run changed.
+
+Left for later on purpose: the weekly intercity pass (§8.2), and the walking
+rig does not ride the coach yet — that is Phase 4, and until then every number
+it prints is a number about Brokemon.
 
 ### Phase 2 — Brokedale proper
 
-Districts, venues, jobs, rooms. See section 7.
+Districts, venues, jobs, rooms. See section 7. The stub grid grows rather than
+gets replaced: the terminal and St Giles Row stay where they are, the High
+Street and Riverside go in beside them.
 
 ### Phase 3 — encounters, threads, and the second apex
 
