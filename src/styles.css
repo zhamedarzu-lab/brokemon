@@ -68,6 +68,7 @@ body {
   height: 100vh;
   height: 100dvh;
   padding: var(--gutter);
+  padding-top: max(var(--gutter), env(safe-area-inset-top));
   padding-bottom: calc(var(--gutter) + var(--controls) + env(safe-area-inset-bottom));
 }
 
@@ -911,17 +912,20 @@ kbd {
 }
 
 /*
- * Portrait is always width-limited at this aspect ratio, so reserving a strip
- * would not buy the frame a single pixel. Instead: screen to the top, pad
- * lifted off the bottom edge into thumb reach, handheld-console style. The
- * HUD keeps its desktop positions because nothing overlaps it here.
+ * Portrait: reserve the full control-strip height at the bottom so #app
+ * centres the frame in whatever remains, then anchor the pad to bottom: 0.
+ * The strip's own safe-area padding already keeps buttons clear of the
+ * home indicator — no extra offset needed.
  */
 @media (pointer: coarse) and (orientation: portrait) {
-  #app {
-    align-items: start;
+  :root {
+    /* dpad: 3 × 62px + 2 × 5px gap = 196px content, plus 12px top padding
+       inside #touch = 208px. safe-area-bottom adds ~34px on iPhone.
+       220px reserve keeps the frame from sitting behind the pad. */
+    --controls: 220px;
   }
   #touch {
-    bottom: 12vh;
+    bottom: 0;
   }
 }
 
