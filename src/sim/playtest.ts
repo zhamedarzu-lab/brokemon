@@ -366,9 +366,11 @@ class Player {
       const pick = order.find((i) => countOf(this.s.inventory, i) > 0);
       if (!pick) break;
       consume(this.ctx, pick);
+      TOPUPS.meals++;
     }
     while (this.s.meters.thirst < 62 && countOf(this.s.inventory, "waterBottle") > 0) {
       consume(this.ctx, "waterBottle");
+      TOPUPS.drinks++;
     }
   }
 
@@ -459,12 +461,15 @@ const HOME_MARKER: Partial<Record<HousingId, string>> = {
   room: "weeklyRooms",
 };
 
+export const TOPUPS = { meals: 0, drinks: 0 };
+
 function drink(p: Player): void {
   const water = scenery(townOf(p.s)).water;
   if (water.length === 0) return;
   for (let i = 0; i < 3 && p.s.meters.thirst < 85; i++) {
     p.approach(nearest(p, water));
     if (!p.took(p.press(), "drink")) break;
+    TOPUPS.drinks++;
   }
 }
 
@@ -1484,4 +1489,11 @@ function summarise(lengths: number[]): void {
       `range ${sorted[0]}–${sorted[sorted.length - 1]}, sd ${sd.toFixed(0)}`,
   );
   console.log(`Anything smaller than about ${(sd / 2).toFixed(0)} days is inside the noise. Do not tune on it.`);
+  // How often the bot actually had to stop and see to itself. The design
+  // target is roughly two meals and three drinks a day; anything much above
+  // that is a meter the player is nursing rather than managing.
+  const days = lengths.reduce((a, b) => a + b, 0);
+  console.log(
+    `Per day: ${(TOPUPS.meals / days).toFixed(1)} meals, ${(TOPUPS.drinks / days).toFixed(1)} drinks.`,
+  );
 }

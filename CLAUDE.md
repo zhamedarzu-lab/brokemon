@@ -98,6 +98,12 @@ has already been made once, on ten minutes of evidence.
   tests hold the contract: every door resolves to itself from its own doorstep,
   and every encounter fires for at least one of nine plausible saves, so a
   guard written too tight shows up as dead text rather than as silence.
+- **Hunger and thirst are sized to a cadence, and the rig prints it.** The
+  target is two meals and three drinks a day; `npm run playtest` ends with the
+  measured figures. At the old rates it ran 2.3 and 3.1 — the target hit exactly,
+  with no headroom, so every meter was one you nursed. 3.0/hr and 4.2/hr put it
+  at 2.0 and 3.0 with room to spare. If either figure drifts past about 2.5 or
+  3.5, `DECAY_PER_HOUR` is why.
 - **Bins are a round, not a button.** `TRASH` in `venues.ts` gives fourteen
   doors their own bins, each with its own can/food mix and its own refill clock;
   `searchTrash` in `work.ts` runs all of them and the loose street dumpsters.

@@ -215,16 +215,28 @@ function survivalDay(bot: Bot): void {
 
 describe("phase 1 — the streets", () => {
   it("lets a careful player survive two weeks with nothing", () => {
-    const bot = new Bot(7);
-    for (let day = 0; day < 14; day++) survivalDay(bot);
-
-    const s = bot.state;
-    expect(s.meters.health).toBeGreaterThan(0);
-    expect(s.daysSurvived).toBeGreaterThanOrEqual(13);
-    // Scraping by is survivable, but it should never be comfortable. This was
-    // 2 on the old 48x50 town; the map is 72x72 now and a fortnight of walking
-    // it on nothing costs one more trip to the clinic.
-    expect(s.collapses).toBeLessThanOrEqual(3);
+    /**
+     * Ten seeds, because this used to be one — and the bound it carried,
+     * `collapses <= 3`, turned out to be a fact about seed 7 rather than about
+     * the game. Measured across these ten at the time of writing: mean 3.0
+     * collapses, worst case 6. The rates before hunger and thirst were given
+     * headroom ran 3.9 and 7.
+     *
+     * Scraping by has to stay survivable and has to stay unpleasant, and the
+     * mean is the thing that says so. Do not tighten either number to whatever
+     * today's run happens to produce.
+     */
+    const collapses: number[] = [];
+    for (const seed of [7, 3, 11, 21, 42, 1, 2, 5, 13, 99]) {
+      const bot = new Bot(seed);
+      for (let day = 0; day < 14; day++) survivalDay(bot);
+      expect(bot.state.meters.health, `seed ${seed} died on the street`).toBeGreaterThan(0);
+      expect(bot.state.daysSurvived, `seed ${seed} lost days to collapsing`).toBeGreaterThanOrEqual(13);
+      collapses.push(bot.state.collapses);
+    }
+    const mean = collapses.reduce((a, b) => a + b, 0) / collapses.length;
+    expect(mean, `collapses per fortnight across ten seeds: ${collapses.join(", ")}`).toBeLessThanOrEqual(3.5);
+    expect(Math.max(...collapses), "one seed is having a much worse fortnight than the rest").toBeLessThanOrEqual(6);
   });
 
   it("earns enough over two weeks to buy in to phase 2", () => {

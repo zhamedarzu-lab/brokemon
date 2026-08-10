@@ -21,10 +21,25 @@ export const METER_LABEL: Record<MeterId, string> = {
   health: "Health",
 };
 
-/** Points lost per in-game hour while awake and idle. */
+/**
+ * Points lost per in-game hour while awake and idle.
+ *
+ * Hunger and thirst are sized against a cadence, not a feeling: **two meals and
+ * three drinks a day**, with room to spare rather than exactly on the edge.
+ *
+ * At 3.6 and 5.0 an idle day cost 78 hunger and 98 thirst, and a working day
+ * charges its own lump on top — so the walking rig ran at 2.3 meals and 3.1
+ * drinks, which is the target hit dead on with nothing in hand. Every meter was
+ * a bar you were nursing. At 3.0 and 4.2 a day costs 65 and 82, so a sandwich
+ * and a hot meal cover the day with headroom and three trips to a fountain is
+ * comfortable rather than compulsory.
+ *
+ * The rig prints the real figures at the end of a run. If either number drifts
+ * past about 2.5 meals or 3.5 drinks, this table is why.
+ */
 export const DECAY_PER_HOUR: Record<MeterId, number> = {
-  hunger: 3.6,
-  thirst: 5.0,
+  hunger: 3.0,
+  thirst: 4.2,
   hygiene: 1.9,
   // A 15-hour day at light exertion burned 61 of a 100-point bar, against the
   // 75 a hostel bed gives back — so energy slid downhill no matter what you

@@ -361,7 +361,7 @@ export const STREET_DUMPSTER: TrashSpec = {
   title: "Dumpster",
   line: "Somebody has been through it already and given up.",
   food: 0.18,
-  cans: [1, 5],
+  cans: [2, 7],
   minutes: 12,
   refillHours: 8,
 };
@@ -370,7 +370,7 @@ export const STREET_BIN: TrashSpec = {
   title: "Recycling bin",
   line: "Cardboard, junk mail, and whatever went in on top of it.",
   food: 0.04,
-  cans: [0, 4],
+  cans: [1, 5],
   minutes: 8,
   refillHours: 6,
 };
