@@ -1381,6 +1381,8 @@ const nightMarket: Venue = (ctx) => {
   const noodles = 6;
   const water = 3;
   const brew = 4;
+  const packet = 4;
+  const tablets = 18;
 
   const choices: Choice[] = [
     s.cash >= noodles
@@ -1412,6 +1414,52 @@ const nightMarket: Venue = (ctx) => {
           },
         }
       : { label: "Bottle of water", hint: `$${water}`, locked: "You can't afford it" },
+    // The stall sold a tray you ate standing up and nothing you could carry,
+    // which made this the only town in the game where you could not take food
+    // to work. A Brokedale resident went out on an eight-hour depot shift with
+    // whatever was already in the bag — which was nothing — and bottomed out at
+    // hunger 0 mid-shift most days of a 248-day run.
+    s.cash >= packet
+      ? {
+          label: "A packet for later",
+          hint: `$${packet}`,
+          run: () => {
+            s.cash -= packet;
+            addItem(s.inventory, "instantNoodles");
+            return menu(
+              "Night Market",
+              ["Dry, in a plastic cup, and it keeps. Three at home. You are not at home."],
+              [BACK],
+            );
+          },
+        }
+      : { label: "A packet for later", hint: `$${packet}`, locked: "You can't afford it" },
+    // Brokedale had nothing anywhere in it that treats being ill: no clinic, no
+    // hospital, and nothing on a shelf. Once a fever took hold your health bled
+    // out until you collapsed, and collapsing was the only thing that cleared
+    // it — eight of them on a 271-day run, every one with hunger and thirst
+    // perfectly fine and `sick` true.
+    //
+    // The city having no *charity* in it is the point. It having no chemist is
+    // not: even here somebody sells you the tablets, dearer than at home.
+    s.cash >= tablets
+      ? {
+          label: "Cold and flu tablets",
+          hint: `$${tablets}`,
+          run: () => {
+            s.cash -= tablets;
+            addItem(s.inventory, "medicine");
+            return menu(
+              "Night Market",
+              [
+                "A blister strip out of a cardboard box under the counter, twelve at home and eighteen here.",
+                `"You want them or not? I'm not the one shivering."`,
+              ],
+              [BACK],
+            );
+          },
+        }
+      : { label: "Cold and flu tablets", hint: `$${tablets}`, locked: "You can't afford it" },
     s.cash >= brew
       ? {
           label: "Coffee, black",

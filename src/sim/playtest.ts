@@ -1005,19 +1005,51 @@ function strandedDay(p: Player): void {
  * the Mart; Brokedale has a stall and a price. Without this the bot starved on
  * a full wallet, which said more about the bot than the city.
  */
+/**
+ * Eat at the stall, and buy tomorrow's while you are standing there.
+ *
+ * The hot tray is eaten where you buy it, so a bot that only ever visited the
+ * market when it was already hungry went out on an eight-hour depot shift with
+ * an empty bag and bottomed out at hunger 0 in the middle of it, most days of a
+ * 248-day run. Queuing on the way *to* work is not the answer — that was tried,
+ * and forty-five minutes in a queue made the bot chronically late, written up
+ * every day and demoted every fifth. The answer is what a person actually does:
+ * carry the next day's out of tonight's trip.
+ */
+const PACKETS_TO_CARRY = 2;
+
+/**
+ * A fever in Brokedale used to end in a collapse, because nothing in the city
+ * treated one. The market sells tablets now and the bot buys them, which is
+ * what a player would do the second time it happened to them.
+ */
+function treatFever(p: Player): void {
+  const s = p.s;
+  if (!s.sick) return;
+  if (countOf(s.inventory, "medicine") === 0) {
+    if (!hasMarker(townOf(s), "nightMarket") || s.cash < 18) return;
+    p.goto("nightMarket");
+    if (!p.took(p.press(), "Cold and flu tablets")) return;
+  }
+  consume(p.ctx, "medicine");
+}
+
 function buyFood(p: Player): void {
   const s = p.s;
-  if (s.meters.hunger >= 55) return;
   if (!hasMarker(townOf(s), "nightMarket")) return;
+  const carrying = countOf(s.inventory, "instantNoodles");
+  if (s.meters.hunger >= 55 && carrying >= PACKETS_TO_CARRY) return;
   // Leave the fare alone once it is nearly in reach — going hungry one more
   // night to get out is the trade a stranded player actually makes.
   const service = serviceFrom(s.player.town);
   const keep = service && s.cash >= service.fare - 6 ? service.fare : 0;
   p.goto("nightMarket");
-  // One tray does not cover an eight-hour shift; the bot was ending every
-  // working day on hunger 0 and collapsing on the days it travelled.
+  // One tray does not cover an eight-hour shift.
   for (let i = 0; i < 3 && s.meters.hunger < 55 && s.cash - keep >= 6; i++) {
     if (!p.took(p.press(), "noodles")) break;
+  }
+  for (let i = carrying; i < PACKETS_TO_CARRY && s.cash - keep >= 4; i++) {
+    if (!p.took(p.press(), "packet for later")) break;
   }
 }
 
@@ -1250,6 +1282,7 @@ function brokedaleDay(p: Player): void {
   bankBrokedale(p);
 
   buyFood(p);
+  treatFever(p);
   drink(p);
   p.eat();
   p.waitUntil(20);

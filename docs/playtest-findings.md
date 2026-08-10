@@ -79,6 +79,8 @@ All in `4b44b36`.
 | 58 | Riverside was 56% one encounter | The zone-spread test — eight distinct encounters, none above 25% — had only ever looked at Brokemon's three zones. Brokedale ran 4/6/4/3 distinct, and over half of everything that happened on the riverside was the same man telling you to stand away from the same car. Fifteen new encounters bring all four districts to 8 distinct at 17–23% | `events` — gives each Brokedale district a spread too |
 | 59 | Three encounters were pop-ups for a player with no money | The decision check ran one bot with $120 in its pocket, which can afford every option. `bd_tout` and `bd_twoAM` greyed out their only real choice for somebody broke — a man off the coach at 3AM, or somebody starving outside a stall of food about to be binned, with nothing to press but "Move on" — and `bd_showers` was the pure archetype, a man tells you something and the only button is "Thank him". The check now runs a destitute save across five times of day | `events-quality` — leaves you something to do even when you have nothing |
 | 60 | Brokedale's water was called "the fountain" | One glyph, two towns, and not the same thing behind it: Brokemon has an ornamental fountain in Market Square, Brokedale has a canal through the Blocks and the river along its southern edge. You drank from a decorative basin on the towpath | none — `waterName` in `actions.ts` |
+| 61 | You could not carry food out of any shop in Brokedale | The night market's tray is eaten standing at the stall, and it was the only food in the city — so a resident went out on an eight-hour depot shift with an empty bag and bottomed out at hunger 0 in the middle of it, most days of a 248-day run. Queuing on the way *to* work is not the answer; that was tried, and forty-five minutes in a queue made the bot chronically late and demoted every fifth day. The stall sells a packet you can carry now, and the rig buys tomorrow's out of tonight's trip. Seed 7: **248 days and 9 collapses → 187 and 0** | `town-services` — sells food you can carry out of the shop |
+| 62 | Nothing in Brokedale treated being ill | Being ill has three ways out: medicine, a clinic, or collapsing. Brokedale had no clinic, no hospital and nothing on a shelf, so it had only the third — which costs $100 of debt and a day and does not stop it happening again. **25 collapses across five runs, every one with hunger and thirst perfectly fine and `sick` true**; the meter columns read like starvation and were nothing of the kind. The market sells tablets at $18 against $12 at home. Five seeds: **25 collapses → 0** | `town-services` — sells something that clears a fever |
 | 36 | A Regional Director could never enter their own bank | The bank opened 9AM–5PM. Office Administrator and Regional Director work 9AM–5PM. The estate wants a 720 credit score, the score is pinned at 430 while any debt is outstanding, and the only place to pay a debt is the bank — so reaching the best job in the game permanently locked the ending it leads to. A run finished with $244,495 in savings, $1,678 of debt it could not hand over, and 152 refused offers. Open until six now | the numbers: 3/10 seeds winning → 10/10 |
 | 37 | The rig had never heard of a launderette | Hygiene became the average of how clean *you* are and how clean your *clothes* are. The bot only ever washed itself, so it capped at 49 and spent 97 applications being told it needed to be a lot cleaner (49/70) — which read as an impossible job requirement and was an instrument that did not know the mechanic had changed. Fourth time the rigs have gone blind to a change; see 16, 17, 21 | `playtest` — washes both halves |
 | 38 | The rig banked after the bank shut | `banking()` ran at the end of the errand list, so a 9-to-5 always arrived after closing. Two seeds finished with eighty thousand in cash and a few hundred of debt they never handed over. Moving one call to straight after the shift took the ten-seed spread from mean 252 (8/10 winning) to **mean 181, sd 8, 10/10** — the tightest the game has measured | `playtest` — banks on the way out of work |
@@ -175,20 +177,6 @@ overtime.
   keeps themselves half-clean on purpose. Probably intended; worth confirming.
 
 ---
-
-### Open, found during the Brokedale audit
-
-- **The Brokedale rig eats after its shift, not before it.** `buyFood` is called
-  late in `brokedaleDay`, so the bot works eight hours on whatever was in its bag,
-  bottoms out at hunger 0 mid-shift and then goes to the market — nine collapses
-  across a 248-day run. Same shape as the `wash()` trigger finding: a rig policy
-  masquerading as a balance problem. Worth fixing before anybody reads that run's
-  meter columns as evidence about the city.
-- **Brokedale has exactly one place to buy food or drink**, the night market, and
-  it sells only the weakest food item in the game (+38 hunger against a ~65/day
-  cost). That is probably deliberate scarcity — "it never shuts and it never gets
-  cheaper" is in the venue text — but it has never been measured against a
-  resident's day, only against a day-tripper's.
 
 ## The rig
 

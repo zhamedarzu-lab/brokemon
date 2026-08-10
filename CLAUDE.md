@@ -143,6 +143,15 @@ has already been made once, on ten minutes of evidence.
   escorted you to a tile inside themselves. Writing those checks over both towns
   then found the same two holes in Brokemon's Heights. Brokemon's `downtown` is
   the one allow-listed escort exception, and the reason is in the test.
+- **"Nothing here is free" is about charity, not supply.** Brokedale is meant to
+  have no food bank, no free wash and no bench you can sleep on. It is not meant
+  to have nowhere to *buy* things, and that kept being read across: the night
+  market's tray was eaten at the stall so a resident could not carry food to a
+  shift, and nothing in the whole city cleared a fever, so being ill ended in a
+  collapse every time — 25 across five runs, every one with hunger and thirst
+  fine and `sick` true. `src/sim/town-services.test.ts` checks every town sells
+  carriable food, water and medicine, by running the menus and looking in the
+  bag rather than by matching button text.
 - **The encounter-spread bar applies to both towns**: eight distinct encounters
   per district, none above 25% of rolls. Brokedale shipped at 4/6/4/3 with
   Riverside **56% one encounter**, because the spread test only ever looked at
