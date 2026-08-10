@@ -88,7 +88,7 @@ export const GIGS: Record<GigId, GigDef> = {
     basePay: 35,
     fromJobBoard: true,
     dailyLimit: 2,
-    deadlineMinutes: 180, // 3 in-game hours to reach all four drops
+    deadlineMinutes: 240, // 4 in-game hours to reach all four drops
   },
   yardWork: {
     id: "yardWork",
