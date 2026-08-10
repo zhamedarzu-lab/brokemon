@@ -417,9 +417,16 @@ function interruptPrompt(i: Interrupt, ctx: ActionCtx): Prompt | null {
     }
 
     case "sick":
+      // Once. The remedy is not obvious the first time and is not news the
+      // fourth; the Log says it every time either way.
+      if (ctx.state.flags.seenFever) return null;
+      ctx.state.flags.seenFever = 1;
       return say(
         "You don't feel right",
-        ["Your head is hot and your joints ache.", "The clinic at the community center can sort it, or cold medicine from the Mart."],
+        [
+          "Your head is hot and your joints ache.",
+          "The clinic at the community center can sort it, or cold medicine off a shelf. It will not clear on its own while you are run down.",
+        ],
         "bad",
       );
 
@@ -429,11 +436,20 @@ function interruptPrompt(i: Interrupt, ctx: ActionCtx): Prompt | null {
     case "newDay":
       return null;
 
-    case "income":
-      return menu("Overnight", i.lines, [{ label: "Good" }], "money");
+    case "income": {
+      // Money that arrives while you sleep is worth a box the first time it
+      // ever happens, because it is the moment the game changes shape. After
+      // that it is a daily interruption saying "Good" — the HUD carries the
+      // balance and the Log carries the line.
+      if (ctx.state.flags.seenPassiveIncome) return null;
+      ctx.state.flags.seenPassiveIncome = 1;
+      return menu("Overnight", [...i.lines, "This arrives every night now, and it is in the Log."], [{ label: "Good" }], "money");
+    }
 
     case "weather":
-      return say("Weather", i.text);
+      // The HUD names it, the screen tints for it and the Log records it.
+      // A box you dismiss adds nothing to any of that.
+      return null;
 
     case "fired":
       return say(
@@ -456,7 +472,7 @@ function interruptPrompt(i: Interrupt, ctx: ActionCtx): Prompt | null {
           i.cost > 0
             ? `They hand you a discharge form and take $${i.cost}. Less than it could have been.`
             : "The driver stopped. There's nothing to pay. Someone called it in.",
-          "There's a sandwich on the chair beside you. You don't know who left it.",
+          "Two hours gone, and you are put out of the door in the same state you came in.",
         ],
         [{ label: "Get up carefully" }],
         "bad",

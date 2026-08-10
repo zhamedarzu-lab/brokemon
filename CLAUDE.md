@@ -30,7 +30,7 @@ Two harnesses, and the difference between them matters:
   and it cannot see anything that costs time or distance.
 - `npm run playtest` (optionally `-- 7 99` for seeds) — `src/sim/playtest.ts`
   drives the same tree with a bot that *walks*: real pathfinding at the real
-  per-tile rate, police checks and encounters on the way, and the coach when a
+  per-tile rate, police checks on the way, and the coach when a
   routine asks for it. Every balance bug found so far was one the teleporting
   bot could not see.
 - `npm run playtest -- --crossing` — what a Brokedale day trip actually costs,
@@ -65,6 +65,35 @@ has already been made once, on ten minutes of evidence.
 - `docs/playtest-findings.md` — open balance and design items, ranked, with the
   numbers behind each. Keep it current when something on the list gets fixed.
 
+## There are no random events any more
+
+The encounter system — `events.ts`, `events-places.ts`, `events-brokedale.ts`,
+`events-work.ts` and their tests, about 8,600 lines — was deleted deliberately.
+Nothing now interrupts a walk. **Do not add it back**, and do not add anything
+shaped like it: no pop-up while walking, nothing that hands the player money or
+goods they did not choose and work for.
+
+Two things survived the cull because they never lived in that module, and both
+are worth knowing about:
+
+- **Interrupts in `tick.ts` are not encounters, but one was behaving like one.**
+  `carHit` topped hunger to 58 and thirst to 62 and put a sandwich in your bag,
+  so for a starving player walking into traffic was a meal and a packed lunch.
+  Everything still in `interruptPrompt` is a consequence of something the player
+  did — a citation, a fall, a fever, a missed deadline — and each one costs.
+- **The encounters were carrying reputation.** Brokedale's standing came almost
+  entirely from helping people in the street, and when that went the only
+  positive source left was +2 every tenth shift against -3 for every citation in
+  a city that fines you in all four districts. The rig sat at reputation 7 after
+  four hundred days and could never buy the block, which wants 40. Standing is
+  now paid by **rent settled on time (+2)** and **every shift worked without
+  being late (+1)** — deliberate, repeatable, and the two things a landlord and
+  an employer actually measure you by.
+
+A dialogue that fires without the player pressing anything needs a reason. The
+Log tab and the HUD carry weather, overnight income and meter warnings; none of
+those needs a box. `income` and `sick` open once per run and are silent after.
+
 ## Things worth knowing before changing balance
 
 - The Heights (rows 0–13) are sealed behind one security gate that wants
@@ -84,20 +113,6 @@ has already been made once, on ten minutes of evidence.
   exactly the hours of the top two jobs and a Regional Director could never
   walk in, which locked the estate behind a scheduling impossibility. Check
   this whenever a shift or an opening time moves.
-- **Encounters have two rules and both are tested.** Every one is a decision —
-  if the only button is "Move on" it is a pop-up, and pop-ups teach the player
-  to stop reading. And nothing is *given* before a choice: `build()` may set up
-  a situation and cost you, only a `run()` may pay you. Free money makes every
-  earlier decision about money retroactively pointless.
-- Encounters tied to a place live in `events-places.ts` and name the marker
-  they happen at. Being outside the door outranks the ambient pool 5x, because
-  at equal weight one place event competes with eighty others. **The nearest
-  door owns the pavement** — `at()` fires on `near.closest`, not `near.has`,
-  because the town is dense enough that the bank is five tiles from the
-  hospital, and `has()` alone put the A&E encounter at the bank counter. Two
-  tests hold the contract: every door resolves to itself from its own doorstep,
-  and every encounter fires for at least one of nine plausible saves, so a
-  guard written too tight shows up as dead text rather than as silence.
 - **Panhandling has a plateau, not a peak.** Sympathy is flat across appearance
   28–50 and falls away on both sides. It used to be a single point at 32, which
   priced *washing*: a shelter shower moves a phase-1 player from ~32 to ~50 and
@@ -152,10 +167,6 @@ has already been made once, on ten minutes of evidence.
   fine and `sick` true. `src/sim/town-services.test.ts` checks every town sells
   carriable food, water and medicine, by running the menus and looking in the
   bag rather than by matching button text.
-- **The encounter-spread bar applies to both towns**: eight distinct encounters
-  per district, none above 25% of rolls. Brokedale shipped at 4/6/4/3 with
-  Riverside **56% one encounter**, because the spread test only ever looked at
-  Brokemon's three zones.
 - **There are two towns now.** Housing, rent, hostel nights and reputation are
   one value per town (`PerTown<T>`); reach them through `housingIn`,
   `setHousing`, `bestHousing` and `reputationIn`, never by indexing directly on

@@ -7,7 +7,7 @@ import { rollWeather, WEATHER, weatherDuration } from "./weather";
 import { HOUSING, outfitRank } from "./social";
 import type { Rng } from "./rng";
 import { currentAppearance } from "./state";
-import { addItem, removeItem } from "./items";
+import { removeItem } from "./items";
 
 /**
  * Something that has to stop the player and be acknowledged. The renderer
@@ -332,6 +332,25 @@ function chargeRent(s: GameState, day: number, out: Interrupt[]): void {
   for (const town of Object.keys(TOWNS) as TownId[]) chargeRentIn(s, town, day, out);
 }
 
+/**
+ * Paying the rent, on time, is how a landlord comes to know you.
+ *
+ * This used to be carried by the street encounters — you built a name in
+ * Brokedale by helping people on the landing and in the stairwell, and when
+ * those were removed the only positive source of standing left in that city was
+ * +2 every tenth shift, against -3 for every citation in a place that fines you
+ * in all four districts. The rig sat at reputation 7 after four hundred days and
+ * could never buy the block, which wants 40.
+ *
+ * Rent is the right lever and not a consolation for the missing one: it is
+ * deliberate, it is repeatable, it is the single thing Aldiss would actually
+ * measure you by, and it scales with how long you have been somewhere rather
+ * than with how many strangers you happened to walk past.
+ */
+function payingOnTime(s: GameState, town: TownId): void {
+  changeReputation(s, 2, town);
+}
+
 function chargeRentIn(s: GameState, town: TownId, day: number, out: Interrupt[]): void {
   // You do not pay rent to yourself.
   if (town === "brokedale" && s.blockOwned) return;
@@ -346,12 +365,14 @@ function chargeRentIn(s: GameState, town: TownId, day: number, out: Interrupt[])
 
   if (s.cash >= amount) {
     s.cash -= amount;
+    payingOnTime(s, town);
     pushLog(s, `Rent taken: $${amount} for ${def.name.toLowerCase()}${where}.`, "money");
     out.push({ kind: "rent", amount, paid: true });
   } else if (s.bank >= amount - s.cash) {
     const fromBank = amount - s.cash;
     s.bank -= fromBank;
     s.cash = 0;
+    payingOnTime(s, town);
     pushLog(s, `Rent taken: $${amount}, $${fromBank} of it out of savings.`, "money");
     out.push({ kind: "rent", amount, paid: true });
   } else {
@@ -377,16 +398,23 @@ function chargeRentIn(s: GameState, town: TownId, day: number, out: Interrupt[])
  *   foldingBike / bicycle / roadBike — cyclingHelmet only
  */
 function carHit(s: GameState, rng: Rng, out: Interrupt[]): Interrupt {
-  // Generous: bystanders helped, hospital fed you, bill is small or nothing.
+  /**
+   * Being hit by a car used to feed you.
+   *
+   * It topped hunger up to 58 and thirst to 62 and put a sandwich in your bag,
+   * on the reasoning that the hospital would have fed you — which meant that
+   * for a starving player, walking into traffic was a meal and a packed lunch.
+   * It survived the cull of the encounter system because it does not live in
+   * it; it is an interrupt, on the clock, in `tick.ts`.
+   *
+   * It costs you now, which is all it was ever supposed to do: two hours, most
+   * of your health, and sometimes the money.
+   */
   const cost = rng.chance(0.55) ? 0 : Math.min(s.cash, rng.int(10, 45));
   s.cash -= cost;
   s.meters.health = Math.min(s.meters.health, 48);
   s.meters.morale = Math.max(0, s.meters.morale - 14);
   s.meters.energy = Math.max(0, s.meters.energy - 18);
-  // Hospital gave you something to eat and drink.
-  s.meters.hunger = Math.max(s.meters.hunger, 58);
-  s.meters.thirst = Math.max(s.meters.thirst, 62);
-  addItem(s.inventory, "sandwich", 1); // bystander left it on the chair
 
   // Skip 2 hours of hospital time.
   const dayBefore = dayOf(s.time);

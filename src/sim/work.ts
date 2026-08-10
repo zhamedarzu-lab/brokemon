@@ -123,6 +123,13 @@ export function workShift(ctx: ActionCtx, job: EmploymentId): Prompt {
   earnCash(s, pay);
   s.shiftsWorked[job] = (s.shiftsWorked[job] ?? 0) + 1;
   s.lastShiftDay = rota;
+  // Turning up is how people come to know you, and it is the other half of
+  // what the street encounters used to carry. On its own the rent trickle left
+  // a Brokedale resident oscillating either side of the pitch's threshold for
+  // three hundred days — every citation is -3, and that city checks you in all
+  // four districts. Working the shift you said you would work is worth as much
+  // as paying the rent you said you would pay.
+  if (!late) changeReputation(s, 1, def.town);
 
   const lines = [`${fmtDuration(minutes)} on the clock.`];
   if (late) {

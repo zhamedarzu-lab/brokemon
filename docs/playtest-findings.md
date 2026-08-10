@@ -117,7 +117,32 @@ closed by `4b44b36`:
 
 ---
 
+## The encounter system was removed
+
+`events.ts`, `events-places.ts`, `events-brokedale.ts`, `events-work.ts` and
+their tests — about 8,600 lines — were deleted on request. Findings 11, 12, 28,
+31, 39, 40, 41, 42, 43, 58 and 59 below are all about that system and are kept
+only as history; the code they describe is gone. Do not act on them.
+
+What the removal cost and what it exposed:
+
+| # | Item | What was found |
+|---|------|----------------|
+| 63 | Getting hit by a car fed you | `carHit` topped hunger to 58 and thirst to 62 and put a sandwich in your bag, so for a starving player walking into traffic was a meal and a packed lunch. It survived the cull because it is an interrupt in `tick.ts`, not an encounter. It costs you now and gives nothing |
+| 64 | Reputation had almost no positive source left | Brokedale's standing came from helping people in the street. With that gone the only positive was +2 every tenth shift against -3 per citation, in a city that fines you in all four districts — the rig sat at reputation 7 after 400 days and could never buy the block, which wants 40. Rent paid on time is +2 and every shift worked without being late is +1. Four of five Brokedale seeds go from never finishing to 193–241 days |
+| 65 | Three dialogues fired without the player doing anything | Weather changes opened a box on every turn to wet or cold; overnight income opened one every single day once you owned anything; the fever notice opened every time you caught one. All three are in the HUD or the Log already. Weather is silent now, income and fever open once per run |
+| 66 | Run length, with no events at all | Ten seeds: **169 → 206 days** before the reputation fix, **193** after, 10/10 winning, sd 4. The encounters were a net income source; losing them makes the run about a seventh longer and considerably quieter |
+
 ## Open — ranked by how much they cost the player
+
+- **One Brokedale seed loses its job 93 times.** Seed 7 re-hires 93 times across
+  400 days against seed 11's 2, with zero missed shifts — so it is being struck
+  out on a door requirement rather than failing to turn up, and it never holds a
+  job long enough to build standing. It is the only one of five seeds that does
+  not finish. This is the top open item and it is the same family as the strikes
+  finding below.
+
+
 
 ### 1. Walking still dominates the day, and the town just doubled
 
