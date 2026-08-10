@@ -79,6 +79,11 @@ has already been made once, on ten minutes of evidence.
   energy costs against the whole distribution, not one seed. See open finding 2.
 - Credit is capped at 600 while any debt is outstanding, and the apartment lease
   wants 620. Clearing the debt is the real lever; say so in any new gate text.
+- **The bank is the only place a debt can be paid, so its hours gate the
+  endgame.** It opens 9–6 against a career that works 9–5; at 9–5 it kept
+  exactly the hours of the top two jobs and a Regional Director could never
+  walk in, which locked the estate behind a scheduling impossibility. Check
+  this whenever a shift or an opening time moves.
 - Night class is the only door to phase 3. Anything that costs energy in the
   evening competes with it directly.
 - **There are two towns now.** Housing, rent, hostel nights and reputation are

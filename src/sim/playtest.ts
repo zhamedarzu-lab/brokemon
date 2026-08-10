@@ -422,6 +422,8 @@ interface Amenities {
   /** The cheapest bed of last resort, if the town has one, and when it is open. */
   refuge: { marker: string; take: string[]; fromHour: number; toHour: number } | null;
   wash: { marker: string; take: string[] } | null;
+  /** Where clothes get cleaned, which is a different question and a paid one. */
+  laundry: { marker: string; take: string[]; need: number; fromHour: number; toHour: number } | null;
 }
 
 const AMENITIES: Record<TownId, Amenities> = {
@@ -429,6 +431,7 @@ const AMENITIES: Record<TownId, Amenities> = {
     bed: { marker: "hostel", take: ["pay for a cot", "get up"], need: 12 },
     refuge: { marker: "communityCenter", take: ["take a bed", "get up"], fromHour: 18, toHour: 8 },
     wash: { marker: "communityCenter", take: ["wash up"] },
+    laundry: { marker: "laundromat", take: ["wash everything"], need: 8, fromHour: 7, toHour: 21 },
   },
   brokedale: {
     bed: { marker: "dossHouse", take: ["pay for a room", "get up"], need: 18 },
@@ -437,7 +440,10 @@ const AMENITIES: Record<TownId, Amenities> = {
     refuge: { marker: "coachTerminal", take: ["concourse", "get up"], fromHour: 0, toHour: 24 },
     // $5 for +46 hygiene beats the doss house shower on both counts, and it
     // never closes.
+    // The Eastgate token does both at once, which is most of why it is worth
+    // five dollars in a city with nothing free in it.
     wash: { marker: "washhouse", take: ["buy a token"] },
+    laundry: { marker: "washhouse", take: ["buy a token"], need: 6, fromHour: 0, toHour: 24 },
   },
 };
 
@@ -477,20 +483,52 @@ function nearest(p: Player, options: Approach[]): Approach {
   return best;
 }
 
+/**
+ * Get clean — both halves of it.
+ *
+ * Hygiene is the average of how clean you are and how clean your clothes are,
+ * so scrubbing yourself raw in the community center bathroom tops out at 50
+ * while you are still wearing the week. The bot did exactly that and then
+ * spent ninety-seven applications being told it needed to be a lot cleaner
+ * (49/70), which read as an impossible job requirement and was actually an
+ * instrument that had never heard of a launderette.
+ */
 function wash(p: Player, target = 65): void {
-  if (p.s.meters.hygiene >= target) return;
-  if (housingIn(p.s) === "apartment" || housingIn(p.s) === "estate") {
-    p.goto(housingIn(p.s));
+  const s = p.s;
+  if (s.meters.hygiene >= target) return;
+
+  // Clothes first when they are the half that is dragging: they are the
+  // expensive half to fix and the one with opening hours.
+  if (s.clothesClean < s.bodyClean && s.clothesClean < target) washClothes(p);
+  if (s.meters.hygiene >= target) return;
+
+  const home = HOME_MARKER[housingIn(s)];
+  if (home && (housingIn(s) === "apartment" || housingIn(s) === "estate")) {
+    p.goto(home);
     if (p.took(p.press(), "shower and change")) return;
   }
-  if (housingIn(p.s) === "trailer") {
+  if (housingIn(s) === "trailer") {
     p.goto("trailer");
     if (p.took(p.press(), "wash")) return;
   }
-  const here = AMENITIES[p.s.player.town].wash;
+  const here = AMENITIES[s.player.town].wash;
   if (!here) return;
   p.goto(here.marker);
   p.drive(p.press(), ...here.take);
+
+  // And if the body is clean but the clothes still are not, that is what is
+  // holding the number down.
+  if (s.meters.hygiene < target && s.clothesClean < target) washClothes(p);
+}
+
+/** The launderette, which is the only thing in either town that cleans clothes. */
+function washClothes(p: Player): void {
+  const s = p.s;
+  const at = AMENITIES[s.player.town].laundry;
+  if (!at || s.cash < at.need) return;
+  if (!withinHours(s.time, at.fromHour, at.toHour)) return;
+  p.goto(at.marker);
+  p.drive(p.press(), ...at.take);
 }
 
 function scavenge(p: Player): void {
@@ -553,10 +591,17 @@ function shop(p: Player): void {
     if (p.took(p.press(), "thrift")) p.note("BOUGHT thrift clothes");
   }
   // The bicycle halves every walk for the rest of the run. It pays for itself
-  // faster than anything else on the shelf.
+  // faster than anything else on the shelf — but riding it bareheaded is a
+  // 1.2%-per-hour concussion, and each one is up to $140 with the balance
+  // going on the debt. Seventeen of them across one run held the credit score
+  // at 430 and locked the estate permanently. Buy the helmet with the bike.
   if (countOf(s.inventory, "bicycle") === 0 && s.cash >= 110 && look >= 28) {
     p.goto("mart");
     if (p.took(p.press(), "buy something", "Bicycle")) p.note("BOUGHT a bicycle");
+  }
+  if (countOf(s.inventory, "bicycle") > 0 && countOf(s.inventory, "cyclingHelmet") === 0 && s.cash >= 40) {
+    p.goto("bikeShop");
+    if (p.took(p.press(), "cycling helmet")) p.note("BOUGHT a helmet");
   }
   if (countOf(s.inventory, "phone") === 0 && s.cash >= 60 && look >= 28) {
     p.goto("mart");
@@ -696,7 +741,8 @@ function endgame(p: Player): void {
 
 function banking(p: Player): void {
   const s = p.s;
-  if (hourOf(s.time) < 9 || hourOf(s.time) >= 17) return;
+  // The bank shuts at six, and that last hour is the only one a 9-to-5 has.
+  if (hourOf(s.time) < 9 || hourOf(s.time) >= 18) return;
   if (s.cash < 300) return;
   p.goto("bank");
   const b = p.press();
@@ -797,6 +843,13 @@ function playDay(p: Player): void {
 
   const worked = workShift(p);
 
+  // Straight from the shift to the bank, while the last hour of opening is
+  // still there. Doing it at the end of the errand list meant a 9-to-5 always
+  // arrived after closing, and two seeds finished with eighty thousand in
+  // cash, a few hundred of debt they could never hand over, and the estate
+  // refusing them on a credit score the debt was pinning down.
+  banking(p);
+
   wash(p);
   shop(p);
   groceries(p);
@@ -816,8 +869,13 @@ function playDay(p: Player): void {
 
   p.eat();
   drink(p);
+  // Banking *before* school. `school` waits until 7PM to sit the class, and the
+  // bank shuts at 5 — so on every day the bot still wanted a credit, banking
+  // was attempted after closing and silently did nothing. A run that stalled
+  // at five of six credits therefore never paid a penny off its starting $240,
+  // which compounded to $1,678, pinned the credit score at 430 and locked the
+  // estate for good. The order of two calls was worth a hundred and fifty days.
   school(p);
-  banking(p);
   p.eat();
   wash(p);
   sleep(p);

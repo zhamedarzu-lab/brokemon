@@ -134,7 +134,6 @@ describe("colleagueCall event", () => {
     }
     expect(prompt).not.toBeNull();
     const repBefore = s.reputation[STARTING_TOWN];
-    const cashBefore = s.cash;
     drive(prompt, "yes");
     expect(s.reputation[STARTING_TOWN]).toBeGreaterThan(repBefore);
     // colleagueCall no longer gives cash — reputation boost only
@@ -269,7 +268,6 @@ describe("lostTourist event", () => {
       if (p?.title === "A couple with a map") { prompt = p; break; }
     }
     expect(prompt).not.toBeNull();
-    const cashBefore = s.cash;
     const moraleBefore = s.meters.morale;
     drive(prompt, "point them");
     // lostTourist no longer gives a tip — morale boost only

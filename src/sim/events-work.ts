@@ -374,7 +374,12 @@ export const WORK_EVENTS: WorkEvent[] = [
 
   {
     id: "wk_advance",
-    weight: (s, def) => (def.tier >= 2 && s.cash < 25 ? 4 : 0),
+    // Cash *and* savings. Keyed on cash alone this fired at somebody with ten
+    // thousand in the bank and an empty pocket, and each sub puts $40 on the
+    // debt — forty-two of them across one run, which pinned the credit score
+    // at 430 and locked the estate for good. Nobody with savings asks payroll
+    // for a sub.
+    weight: (s, def) => (def.tier >= 2 && s.cash + s.bank < 25 ? 4 : 0),
     build: (ctx, job) => {
       const s = ctx.state;
       const def = EMPLOYMENT[job];

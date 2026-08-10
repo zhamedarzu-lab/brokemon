@@ -770,7 +770,16 @@ const college: Venue = (ctx) => {
 
 const bank: Venue = (ctx) => {
   const s = ctx.state;
-  if (!withinHours(s.time, 9, 17)) return say("Route 1 Savings & Loan", "Closed. Open 9AM to 5PM, every day.");
+  // Open until six, and the hour matters more than it looks.
+  //
+  // At 9-to-5 the bank kept exactly the hours of the two jobs at the top of
+  // the career track, so a Regional Director could never once walk into their
+  // own bank. The estate wants a 720 credit score, the score is pinned at 430
+  // while any debt is outstanding, and the only place to pay a debt is here —
+  // so reaching the best job in the game permanently locked the ending it was
+  // meant to lead to. A run finished with $244,495 in savings, $1,678 of debt
+  // it could not hand over, and a hundred and fifty-two refused offers.
+  if (!withinHours(s.time, 9, 18)) return say("Route 1 Savings & Loan", "Closed. Open 9AM to 6PM, every day.");
 
   const choices: Choice[] = [];
 
