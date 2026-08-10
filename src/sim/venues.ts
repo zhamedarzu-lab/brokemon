@@ -19,12 +19,14 @@ import {
   CLASS_START,
   EMPLOYMENT,
   employmentIn,
+  energyToFinish,
   hiringRequirements,
   worksBehindTheGate,
   GIGS,
   MAX_CREDITS,
   type EmploymentDef,
   type EmploymentId,
+  type GigId,
 } from "./jobs";
 import { applyDelta } from "./meters";
 import { menu, say, type Choice, type Prompt } from "./prompt";
@@ -56,11 +58,14 @@ import {
   grantOrTakeBadge,
   fmtHour,
   lockedChoice,
+  searchTrash,
   shiftWindow,
   sleep,
   startAssignment,
+  venueTrashKey,
   workShift,
   type ActionCtx,
+  type TrashSpec,
 } from "./work";
 
 const BACK: Choice = { label: "Leave" };
@@ -1138,6 +1143,11 @@ const jobBoard: Venue = (ctx) => {
   const s = ctx.state;
   const a = s.assignment;
   const choices: Choice[] = [];
+  const lines = [
+    "A corkboard under perspex outside the parks office.",
+    "Index cards, phone numbers torn into fringes, and one laminated sheet for the council jobs.",
+    "The energy figure is what you need to see the job through, and the walking between addresses is on top of it.",
+  ];
 
   // The parks office crew muster here. Without this the job is a dead end:
   // you get hired, there is nowhere to clock in, and because firing only
@@ -1161,10 +1171,10 @@ const jobBoard: Venue = (ctx) => {
       flyers.ok
         ? {
             label: GIGS.flyers.name,
-            hint: `4 stops, $${GIGS.flyers.basePay}`,
+            hint: gigHint(s, "flyers", "4 stops"),
             run: () => startAssignment(ctx, "flyers", flyerRoute(ctx), "Deliver flyers to four addresses"),
           }
-        : lockedChoice(GIGS.flyers.name, flyers.reasons, `$${GIGS.flyers.basePay}`),
+        : lockedChoice(GIGS.flyers.name, flyers.reasons, gigHint(s, "flyers", "4 stops")),
     );
 
     const yard = canDoGig(s, "yardWork");
@@ -1172,29 +1182,40 @@ const jobBoard: Venue = (ctx) => {
       yard.ok
         ? {
             label: GIGS.yardWork.name,
-            hint: `1 stop, $${GIGS.yardWork.basePay}`,
+            hint: gigHint(s, "yardWork", "1 stop"),
             run: () => {
               const spot = ctx.rng.pick(yardSpotsFor(s));
               const p = markerPos(townOf(s), spot.marker);
               return startAssignment(ctx, "yardWork", [{ x: p.x + spot.dx, y: p.y + spot.dy }], `Yard work — ${spot.name}`);
             },
           }
-        : lockedChoice(GIGS.yardWork.name, yard.reasons, `$${GIGS.yardWork.basePay}`),
+        : lockedChoice(GIGS.yardWork.name, yard.reasons, gigHint(s, "yardWork", "1 stop")),
     );
+
+    if (s.meters.energy < Math.min(energyToFinish("flyers"), energyToFinish("yardWork"))) {
+      lines.push("You have taken jobs off this board before that you were too tired to finish. The board does not pay for half a round.");
+    }
   }
 
   choices.push({ label: "Read the career listings", run: () => jobApplications(ctx) });
   choices.push(BACK);
 
-  return menu(
-    "Job Board",
-    [
-      "A corkboard under perspex outside the parks office.",
-      "Index cards, phone numbers torn into fringes, and one laminated sheet for the council jobs.",
-    ],
-    choices,
-  );
+  return menu("Job Board", lines, choices);
 };
+
+/**
+ * `4 stops · $35 · 31 energy` — and the energy is the number the player was
+ * missing. Taking a flyer round on fumes is how you end up two addresses from
+ * the end with a stack of paper and nothing left, and the board reassigns it.
+ *
+ * The figure shown is what you need in the tank to *finish*, not what the job
+ * costs, because the requirement is checked again at every stop.
+ */
+function gigHint(s: GameState, id: GigId, stops: string): string {
+  const need = energyToFinish(id);
+  const short = s.meters.energy < need;
+  return `${stops} · $${GIGS[id].basePay} · ${need} energy${short ? " — you'd run dry" : ""}`;
+}
 
 interface YardSpot {
   marker: string;
@@ -2427,7 +2448,172 @@ const hospital: Venue = (ctx) => {
 
 /* --------------------------------------------------------------- registry */
 
-export const VENUES: Record<string, Venue> = {
+/**
+ * Which doors have bins worth opening, and what tends to be in them.
+ *
+ * Cans are a dollar each at the depot, so this table is the bottom rung of the
+ * whole economy: a broke player with nothing else on and no job they can pass
+ * the door requirement for still has a round to walk. Making it a *round* is
+ * the point — the plaza is the best cans in either town and has nothing edible
+ * in it, the night market is the reverse, and each bin refills on its own clock.
+ * A player who learns the good ones is earning that money rather than pressing
+ * a button on the nearest dumpster forty times.
+ *
+ * Food is never handed over. `searchTrash` asks.
+ */
+const TRASH: Record<string, TrashSpec> = {
+  corporatePlaza: {
+    title: "The plaza bins",
+    line: "Glass-sided, emptied on a contract, and full of the lunch of people who did not finish it.",
+    food: 0.08,
+    cans: [3, 8],
+    minutes: 12,
+    refillHours: 12,
+  },
+  coachTerminal: {
+    title: "The terminal bins",
+    line: "Four of them along the stands, and everybody who ever waited here put something in one.",
+    food: 0.14,
+    cans: [2, 7],
+    minutes: 12,
+    refillHours: 8,
+  },
+  mart: {
+    title: "Behind the Mart",
+    line: "The good skip is locked. The one for the front-of-house bins is not.",
+    food: 0.20,
+    cans: [2, 7],
+    minutes: 12,
+    refillHours: 8,
+  },
+  college: {
+    title: "Behind the refectory",
+    line: "Trays go out at two and nobody comes back for what was on them.",
+    food: 0.40,
+    cans: [2, 6],
+    minutes: 12,
+    refillHours: 9,
+  },
+  depot: {
+    title: "The depot skip",
+    line: "Shrink wrap, strapping, and the drivers' bin at the end of the row.",
+    food: 0.10,
+    cans: [2, 6],
+    minutes: 12,
+    refillHours: 10,
+  },
+  gym: {
+    title: "The gym bins",
+    line: "Protein tubs and sports drinks, which is a deposit each and nothing else.",
+    food: 0.04,
+    cans: [2, 5],
+    minutes: 8,
+    refillHours: 10,
+  },
+  hospital: {
+    title: "The bins by A&E",
+    line: "Vending machine, twenty-four hours, and a bin under it that nobody has ever emptied on time.",
+    food: 0.06,
+    cans: [1, 5],
+    minutes: 10,
+    refillHours: 10,
+  },
+  communityCenter: {
+    title: "The bins by the fire door",
+    line: "Whatever the lunch club did not get through, and it is never very much.",
+    food: 0.35,
+    cans: [1, 4],
+    minutes: 10,
+    refillHours: 10,
+  },
+  diner: {
+    title: "The diner's bins",
+    line: "Hot, even from here, and the smell arrives about four feet before the bins do.",
+    food: 0.55,
+    cans: [0, 3],
+    minutes: 10,
+    refillHours: 10,
+  },
+  church: {
+    title: "Behind the church hall",
+    line: "The soup run washes up out here. What is left over is left out here too.",
+    food: 0.50,
+    cans: [0, 3],
+    minutes: 10,
+    refillHours: 12,
+  },
+  nightMarket: {
+    title: "Behind the stalls",
+    line: "Everything cooked here goes cold in an hour and the stalls will not sell it cold.",
+    food: 0.60,
+    cans: [1, 5],
+    minutes: 12,
+    refillHours: 8,
+  },
+  busStop: {
+    title: "The bin at the stop",
+    line: "One bin, bolted to the pole, and everything anybody drank while they waited.",
+    food: 0.12,
+    cans: [0, 3],
+    minutes: 6,
+    refillHours: 6,
+  },
+  outskirtsBusStop: {
+    title: "The bin at the stop",
+    line: "Nobody empties this one, which cuts both ways.",
+    food: 0.12,
+    cans: [0, 4],
+    minutes: 6,
+    refillHours: 8,
+  },
+  washhouse: {
+    title: "The washhouse bins",
+    line: "Softener bottles, mostly, and the machine at the depot takes those.",
+    food: 0.03,
+    cans: [1, 4],
+    minutes: 8,
+    refillHours: 10,
+  },
+};
+
+/**
+ * Bolts "Check the bins" onto every door that has any, in one place.
+ *
+ * Doing it at the registry rather than inside fourteen venue functions means
+ * the option cannot drift — a door with a bin in `TRASH` always offers it, and
+ * it always reads the same, whether the shop behind it is open or shut. Being
+ * shut is in fact when you want it.
+ */
+/** Every door with bins behind it — for the test that they are all real doors. */
+export const TRASH_DOORS = Object.keys(TRASH);
+
+function withBins(venues: Record<string, Venue>): Record<string, Venue> {
+  const out: Record<string, Venue> = {};
+  for (const [marker, venue] of Object.entries(venues)) {
+    const spec = TRASH[marker];
+    if (!spec) {
+      out[marker] = venue;
+      continue;
+    }
+    out[marker] = (ctx) => {
+      const prompt = venue(ctx);
+      const bins: Choice = {
+        label: "Check the bins out back",
+        hint: `${spec.minutes} min`,
+        run: () => searchTrash(ctx, venueTrashKey(ctx.state, marker), spec),
+      };
+      const choices = [...(prompt.choices ?? [])];
+      // Above the way out, below everything the building itself offers.
+      const exit = choices.length - 1;
+      if (exit >= 0 && !choices[exit]!.run) choices.splice(exit, 0, bins);
+      else choices.push(bins, BACK);
+      return { ...prompt, choices };
+    };
+  }
+  return out;
+}
+
+export const VENUES: Record<string, Venue> = withBins({
   communityCenter,
   mart,
   laundromat,
@@ -2456,4 +2642,4 @@ export const VENUES: Record<string, Venue> = {
   jobCentre,
   depot,
   gym,
-};
+});

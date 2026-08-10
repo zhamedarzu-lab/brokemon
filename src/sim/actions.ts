@@ -6,7 +6,7 @@ import { menu, say, type Choice, type Prompt } from "./prompt";
 import { currentAppearance, pushLog, townOf, type GameState } from "./state";
 import { HEIGHTS_GATE_LOOK, HOUSING } from "./social";
 import { VENUES } from "./venues";
-import { panhandle, scavenge, sleep, workAssignmentStop, type ActionCtx } from "./work";
+import { panhandle, searchTrash, sleep, STREET_BIN, STREET_DUMPSTER, workAssignmentStop, type ActionCtx } from "./work";
 
 const BACK: Choice = { label: "Leave" };
 
@@ -104,10 +104,10 @@ function tileAction(ctx: ActionCtx, cell: Vec2): Prompt | null {
       return benchPrompt(ctx);
 
     case "dumpster":
-      return scavenge(ctx, `dump:${key(cell.x, cell.y)}`);
+      return searchTrash(ctx, `dump:${key(cell.x, cell.y)}`, STREET_DUMPSTER);
 
     case "bin":
-      return recycleBin(ctx);
+      return searchTrash(ctx, `bin:${key(cell.x, cell.y)}`, STREET_BIN);
 
     case "sign":
       return say("Sign", zoneAt(townOf(s), cell.y).sign);
@@ -220,17 +220,6 @@ function streetPanhandle(ctx: ActionCtx, cell: Vec2): Prompt {
       BACK,
     ],
   );
-}
-
-function recycleBin(ctx: ActionCtx): Prompt {
-  const s = ctx.state;
-  ctx.advance(8, { exertion: 1.3 });
-  applyDelta(s.meters, { hygiene: -2, energy: -2 });
-  const n = ctx.rng.int(0, 4);
-  if (n === 0) return say("Recycling bin", "Cardboard, junk mail, and nothing with a deposit on it.");
-  s.inventory.recyclables = (s.inventory.recyclables ?? 0) + n;
-  pushLog(s, `Pulled ${n} containers out of a bin.`);
-  return menu("Recycling bin", [`${n} container${n === 1 ? "" : "s"} with the deposit still on them.`], [BACK]);
 }
 
 function heightsGate(ctx: ActionCtx, cell: Vec2): Prompt {

@@ -98,6 +98,20 @@ has already been made once, on ten minutes of evidence.
   tests hold the contract: every door resolves to itself from its own doorstep,
   and every encounter fires for at least one of nine plausible saves, so a
   guard written too tight shows up as dead text rather than as silence.
+- **Bins are a round, not a button.** `TRASH` in `venues.ts` gives fourteen
+  doors their own bins, each with its own can/food mix and its own refill clock;
+  `searchTrash` in `work.ts` runs all of them and the loose street dumpsters.
+  A rummage yields cans *or* food, never both, and food is **offered** — taking
+  it costs dignity, and more of it once you have an address. Bins are priced to
+  be worth opening when you are already at the door: a dedicated five-door tour
+  of the good ones was measured at four days a run *worse*, because a bin holds
+  a dollar or two and crossing town for it costs more clock than that is worth.
+  Keep the rig's `BIN_ROUND` to doors it already stands at.
+- **Exhaustion and dehydration feed each other** (`meters.ts`). Energy at zero
+  drains thirst, thirst at zero drains energy, both gentler than the meters' own
+  decay so a drink or an hour's sleep still climbs out faster than the loop
+  pulls down. Measured at zero cost across ten seeds; check it again if either
+  rate moves.
 - Night class is the only door to phase 3. Anything that costs energy in the
   evening competes with it directly.
 - **There are two towns now.** Housing, rent, hostel nights and reputation are

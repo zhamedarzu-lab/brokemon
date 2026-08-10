@@ -3,7 +3,7 @@ import { applyDelta, type MeterDelta } from "./meters";
 import { menu, say, type Choice, type Prompt } from "./prompt";
 import type { Rng } from "./rng";
 import { HOUSING, type HousingId } from "./social";
-import { canDoGig, changeReputation, checkRequirements, currentAppearance, earnCash, pushLog, syncHygiene, townOf, type GameState } from "./state";
+import { bestHousing, canDoGig, changeReputation, checkRequirements, currentAppearance, earnCash, pushLog, syncHygiene, townOf, type GameState } from "./state";
 import { zoneAt } from "../world/map";
 import { dayOf, hourOf, minuteOfDay, MINUTES_PER_DAY, minutesUntilHour, withinHours } from "./time";
 import { WEATHER } from "./weather";
@@ -227,41 +227,157 @@ export function panhandle(ctx: ActionCtx): Prompt {
   return menu(`Corner of ${where}`, lines, [{ label: "Get up" }], take > 0 ? "money" : "plain");
 }
 
-export function scavenge(ctx: ActionCtx, key: string): Prompt {
+/**
+ * A bin worth opening, and what tends to be in it.
+ *
+ * The back of a diner and the back of an office block are not the same bin, and
+ * a game where they are is a game where you dig through the nearest one. The
+ * plaza is the best cans in either town and has nothing you could eat; the
+ * night market is the other way round. Learning which is which is most of what
+ * there is to know about being broke in these two towns.
+ */
+export interface TrashSpec {
+  /** You are behind a named building, not at "a dumpster". */
+  title: string;
+  /** What it looks like before you have your hands in it. */
+  line: string;
+  /** Chance the rummage turns up something edible instead of deposits. */
+  food: number;
+  /** Containers, inclusive, when it is cans. */
+  cans: [number, number];
+  /** A proper look, in minutes. */
+  minutes: number;
+  /** Hours before it is worth opening again. */
+  refillHours: number;
+}
+
+/**
+ * Dignity, in morale, for lifting food out of a bin.
+ *
+ * Eating it costs you again — `trashFood` carries its own morale line — and
+ * that is deliberate. This is the cost of the decision; that is the cost of the
+ * meal. And it is worse once you have an address, because the further you have
+ * climbed the further this is back down, which is the whole subject of the game.
+ */
+const BIN_FOOD_DIGNITY = 6;
+const BIN_FOOD_DIGNITY_WITH_AN_ADDRESS = 11;
+
+export function searchTrash(ctx: ActionCtx, key: string, spec: TrashSpec): Prompt {
   const s = ctx.state;
-  ctx.advance(12, { exertion: 1.6 });
+  ctx.advance(spec.minutes, { exertion: 1.6 });
   applyDelta(s.meters, { hygiene: -3, energy: -3, morale: -3 });
 
-  // A bin you emptied refills after about eight hours. One you have never
-  // touched is always worth opening — including on the morning of day one,
-  // when `time` is still smaller than that window.
+  // A bin you emptied refills on its own schedule. One you have never touched
+  // is always worth opening — including on the morning of day one, when `time`
+  // is still smaller than the window.
   const lastEmptied = s.flags[key];
-  if (lastEmptied !== undefined && lastEmptied > s.time - 8 * 60) {
-    return say("Dumpster", "Somebody has already been through this one today.");
+  if (lastEmptied !== undefined && lastEmptied > s.time - spec.refillHours * 60) {
+    return menu(spec.title, ["Somebody has already been through this one, and recently."], [{ label: "Close the lid" }]);
   }
   s.flags[key] = s.time;
 
-  const cans = ctx.rng.int(1, 6);
-  const found: string[] = [];
-  s.inventory.recyclables = (s.inventory.recyclables ?? 0) + cans;
-  found.push(cans === 1 ? "one can with the deposit still on it" : `${cans} cans and bottles`);
+  // Glass does not care what else is in there.
+  const cut = ctx.rng.chance(0.04);
+  if (cut) s.meters.health = Math.max(0, s.meters.health - 8);
+  const cutLine = cut ? "Something in there has opened the back of your hand." : "";
 
-  if (ctx.rng.chance(0.22)) {
-    s.inventory.trashFood = (s.inventory.trashFood ?? 0) + 1;
-    found.push("something wrapped that still smells fine");
-  }
-  if (ctx.rng.chance(0.06)) {
-    const cash = ctx.rng.int(1, 8);
-    earnCash(s, cash);
-    found.push(`$${cash} in a coat pocket`);
-  }
-  if (ctx.rng.chance(0.04)) {
-    s.meters.health = Math.max(0, s.meters.health - 8);
-    found.push("a cut on your hand from broken glass");
-  }
+  // Cans or food, not both. The bin has one thing in it and you either want it
+  // or you do not — that is the decision, and running them together turned it
+  // into a payout screen.
+  if (ctx.rng.chance(spec.food)) return binFood(ctx, spec, cutLine);
 
-  pushLog(s, `Scavenged: ${found.join(", ")}.`);
-  return menu("Dumpster", [`You find ${listSentence(found)}.`], [{ label: "Close the lid" }]);
+  const cans = ctx.rng.int(spec.cans[0], spec.cans[1]);
+  if (cans === 0) {
+    return menu(spec.title, [spec.line, "Cardboard, wet paper, and nothing with a deposit on it.", cutLine].filter(Boolean), [
+      { label: "Close the lid" },
+    ]);
+  }
+  addItem(s.inventory, "recyclables", cans);
+  pushLog(s, `Pulled ${cans} container${cans === 1 ? "" : "s"} out of the bins.`);
+  return menu(
+    spec.title,
+    [
+      spec.line,
+      cans === 1 ? "One can, and the deposit still on it." : `${cans} cans and bottles, and it is all over your hands.`,
+      cutLine,
+    ].filter(Boolean),
+    [{ label: "Close the lid" }],
+  );
+}
+
+/**
+ * The bin has food in it. Whether you take it is yours to answer — the box does
+ * not put it in your bag and then ask you to press OK about it.
+ */
+function binFood(ctx: ActionCtx, spec: TrashSpec, cutLine: string): Prompt {
+  const s = ctx.state;
+  const housed = bestHousing(s) !== "street";
+  const dignity = housed ? BIN_FOOD_DIGNITY_WITH_AN_ADDRESS : BIN_FOOD_DIGNITY;
+  return menu(
+    spec.title,
+    [
+      spec.line,
+      "Wrapped, barely touched, and on top rather than underneath — which is the only reason you are still looking at it.",
+      housed ? "You have a bed to go back to tonight. That is somehow the part that makes this hard." : "",
+      cutLine,
+    ].filter(Boolean),
+    [
+      {
+        label: "Take it",
+        hint: `−${dignity} dignity`,
+        run: () => {
+          addItem(s.inventory, "trashFood");
+          applyDelta(s.meters, { morale: -dignity });
+          s.flags.tookFoodFromABin = (s.flags.tookFoodFromABin ?? 0) + 1;
+          pushLog(s, "Took food out of a bin.", "bad");
+          return menu(
+            spec.title,
+            [
+              "It goes in the bag before you have finished deciding, which tells you where you are.",
+              s.flags.tookFoodFromABin >= 5 ? "You do not look up and down the street first any more." : "You look up and down the street first.",
+            ],
+            [{ label: "Close the lid" }],
+            "bad",
+          );
+        },
+      },
+      {
+        label: "Leave it",
+        run: () => {
+          applyDelta(s.meters, { morale: +2 });
+          return menu(spec.title, ["You put the lid back down. You are hungry all the way to wherever you are going."], [{ label: "Walk on" }]);
+        },
+      },
+    ],
+  );
+}
+
+/**
+ * The dumpsters and bins drawn straight onto the street, with no door behind
+ * them. Poorer than anywhere with a kitchen or an office above it, which is the
+ * point of walking to the good ones.
+ */
+export const STREET_DUMPSTER: TrashSpec = {
+  title: "Dumpster",
+  line: "Somebody has been through it already and given up.",
+  food: 0.18,
+  cans: [1, 5],
+  minutes: 12,
+  refillHours: 8,
+};
+
+export const STREET_BIN: TrashSpec = {
+  title: "Recycling bin",
+  line: "Cardboard, junk mail, and whatever went in on top of it.",
+  food: 0.04,
+  cans: [0, 4],
+  minutes: 8,
+  refillHours: 6,
+};
+
+/** The bins behind a marked door — one key per town, so both towns keep their own. */
+export function venueTrashKey(s: GameState, marker: string): string {
+  return `bin:${s.player.town}:${marker}`;
 }
 
 export function startAssignment(ctx: ActionCtx, gig: GigId, targets: { x: number; y: number }[], label: string): Prompt {

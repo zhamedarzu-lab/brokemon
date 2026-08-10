@@ -75,13 +75,17 @@ export const GIGS: Record<GigId, GigDef> = {
   flyers: {
     id: "flyers",
     name: "Deliver flyers",
-    desc: "Four addresses, one stack of paper, twenty-two dollars cash.",
+    desc: "Four addresses at four corners of town, one stack of paper, thirty-five dollars cash.",
     minutes: 0,
     requires: { energy: 15 },
     cost: { energy: -14, hygiene: -5, thirst: -10, hunger: -6 },
     exertion: 1.4,
     stops: 4,
-    basePay: 22,
+    // Four stops scattered across the map, and the walking between them is the
+    // job — the rig spends more of the clock on a flyer round than on ninety
+    // minutes of hedge, and it used to pay less for it. Whichever job asks
+    // more of the day should pay more of the money.
+    basePay: 35,
     fromJobBoard: true,
     dailyLimit: 2,
     deadlineMinutes: 180, // 3 in-game hours to reach all four drops
@@ -89,13 +93,13 @@ export const GIGS: Record<GigId, GigDef> = {
   yardWork: {
     id: "yardWork",
     name: "Yard work",
-    desc: "Somebody's hedge, somebody's leaves, ninety minutes, thirty-five dollars.",
+    desc: "Somebody's hedge, somebody's leaves, ninety minutes in one place, twenty dollars.",
     minutes: 90,
     requires: { energy: 25, hygiene: 15, morale: MORALE_BREAKDOWN },
     cost: { energy: -26, hygiene: -14, thirst: -18, hunger: -12, morale: +3 },
     exertion: 2.2,
     stops: 1,
-    basePay: 35,
+    basePay: 20,
     fromJobBoard: true,
     dailyLimit: 2,
     deadlineMinutes: 180, // 3 in-game hours including travel to the yard
@@ -371,6 +375,36 @@ export const EMPLOYMENT_ORDER: EmploymentId[] = [
 ];
 
 /** The ladder available in a given town, worst-paid first. */
+/**
+ * What a gig burns from the moment you take it to the moment you collect.
+ *
+ * `cost` is the whole job's bill, split across its stops as you reach them, so
+ * this is just its energy line as a positive number.
+ */
+export function gigEnergyCost(id: GigId): number {
+  return Math.abs(GIGS[id].cost.energy ?? 0);
+}
+
+/**
+ * Roughly what you need in the tank before it is worth taking this on.
+ *
+ * The door requirement is re-checked at *every* stop, not only when the board
+ * hands you the job — so what strands a player is not the total bill, it is
+ * arriving at the last address already under the number. That is the flyer
+ * round with two houses left and no way to finish it, and the stack of paper
+ * still in your bag when the window closes.
+ *
+ * The walking between stops is on top of this and is not modelled here, because
+ * how far you walk is up to you; the job board says so in words instead of
+ * pretending to a number it cannot know.
+ */
+export function energyToFinish(id: GigId): number {
+  const gig = GIGS[id];
+  const door = gig.requires.energy ?? 0;
+  const burntBeforeTheLastStop = gig.stops > 1 ? (gigEnergyCost(id) * (gig.stops - 1)) / gig.stops : 0;
+  return Math.ceil(door + burntBeforeTheLastStop);
+}
+
 export function employmentIn(town: TownId): EmploymentId[] {
   return EMPLOYMENT_ORDER.filter((id) => EMPLOYMENT[id].town === town);
 }

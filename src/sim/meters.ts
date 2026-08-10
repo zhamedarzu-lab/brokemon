@@ -68,6 +68,22 @@ export interface HygieneSub {
 /** Clothes-cleanliness points lost per in-game hour, indexed by outfit rank (0=rags … 4=tailored). */
 const CLOTHES_DECAY_BY_RANK = [3.0, 1.8, 1.2, 0.8, 0.5];
 
+/**
+ * What running on empty does to the other half.
+ *
+ * These two are the only feedback loop between meters, and they are deliberate:
+ * exhaustion and dehydration are the same hole from different ends. Neither one
+ * kills you on its own — energy has no direct health cost and thirst at zero
+ * already bleeds health — but together they close a circuit, so a day that ends
+ * with nothing left in you is a day that costs something tomorrow rather than a
+ * meter sitting harmlessly at the bottom of its bar.
+ *
+ * Both are gentler than the meters' own decay (thirst 5.0/hr, energy 2.6/hr), so
+ * a drink or an hour's sleep still climbs out faster than the loop pulls down.
+ */
+const EXHAUSTION_THIRST_PER_HOUR = 3.0;
+const DEHYDRATION_ENERGY_PER_HOUR = 2.0;
+
 export interface DecayContext {
   /** In-game minutes elapsed. */
   minutes: number;
@@ -105,6 +121,15 @@ export function decay(meters: Meters, ctx: DecayContext, hygieneSub: HygieneSub)
   if (!ctx.asleep) {
     meters.energy = clamp(meters.energy - DECAY_PER_HOUR.energy * hours * ctx.exertion);
   }
+
+  // Empty pulls on empty. A body with nothing left in it sweats out what water
+  // it has and stops thinking to drink; a body with no water in it cannot make
+  // energy out of anything. Read both from the values *before* the coupling so
+  // the two sides are symmetrical and one tick cannot cascade through itself.
+  const flatOut = meters.energy <= 0;
+  const driedOut = meters.thirst <= 0;
+  if (flatOut) meters.thirst = clamp(meters.thirst - EXHAUSTION_THIRST_PER_HOUR * hours * restMul);
+  if (driedOut) meters.energy = clamp(meters.energy - DEHYDRATION_ENERGY_PER_HOUR * hours * restMul);
 
   // Dignity tracks the state of the body, and it has to move both ways.
   // Filthy, starving and exhausted is not a mood, it's a slope — but fed,

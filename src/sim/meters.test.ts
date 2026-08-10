@@ -152,3 +152,51 @@ describe("decay", () => {
     expect(ragsSub.clothesClean).toBeLessThan(suitSub.clothesClean);
   });
 });
+
+describe("running on empty pulls on the other half", () => {
+  /**
+   * The only feedback loop between two meters, and it goes both ways:
+   * exhaustion and dehydration are the same hole from different ends. Neither
+   * kills on its own, so without this a day that ends with nothing left in you
+   * is a bar sitting harmlessly at the bottom of the HUD.
+   */
+  it("drains thirst faster once energy is gone", () => {
+    const flat = fresh({ energy: 0, thirst: 60 });
+    const rested = fresh({ energy: 60, thirst: 60 });
+    decay(flat, IDLE, freshSub());
+    decay(rested, IDLE, freshSub());
+    expect(flat.thirst).toBeLessThan(rested.thirst);
+  });
+
+  it("drains energy faster once thirst is gone", () => {
+    const dry = fresh({ thirst: 0, energy: 60 });
+    const watered = fresh({ thirst: 60, energy: 60 });
+    decay(dry, IDLE, freshSub());
+    decay(watered, IDLE, freshSub());
+    expect(dry.energy).toBeLessThan(watered.energy);
+  });
+
+  it("leaves both alone while there is anything left in either", () => {
+    const fine = fresh({ energy: 1, thirst: 1 });
+    const control = fresh({ energy: 1, thirst: 1 });
+    decay(fine, IDLE, freshSub());
+    // Same starting point, so the only difference would be the coupling —
+    // and at 1 point left it must not have fired yet.
+    decay(control, IDLE, freshSub());
+    expect(fine.thirst).toBe(control.thirst);
+    expect(fine.energy).toBe(control.energy);
+  });
+
+  it("pulls gentler than a drink or an hour of sleep can push back", () => {
+    // A loop that outran recovery would be a death spiral with no way out of
+    // it. An hour flat out costs less thirst than the meter's own decay does.
+    const flat = fresh({ energy: 0, thirst: 60 });
+    const rested = fresh({ energy: 60, thirst: 60 });
+    const before = 60;
+    decay(flat, IDLE, freshSub());
+    decay(rested, IDLE, freshSub());
+    const couplingCost = rested.thirst - flat.thirst;
+    const ordinaryDecay = before - rested.thirst;
+    expect(couplingCost).toBeLessThan(ordinaryDecay);
+  });
+});

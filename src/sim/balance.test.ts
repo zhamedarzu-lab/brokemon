@@ -5,7 +5,7 @@ const TOWN = townById(STARTING_TOWN);
 
 import { approaches, sleepableBenches, type Approach } from "../world/landmarks";
 import { interact } from "./actions";
-import { CLASS_COST, EMPLOYMENT, EMPLOYMENT_ORDER } from "./jobs";
+import { CLASS_COST, EMPLOYMENT, EMPLOYMENT_ORDER, GIGS, energyToFinish } from "./jobs";
 import { countOf, type ItemId } from "./items";
 import type { Choice, Prompt } from "./prompt";
 import { Rng } from "./rng";
@@ -126,12 +126,46 @@ class Bot {
 // Read off the map rather than written down — see world/landmarks.ts for why.
 const FOUNTAIN = approaches(TOWN, "water")[0]!;
 const DUMPSTERS = approaches(TOWN, "dumpster");
+
+/**
+ * What a door still offers once it has turned you away.
+ *
+ * "Refused" used to mean a screen with no buttons on it at all. The bins are
+ * outside the building, so being shut out of the Mart does not put them out of
+ * reach — and a rejection screen with something you can still do on it is a
+ * better screen. These tests care that there is no way *in*, which is what they
+ * always meant.
+ */
+function waysIn(prompt: Prompt | null): string[] {
+  return (prompt?.choices ?? [])
+    .filter((c) => !c.locked)
+    .map((c) => c.label)
+    .filter((label) => !/bins|leave|walk on|close the lid/i.test(label));
+}
 const BENCH = sleepableBenches(TOWN)[0]!;
+
+/**
+ * Open one bin and answer whatever it asks.
+ *
+ * Food in a bin is a decision now, not a payout, so the rig has to make it or
+ * it silently leaves every meal it finds — which is how the last four balance
+ * bugs got in. This bot takes it while it is hungry and on the street, and
+ * leaves it otherwise, which is the choice the game is asking the player to
+ * make.
+ */
+function openBin(bot: Bot): void {
+  const prompt = bot.press();
+  if (bot.canChoose(prompt, "take it")) {
+    bot.drive(prompt, bot.state.meters.hunger < 55 ? "take it" : "leave it");
+    return;
+  }
+  bot.drive(prompt, "close the lid");
+}
 
 function scavengeRound(bot: Bot): void {
   for (const d of DUMPSTERS) {
     bot.approach(d);
-    bot.drive(bot.press(), "close the lid");
+    openBin(bot);
   }
   if (countOf(bot.state.inventory, "recyclables") > 0) {
     bot.standOn("recycling");
@@ -219,8 +253,11 @@ describe("phase 1 — the streets", () => {
     const bot = new Bot(21);
     bot.approach(DUMPSTERS[0]!);
     const prompt = bot.press();
-    expect(prompt?.lines.join(" ")).toContain("You find");
-    expect(countOf(bot.state.inventory, "recyclables")).toBeGreaterThan(0);
+    expect(prompt?.lines.join(" ")).not.toContain("already been through");
+    // Cans go straight in the bag; food is offered rather than given.
+    const gotSomething =
+      countOf(bot.state.inventory, "recyclables") > 0 || bot.canChoose(prompt, "take it");
+    expect(gotSomething).toBe(true);
   });
 
   it("will not let you strip the same dumpster twice in a row", () => {
@@ -237,7 +274,7 @@ describe("phase 1 — the streets", () => {
     bot.press();
     bot.ctx.advance(9 * 60);
     bot.approach(DUMPSTERS[0]!);
-    expect(bot.press()?.lines.join(" ")).toContain("You find");
+    expect(bot.press()?.lines.join(" ")).not.toContain("already been through");
   });
 
   it("keeps you out of the Mart while you look like that", () => {
@@ -248,7 +285,7 @@ describe("phase 1 — the streets", () => {
     expect(currentAppearance(bot.state)).toBeLessThan(28);
     bot.standOn("mart");
     const prompt = bot.press();
-    expect(prompt?.choices ?? []).toHaveLength(0);
+    expect(waysIn(prompt)).toEqual([]);
     expect(prompt?.tone).toBe("bad");
   });
 
@@ -344,7 +381,7 @@ describe("phase 3 and 4 — the ladder", () => {
     bot.standOn("corporatePlaza");
     const prompt = bot.press();
     expect(prompt?.tone).toBe("bad");
-    expect(prompt?.choices ?? []).toHaveLength(0);
+    expect(waysIn(prompt)).toEqual([]);
   });
 
   it("locks the apartment behind credit, deposit and a career job", () => {
@@ -534,7 +571,7 @@ describe("the Mart after hours", () => {
     bot.state.time = 23 * 60 + 30;
     bot.standOn("mart");
     const prompt = bot.press();
-    expect(prompt?.choices ?? []).toHaveLength(0);
+    expect(waysIn(prompt)).toEqual([]);
     expect(prompt?.lines.join(" ")).toContain("Shutters down");
   });
 
@@ -622,5 +659,47 @@ describe("night school after a day's work", () => {
     const before = bot.state.cash;
     bot.drive(bot.press(), "attend");
     expect(before - bot.state.cash).toBe(CLASS_COST);
+  });
+});
+
+describe("the job board says what a job will take out of you", () => {
+  it("pays the harder job more", () => {
+    // Flyers is four addresses at four corners of the map and the walking
+    // between them is the job; yard work is ninety minutes standing still in
+    // one garden. The board used to pay $22 for the first and $35 for the
+    // second, which had it exactly backwards.
+    expect(GIGS.flyers.basePay).toBeGreaterThan(GIGS.yardWork.basePay);
+  });
+
+  it("shows the energy you need to finish, not just to start", () => {
+    const bot = new Bot(5);
+    bot.standOn("jobBoard");
+    const shown = (bot.press()?.choices ?? []).find((c) => c.label === "Deliver flyers");
+    expect(shown?.hint).toContain("energy");
+  });
+
+  it("counts the stops you have left, because the door is checked at each one", () => {
+    // What strands a player is not the total bill, it is arriving at the last
+    // address already under the number, with the stack of paper still in the
+    // bag when the window closes.
+    expect(energyToFinish("flyers")).toBeGreaterThan(GIGS.flyers.requires.energy ?? 0);
+    // One stop, so there is nothing to burn before the only check there is.
+    expect(energyToFinish("yardWork")).toBe(GIGS.yardWork.requires.energy ?? 0);
+  });
+
+  it("warns you when you would run dry halfway round", () => {
+    const bot = new Bot(5);
+    bot.state.meters.energy = energyToFinish("flyers") - 1;
+    bot.standOn("jobBoard");
+    const shown = (bot.press()?.choices ?? []).find((c) => c.label === "Deliver flyers");
+    expect(shown?.hint).toContain("run dry");
+  });
+
+  it("says nothing about running dry when you have the energy for it", () => {
+    const bot = new Bot(5);
+    bot.state.meters.energy = 100;
+    bot.standOn("jobBoard");
+    const shown = (bot.press()?.choices ?? []).find((c) => c.label === "Deliver flyers");
+    expect(shown?.hint).not.toContain("run dry");
   });
 });

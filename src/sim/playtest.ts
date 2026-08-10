@@ -531,10 +531,62 @@ function washClothes(p: Player): void {
   p.drive(p.press(), ...at.take);
 }
 
+/**
+ * Open a bin and answer it.
+ *
+ * Food in a bin is a decision now rather than a payout, so a rig that only
+ * knows how to press "close the lid" walks away from every meal it finds and
+ * reports a hungrier game than the one being played. Take it while you are on
+ * the street and hungry; leave it once you have a bed, which is when the
+ * dignity costs more than the calories are worth.
+ */
+function openBin(p: Player): void {
+  answerBin(p, p.press());
+}
+
+function answerBin(p: Player, prompt: Prompt | null): void {
+  if (p.can(prompt, "take it")) {
+    const takeIt = p.s.meters.hunger < 55 && bestHousing(p.s) === "street";
+    p.drive(prompt, takeIt ? "take it" : "leave it");
+    return;
+  }
+  p.drive(prompt, "close the lid");
+}
+
+/**
+ * The bin round, in the order a player who knew the town would walk it.
+ *
+ * Street dumpsters are the poorest bins in either town, and a rig that only
+ * knows about those measures a game where fourteen doors' worth of bins do not
+ * exist. Which door you open is now most of what phase 1 is: the plaza has the
+ * best cans and nothing you could eat, the night market is the reverse, and
+ * each one refills on its own clock so the round is a round rather than one
+ * dumpster forty times.
+ *
+ * Kept to doors on the way to somewhere — a bin is not worth a special trip
+ * across town, and a rig that made one would report an income no player earns.
+ */
+const BIN_ROUND: Record<TownId, string[]> = {
+  // Only doors this bot already stands at on a phase-1 day: the food bank and
+  // the wash are at the community center, the unloading is behind the Mart.
+  // A five-door tour of the good bins was measured and it is a bad idea — it
+  // cost four days a run, because a bin holds a dollar or two and crossing
+  // town for it costs more of the clock than that is worth. Bins pay when you
+  // are already there, which is the whole design of the table.
+  brokemon: ["mart", "communityCenter"],
+  brokedale: ["coachTerminal", "washhouse"],
+};
+
 function scavenge(p: Player): void {
-  for (const d of scenery(townOf(p.s)).dumpsters) {
+  const town = townOf(p.s);
+  for (const d of scenery(town).dumpsters) {
     p.approach(d);
-    p.drive(p.press(), "close the lid");
+    openBin(p);
+  }
+  for (const marker of BIN_ROUND[town.id]) {
+    if (!hasMarker(town, marker)) continue;
+    p.goto(marker);
+    answerBin(p, p.drive(p.press(), "bins out back"));
   }
   // Only worth emptying the bag where there is a depot to empty it into. The
   // cans keep until you are back in a town that has one.

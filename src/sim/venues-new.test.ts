@@ -59,6 +59,14 @@ class Player {
 
 /* ------------------------------------------------------------------ diner */
 
+/** Options a shut door still offers: the bins outside it, and the way out. */
+function waysIn(prompt: Prompt | null): string[] {
+  return (prompt?.choices ?? [])
+    .filter((c) => !c.locked)
+    .map((c) => c.label)
+    .filter((label) => !/bins|leave|walk on|close the lid/i.test(label));
+}
+
 describe("diner venue", () => {
   it("is closed before 6AM", () => {
     const bot = new Player(1);
@@ -68,7 +76,9 @@ describe("diner venue", () => {
     const p = bot.press();
     expect(p?.title).toBe("Route 1 Diner");
     expect(p?.lines[0]).toMatch(/closed/i);
-    expect(p?.choices).toBeUndefined();
+    // The bins out back are outside the building, so a shut door still leaves
+    // them — but nothing that is a way in.
+    expect(waysIn(p)).toEqual([]);
   });
 
   it("is closed after 10PM", () => {
