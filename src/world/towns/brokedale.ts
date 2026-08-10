@@ -36,14 +36,14 @@ const ROWS = [
   /* 12 */ "W__^^^^^^^^^^^^^________^^^^^^^^^^^^^__W",
   /* 13 */ "W__######K######________######E######__W",
   /* 14 */ "W______________________________________W",
-  /* 15 */ "W____________b____________L____________W",
+  /* 15 */ "W____________b____n_______L____________W",
   /* 16 */ "W_____%__________________________%_____W",
   /* 17 */ "W______________________________________W",
   /* 18 */ "W___^^^^^^^^^^^^________^^^^^^^^^^^^___W",
   /* 19 */ "W___#####R######________#####U######___W",
   /* 20 */ "W________________~~____________________W",
-  /* 21 */ "WrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrW",
-  /* 22 */ "Wrrrrrrrrrrrrrr%rrrrr9rrrxrrrrrrrrrrrrrW",
+  /* 21 */ "Wrrrrrrrrrrrrrrrrr^^^^^rrrrrrrrrrrrrrrrW",
+  /* 22 */ "Wrrrrrrrrrrrrrr%rrr##9##rrxrrrrrrrrrrrrW",
   /* 23 */ "WrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrW",
   /* 24 */ "W______________________________________W",
   /* 25 */ "W==================cc==================W",
@@ -51,13 +51,13 @@ const ROWS = [
   /* 27 */ "W______________________________________W",
   /* 28 */ "W_^^^^^^^^^^^___^^^^^^^^^^___^^^^^^^^^_W",
   /* 29 */ "W_#####P#####___####J#####___####V####_W",
-  /* 30 */ "W______________________________________W",
+  /* 30 */ "W_________________~~___________________W",
   /* 31 */ "W_______________n______________________W",
   /* 32 */ "W______________________________________W",
   /* 33 */ "W____________________^^^^^^^^^^^^^^____W",
   /* 34 */ "W____________________######Z#######____W",
   /* 35 */ "W______________________________________W",
-  /* 36 */ "W________b____________________b________W",
+  /* 36 */ "W________b__________n_________b________W",
   /* 37 */ "W______________________________________W",
   /* 38 */ "W~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~W",
   /* 39 */ "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
@@ -124,7 +124,10 @@ export const BROKEDALE: Town = buildTown({
       hygieneWatch: 40,
       requiresAttire: false,
       fineScale: 2,
-      escortTo: { x: 19, y: 24 },
+      // Off the high street entirely, onto the gravel behind St Giles. Escorting
+      // somebody to row 24 was escorting them to the top of the street they had
+      // just been moved off, where the same officer checks them again.
+      escortTo: { x: 12, y: 22 },
     },
     {
       id: "riverside",
@@ -136,7 +139,10 @@ export const BROKEDALE: Town = buildTown({
       hygieneWatch: 55,
       requiresAttire: true,
       fineScale: 3,
-      escortTo: { x: 19, y: 32 },
+      // Back up to the high street. This used to be row 32 — the first row of
+      // Riverside itself, which is not being moved on, it is being told to
+      // stand up.
+      escortTo: { x: 10, y: 30 },
     },
   ],
 });

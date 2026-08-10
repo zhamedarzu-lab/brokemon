@@ -94,6 +94,37 @@ function panhandleSpot(ctx: ActionCtx): Prompt {
   );
 }
 
+/**
+ * What the water in front of you actually is.
+ *
+ * One glyph, two towns, and they do not have the same thing behind it: Brokemon
+ * has an ornamental fountain in Market Square, Brokedale has a canal through
+ * the Blocks and the river along its southern edge. Calling all of it "the
+ * fountain" had you drinking from a decorative basin on the towpath.
+ */
+function waterName(s: GameState, cell: Vec2): { title: string; label: string; line: string } {
+  if (townOf(s).id !== "brokedale") {
+    return {
+      title: "The fountain",
+      label: "Fountain",
+      line: "It is decorative, but the water is water.",
+    };
+  }
+  const zone = zoneAt(townOf(s), cell.y).id;
+  if (zone === "riverside") {
+    return {
+      title: "The river",
+      label: "River",
+      line: "Brown, wide and moving. There is a set of steps down to it that somebody has worn smooth.",
+    };
+  }
+  return {
+    title: "The canal",
+    label: "Canal",
+    line: "Still, green at the edges, and a tap on the lock-keeper's wall that has never been turned off.",
+  };
+}
+
 function tileAction(ctx: ActionCtx, cell: Vec2): Prompt | null {
   const s = ctx.state;
   const glyph = glyphAt(townOf(s), cell.x, cell.y);
@@ -112,10 +143,14 @@ function tileAction(ctx: ActionCtx, cell: Vec2): Prompt | null {
     case "sign":
       return say("Sign", zoneAt(townOf(s), cell.y).sign);
 
-    case "water":
+    case "water": {
+      // Brokemon's is an ornamental fountain in Market Square. Brokedale's is a
+      // canal and a river, and calling those "the fountain" was the town
+      // borrowing another town's furniture.
+      const water = waterName(s, cell);
       return menu(
-        "The fountain",
-        ["It is decorative, but the water is water."],
+        water.title,
+        [water.line],
         [
           {
             label: "Drink",
@@ -125,9 +160,9 @@ function tileAction(ctx: ActionCtx, cell: Vec2): Prompt | null {
               applyDelta(s.meters, { thirst: +42, morale: -1 });
               if (ctx.rng.chance(0.06)) {
                 applyDelta(s.meters, { health: -5 });
-                return menu("The fountain", ["You drink until your stomach hurts.", "Something in it disagrees with you later."], [BACK]);
+                return menu(water.title, ["You drink until your stomach hurts.", "Something in it disagrees with you later."], [BACK]);
               }
-              return menu("The fountain", ["Cold, metallic, and free. You drink until your stomach hurts."], [BACK]);
+              return menu(water.title, ["Cold, metallic, and free. You drink until your stomach hurts."], [BACK]);
             },
           },
           {
@@ -136,12 +171,13 @@ function tileAction(ctx: ActionCtx, cell: Vec2): Prompt | null {
             run: () => {
               ctx.advance(10);
               applyDelta(s.meters, { hygiene: +8, morale: +2 });
-              return menu("The fountain", ["It is not a wash. It is better than nothing and people watch you do it."], [BACK]);
+              return menu(water.title, ["It is not a wash. It is better than nothing and people watch you do it."], [BACK]);
             },
           },
           BACK,
         ],
       );
+    }
 
     case "gate":
       return heightsGate(ctx, cell);
@@ -290,7 +326,7 @@ export function interactionLabel(s: GameState): string | null {
     case "sign":
       return "Read";
     case "water":
-      return "Fountain";
+      return waterName(s, there).label;
     case "gate":
       return "Gate";
     case "street":
@@ -312,6 +348,9 @@ export const VENUE_LABELS: Record<string, string> = {
   college: "College",
   bank: "Bank",
   laundromat: "Laundromat",
+  hospital: "Hospital",
+  church: "St Anne's",
+  bikeShop: "Bike Shop",
   recycling: "Recycling",
   busStop: "Bus stop",
   outskirtsBusStop: "Bus stop",

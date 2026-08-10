@@ -61,6 +61,50 @@ describe("every encounter is a decision", () => {
     expect(live.length, `${name} — "${prompt.title}" has no live choice at all`).toBeGreaterThan(0);
   });
 
+  it("leaves you something to do even when you have nothing", () => {
+    /**
+     * The single-bot version of this check missed three encounters, because a
+     * bot with $120 in its pocket can afford every option: `bd_tout` and
+     * `bd_twoAM` both greyed out their only real choice for a player with no
+     * money — a man off the coach at three in the morning, or somebody starving
+     * outside a stall of food about to be binned, with nothing to press but
+     * "Move on". Broke at 3am is exactly when an encounter has to have
+     * something in it.
+     *
+     * Walking away is always allowed. It just cannot be the only thing.
+     */
+    const WALKING_AWAY = /^(walk on|move on|leave it|leave them|leave him|leave her|leave|get up|close the lid|keep walking|walk away|carry on|not your business)/i;
+    const destitute = (s: GameState) => {
+      s.cash = 0;
+      s.meters = { hunger: 20, thirst: 20, hygiene: 8, energy: 15, morale: 10, health: 40 };
+      s.bodyClean = 8;
+      s.clothesClean = 8;
+      s.inventory = {};
+    };
+    const dead: string[] = [];
+    for (const [name, e] of ALL) {
+      if (CONSEQUENCES.has(name)) continue;
+      for (const hour of [3, 9, 14, 20, 23]) {
+        const { s, ctx } = bot();
+        s.time = hour * 60;
+        s.player.town = name.startsWith("brokedale/") ? "brokedale" : "brokemon";
+        destitute(s);
+        let prompt;
+        try {
+          prompt = e.build(ctx);
+        } catch {
+          continue;
+        }
+        const live = (prompt.choices ?? []).filter((c) => !c.locked);
+        if (live.length > 0 && live.every((c) => WALKING_AWAY.test(c.label))) {
+          dead.push(`${name} at ${hour}:00 — "${prompt.title}": ${live.map((c) => c.label).join(", ")}`);
+          break;
+        }
+      }
+    }
+    expect(dead).toEqual([]);
+  });
+
   it("has no encounter whose only option is to acknowledge it", () => {
     // The archetype: "a paper bag blew past you" / "Move on". If it cannot
     // change anything, it is not worth stopping the player for.

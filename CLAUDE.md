@@ -133,6 +133,20 @@ has already been made once, on ten minutes of evidence.
   rate moves.
 - Night class is the only door to phase 3. Anything that costs energy in the
   evening competes with it directly.
+- **Every rule about a town is tested over `TOWNS`, not over Brokemon.**
+  `src/world/towns.test.ts` holds the ones that are structural: every door has a
+  building around it, every district has a signpost for its own sign text and
+  somewhere to drink, every zone that fines you escorts you *out* of itself, and
+  every row belongs to exactly one district. Brokedale was written after all of
+  Brokemon's tests and inherited the type but not the scrutiny — it shipped with
+  a recycling depot that was a bare glyph on gravel and two districts that
+  escorted you to a tile inside themselves. Writing those checks over both towns
+  then found the same two holes in Brokemon's Heights. Brokemon's `downtown` is
+  the one allow-listed escort exception, and the reason is in the test.
+- **The encounter-spread bar applies to both towns**: eight distinct encounters
+  per district, none above 25% of rolls. Brokedale shipped at 4/6/4/3 with
+  Riverside **56% one encounter**, because the spread test only ever looked at
+  Brokemon's three zones.
 - **There are two towns now.** Housing, rent, hostel nights and reputation are
   one value per town (`PerTown<T>`); reach them through `housingIn`,
   `setHousing`, `bestHousing` and `reputationIn`, never by indexing directly on

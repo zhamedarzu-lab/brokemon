@@ -16,7 +16,7 @@
 import { addItem, countOf, removeItem } from "./items";
 import { applyDelta } from "./meters";
 import { menu, type Choice } from "./prompt";
-import { changeReputation, currentAppearance, earnCash, pushLog, reputationIn, type GameState } from "./state";
+import { changeReputation, currentAppearance, earnCash, housingIn, pushLog, reputationIn, type GameState } from "./state";
 import { hourOf } from "./time";
 import type { ZoneId } from "../world/map";
 import type { EventDef } from "./events";
@@ -76,6 +76,23 @@ export const BROKEDALE_EVENTS: EventDef[] = [
                 },
               }
             : { label: "Pay him", hint: `$${price}`, locked: "You don't have it" },
+          {
+            label: "Ask him where people sleep for nothing",
+            run: () => {
+              changeReputation(s, -1);
+              applyDelta(s.meters, { morale: -3 });
+              s.flags.bd_askedTheTout = 1;
+              return menu(
+                "A man by the barriers",
+                [
+                  "The friendliness goes out of him like a light going off.",
+                  `"Concourse. They don't move you till six." He is already looking past you at the next one off the coach.`,
+                  "It is worth knowing and it cost you nothing but the way he said it.",
+                ],
+                [close],
+              );
+            },
+          },
           {
             label: "Keep walking",
             run: () => {
@@ -161,19 +178,39 @@ export const BROKEDALE_EVENTS: EventDef[] = [
         ],
         [
           {
-            label: "Thank him",
+            label: "Ask him what else is worth knowing",
+            hint: "20 min",
             run: () => {
-              applyDelta(s.meters, { morale: +6 });
-              changeReputation(s, 2);
-              pushLog(s, "Somebody told you where to wash.", "good");
+              ctx.advance(20, { sheltered: true });
+              applyDelta(s.meters, { morale: +8, energy: -2 });
+              changeReputation(s, 3);
+              s.flags.bd_learnedTheCity = 1;
+              pushLog(s, "Sat with somebody who knows Brokedale.", "good");
               return menu(
                 "Somebody who has been here longer",
                 [
-                  `"S'alright. Everyone gets told once."`,
-                  "He goes back to watching the departure board, which has not changed.",
+                  `"Depot takes anyone Tuesdays. Don't sit on the high street after eight, they've got a thing about it."`,
+                  `"And the yard behind St Giles pays cash for cans. That's the one nobody tells you."`,
+                  "Twenty minutes and you know more about this city than the coach timetable told you.",
                 ],
                 [close],
                 "good",
+              );
+            },
+          },
+          {
+            label: "Ask what he wants for it",
+            run: () => {
+              applyDelta(s.meters, { morale: -4 });
+              changeReputation(s, -2);
+              return menu(
+                "Somebody who has been here longer",
+                [
+                  "He looks at you for a second longer than is comfortable.",
+                  `"Nothing. I wanted nothing." He turns back to the board and that is the end of it.`,
+                ],
+                [close],
+                "bad",
               );
             },
           },
@@ -346,6 +383,28 @@ export const BROKEDALE_EVENTS: EventDef[] = [
                 },
               }
             : { label: "Take whatever's left", hint: `$${price}`, locked: "You don't have two dollars" },
+          {
+            label: "Offer to break the stall down for it",
+            hint: "30 min",
+            run: () => {
+              ctx.advance(30, { exertion: 1.3 });
+              applyDelta(s.meters, { energy: -8, hunger: +30, morale: +6 });
+              changeReputation(s, 2);
+              s.flags.bd_brokeDownTheStall = (s.flags.bd_brokeDownTheStall ?? 0) + 1;
+              pushLog(s, "Broke down a night market stall for the last of the tray.", "good");
+              return menu(
+                "The night market at two",
+                [
+                  "Trestles, crates, the awning poles, and the tray goes in your hands at the end of it.",
+                  s.flags.bd_brokeDownTheStall >= 2
+                    ? "She has stopped asking. She just leaves the tray on the crate and starts on the poles."
+                    : `"You've done this," she says, which you have not.`,
+                ],
+                [close],
+                "good",
+              );
+            },
+          },
           close,
         ],
       );
@@ -681,6 +740,904 @@ export const BROKEDALE_EVENTS: EventDef[] = [
             },
           },
           close,
+        ],
+      );
+    },
+  },
+
+  /* ------------------------------- Terminal Quarter, second helping */
+
+  {
+    id: "bd_ticketMachine",
+    weight: only("terminal", 3),
+    build: (ctx) => {
+      const s = ctx.state;
+      return menu(
+        "The ticket machine",
+        [
+          "A woman with a card that has been declined twice and a coach in eleven minutes, reading the screen like it might change.",
+          `"It's fourteen. I've got nine and a bit in change. I've counted it about six times."`,
+        ],
+        [
+          s.cash >= 5
+            ? {
+                label: "Make up the difference",
+                hint: "$5",
+                run: () => {
+                  s.cash -= 5;
+                  changeReputation(s, 3);
+                  applyDelta(s.meters, { morale: +8 });
+                  pushLog(s, "Made up a stranger's coach fare.", "good");
+                  return menu(
+                    "The ticket machine",
+                    ["She gets on it. She looks back once from the step and you have already turned away, which you regret for about an hour."],
+                    [close],
+                    "good",
+                  );
+                },
+              }
+            : { label: "Make up the difference", hint: "$5", locked: "You have not got five dollars" },
+          {
+            label: "Show her the half-fare button",
+            hint: "5 min",
+            run: () => {
+              ctx.advance(5, { sheltered: true });
+              changeReputation(s, 2);
+              applyDelta(s.meters, { morale: +5 });
+              return menu(
+                "The ticket machine",
+                [
+                  "It is two menus deep and it is not signposted anywhere on the machine.",
+                  `"Nine forty," she says, to the screen rather than to you. "Nine forty."`,
+                ],
+                [close],
+                "good",
+              );
+            },
+          },
+          close,
+        ],
+      );
+    },
+  },
+
+  {
+    id: "bd_leftLuggage",
+    weight: (s, z) => (z === "terminal" && countOf(s.inventory, "sleepingBag") + countOf(s.inventory, "recyclables") > 0 ? 3 : 0),
+    build: (ctx) => {
+      const s = ctx.state;
+      const fee = 3;
+      return menu(
+        "Left luggage",
+        [
+          "A hatch, a laminated price list, and a man who has already decided what you are.",
+          `"Three dollars a day. And it's a locker, not a bed, before you ask."`,
+        ],
+        [
+          s.cash >= fee
+            ? {
+                label: "Take a locker for the day",
+                hint: `$${fee}`,
+                run: () => {
+                  s.cash -= fee;
+                  s.flags.bd_lockerUntil = s.time + 24 * 60;
+                  applyDelta(s.meters, { morale: +6, energy: +3 });
+                  pushLog(s, "Put your bag in a locker for the day.", "money");
+                  return menu(
+                    "Left luggage",
+                    [
+                      "Three dollars, and for the rest of the day you are a man walking about rather than a man carrying everything he owns.",
+                      "It is a surprisingly large difference and you resent how large it is.",
+                    ],
+                    [close],
+                  );
+                },
+              }
+            : { label: "Take a locker for the day", hint: `$${fee}`, locked: "Three dollars you have not got" },
+          {
+            label: "Carry it",
+            run: () => {
+              applyDelta(s.meters, { energy: -3 });
+              return menu("Left luggage", ["You carry it. You have carried it this far."], [close]);
+            },
+          },
+        ],
+      );
+    },
+  },
+
+  {
+    id: "bd_platformSleeper",
+    weight: (s, z) => (z === "terminal" && (hourOf(s.time) >= 23 || hourOf(s.time) < 5) ? 4 : 0),
+    build: (ctx) => {
+      const s = ctx.state;
+      return menu(
+        "Stand four, half past three",
+        [
+          "Somebody is asleep across three seats with a coat over their head, and the cleaner is working up the row with a mop and a decision to make.",
+          "He looks at you. You are the only other person awake in the building.",
+        ],
+        [
+          {
+            label: "Wake them before he gets there",
+            hint: "5 min",
+            run: () => {
+              ctx.advance(5, { sheltered: true });
+              changeReputation(s, 3);
+              applyDelta(s.meters, { morale: +6 });
+              s.flags.bd_wokeTheSleeper = 1;
+              return menu(
+                "Stand four, half past three",
+                [
+                  "They are upright and holding a cup of nothing by the time he arrives, which is all the rule actually requires.",
+                  "The cleaner mops round them without a word. Everybody here knows exactly where the line is.",
+                ],
+                [close],
+                "good",
+              );
+            },
+          },
+          {
+            label: "Let it happen",
+            run: () => {
+              applyDelta(s.meters, { morale: -5 });
+              return menu(
+                "Stand four, half past three",
+                ["He does it by the book and he is not unkind about it, and they are outside in the cold by twenty to four.", "You keep your seat."],
+                [close],
+              );
+            },
+          },
+        ],
+      );
+    },
+  },
+
+  {
+    id: "bd_arrivalsBoard",
+    weight: (s, z) => (z === "terminal" && reputationIn(s, "brokedale") < 20 ? 3 : 0),
+    build: (ctx) => {
+      const s = ctx.state;
+      return menu(
+        "Under the arrivals board",
+        [
+          "Two lads off the same coach as you, nineteen at most, working out from a phone whether the agency opens at six or seven.",
+          "They are about to walk to St Giles, which is the wrong direction, and they have not asked anybody.",
+        ],
+        [
+          {
+            label: "Point them the right way",
+            hint: "10 min",
+            run: () => {
+              ctx.advance(10);
+              changeReputation(s, 3);
+              applyDelta(s.meters, { morale: +6 });
+              return menu(
+                "Under the arrivals board",
+                [
+                  "Six, and it is the other way, and the queue starts before it opens.",
+                  "One of them writes it on his hand. You did that too, the first week.",
+                ],
+                [close],
+                "good",
+              );
+            },
+          },
+          {
+            label: "Let them find out",
+            run: () => {
+              applyDelta(s.meters, { morale: -3 });
+              return menu(
+                "Under the arrivals board",
+                ["They will be back here by eight, having walked two miles and missed the muster.", "Somebody let you find out, once."],
+                [close],
+              );
+            },
+          },
+        ],
+      );
+    },
+  },
+
+  {
+    id: "bd_forecourtPitch",
+    weight: only("terminal", 3),
+    build: (ctx) => {
+      const s = ctx.state;
+      return menu(
+        "On the forecourt",
+        [
+          "A busker with an amp the size of a lunchbox, playing to a rank of coaches and about four people.",
+          "NO TRADING ON THE FORECOURT, says the sign directly above his head, and there is a man in a hi-vis coming out of the office.",
+        ],
+        [
+          {
+            label: "Tell him he's about to be moved",
+            run: () => {
+              changeReputation(s, 2);
+              applyDelta(s.meters, { morale: +5 });
+              return menu(
+                "On the forecourt",
+                [
+                  "He is packed and thirty feet down the pavement before the hi-vis is through the door, which suggests practice.",
+                  `"Cheers. He's alright, that one, he just has to." He sets up again outside the line and nobody minds.`,
+                ],
+                [close],
+                "good",
+              );
+            },
+          },
+          {
+            label: "Stand and listen a while",
+            hint: "15 min",
+            run: () => {
+              ctx.advance(15);
+              applyDelta(s.meters, { morale: +7, energy: -1 });
+              return menu(
+                "On the forecourt",
+                [
+                  "Fifteen minutes, and having one person actually stop changes what he is doing to the point where two more do.",
+                  "The hi-vis comes out, sees a crowd of four, and goes back in. That is apparently the threshold.",
+                ],
+                [close],
+                "good",
+              );
+            },
+          },
+          close,
+        ],
+      );
+    },
+  },
+
+  /* -------------------------------------------- The Blocks, filling out */
+
+  {
+    id: "bd_meter",
+    weight: (s, z) => (z === "blocks" && housingIn(s, "brokedale") === "room" ? 3 : 0),
+    build: (ctx) => {
+      const s = ctx.state;
+      const top = 6;
+      return menu(
+        "The meter cupboard",
+        [
+          "The key meter on the landing has gone, and the woman in the next room is standing in front of it in a coat, indoors.",
+          `"It eats it. Aldiss says it's the meter, the meter says it's Aldiss."`,
+        ],
+        [
+          s.cash >= top
+            ? {
+                label: "Put six on it",
+                hint: `$${top}`,
+                run: () => {
+                  s.cash -= top;
+                  changeReputation(s, 4);
+                  applyDelta(s.meters, { morale: +8 });
+                  s.flags.bd_toppedTheMeter = (s.flags.bd_toppedTheMeter ?? 0) + 1;
+                  pushLog(s, "Put six dollars on the landing meter.", "good");
+                  return menu(
+                    "The meter cupboard",
+                    [
+                      "The hall light comes on and so does her radiator, and yours, because it is one meter for the whole side.",
+                      "She does not offer to split it and you do not ask. It is understood that it goes round.",
+                    ],
+                    [close],
+                    "good",
+                  );
+                },
+              }
+            : { label: "Put six on it", hint: `$${top}`, locked: "You are as short as she is" },
+          {
+            label: "Go up to your room",
+            run: () => {
+              applyDelta(s.meters, { morale: -4 });
+              return menu("The meter cupboard", ["Your room is the same temperature as the landing, which is the answer to the question you did not ask."], [close]);
+            },
+          },
+        ],
+      );
+    },
+  },
+
+  {
+    id: "bd_washingLine",
+    weight: only("blocks", 2),
+    build: (ctx) => {
+      const s = ctx.state;
+      return menu(
+        "The drying green",
+        [
+          "It has come on to rain and there is a full line out, and whoever hung it is at work until six.",
+          "Four shirts, a set of sheets, and a child's coat.",
+        ],
+        [
+          {
+            label: "Get it in",
+            hint: "15 min",
+            run: () => {
+              ctx.advance(15, { exertion: 1.1 });
+              changeReputation(s, 4);
+              applyDelta(s.meters, { morale: +8, energy: -3, hygiene: -2 });
+              s.flags.bd_gotTheWashingIn = 1;
+              pushLog(s, "Got somebody's washing in before the rain.", "good");
+              return menu(
+                "The drying green",
+                [
+                  "It goes over the bannister on the second landing, which is where everybody puts it, and it is dry by seven.",
+                  "Nobody finds out it was you for about a fortnight, and then everybody does.",
+                ],
+                [close],
+                "good",
+              );
+            },
+          },
+          {
+            label: "It's not yours",
+            run: () =>
+              menu("The drying green", ["It is not yours. It rains for two hours and it is still out there at six."], [close]),
+          },
+        ],
+      );
+    },
+  },
+
+  {
+    id: "bd_stairwellKids",
+    weight: (s, z) => (z === "blocks" && hourOf(s.time) >= 15 && hourOf(s.time) < 21 ? 3 : 0),
+    build: (ctx) => {
+      const s = ctx.state;
+      return menu(
+        "The stairwell",
+        [
+          "Three of them on the half-landing with a speaker, and the whole stair is theirs from four until it gets dark.",
+          "The woman on the second has been past twice and said nothing both times.",
+        ],
+        [
+          {
+            label: "Ask them to move it down a floor",
+            run: () => {
+              applyDelta(s.meters, { morale: +2 });
+              changeReputation(s, 1);
+              return menu(
+                "The stairwell",
+                [
+                  "They move. There is a certain amount of theatre about it but they move.",
+                  "It goes on downstairs at the same volume and that is somebody else's landing now, which is not a solution so much as a relocation.",
+                ],
+                [close],
+              );
+            },
+          },
+          {
+            label: "Squeeze past",
+            run: () => {
+              applyDelta(s.meters, { morale: -3 });
+              return menu("The stairwell", ["You go up the side of them. Nobody says anything and the speaker does not go down."], [close]);
+            },
+          },
+          {
+            label: "Sit down on the step",
+            hint: "20 min",
+            run: () => {
+              ctx.advance(20);
+              changeReputation(s, 2);
+              applyDelta(s.meters, { morale: +7, energy: -2 });
+              s.flags.bd_satWithTheKids = 1;
+              return menu(
+                "The stairwell",
+                [
+                  "Twenty minutes of an argument about a footballer you have never heard of, in which you are asked to adjudicate.",
+                  "The speaker goes off at nine every night after that, which nobody asked them to do.",
+                ],
+                [close],
+                "good",
+              );
+            },
+          },
+        ],
+      );
+    },
+  },
+
+  /* ---------------------------------------- The High Street, filling out */
+
+  {
+    id: "bd_shutters",
+    weight: (s, z) => (z === "highStreet" && (hourOf(s.time) >= 20 || hourOf(s.time) < 7) ? 3 : 0),
+    build: (ctx) => {
+      const s = ctx.state;
+      return menu(
+        "A shutter half down",
+        [
+          "The bakery's shutter is a foot off the ground and the lights are off, which means it has been like that since closing.",
+          "Anybody could get a hand under it. You are the one standing here.",
+        ],
+        [
+          {
+            label: "Wait until somebody comes",
+            hint: "40 min",
+            run: () => {
+              ctx.advance(40);
+              changeReputation(s, 5);
+              applyDelta(s.meters, { morale: +6, energy: -5 });
+              s.flags.bd_mindedTheShutter = 1;
+              pushLog(s, "Stood by an open shutter until the owner came back.", "good");
+              return menu(
+                "A shutter half down",
+                [
+                  "Forty minutes, and it is the owner's son at twenty past, and he is white about it.",
+                  "They know your face on this street after that, which turns out to matter more than the forty minutes cost.",
+                ],
+                [close],
+                "good",
+              );
+            },
+          },
+          {
+            label: "Pull it down for them",
+            hint: "5 min",
+            run: () => {
+              ctx.advance(5, { exertion: 1.1 });
+              applyDelta(s.meters, { morale: +3 });
+              changeReputation(s, 1);
+              return menu(
+                "A shutter half down",
+                ["It comes down and locks itself, and nobody will ever know it was open.", "That is the whole of it, and it is fine."],
+                [close],
+              );
+            },
+          },
+          close,
+        ],
+      );
+    },
+  },
+
+  {
+    id: "bd_bigIssue",
+    weight: only("highStreet", 3),
+    build: (ctx) => {
+      const s = ctx.state;
+      const price = 4;
+      return menu(
+        "Outside the chemist",
+        [
+          "A vendor with a pitch, a badge and a stack, and he is working — greeting, not asking.",
+          `"Four dollars. Half of it's mine and I paid for these up front, which is the bit nobody believes."`,
+        ],
+        [
+          s.cash >= price
+            ? {
+                label: "Buy one",
+                hint: `$${price}`,
+                run: () => {
+                  s.cash -= price;
+                  changeReputation(s, 3);
+                  applyDelta(s.meters, { morale: +7 });
+                  pushLog(s, "Bought a magazine off a street vendor.", "money");
+                  return menu(
+                    "Outside the chemist",
+                    [
+                      "He gives you the top one and the change out of his own pocket without being asked.",
+                      "You read about six pages of it and leave it on a bench for whoever is next.",
+                    ],
+                    [close],
+                    "good",
+                  );
+                },
+              }
+            : { label: "Buy one", hint: `$${price}`, locked: `You are short of $${price}` },
+          {
+            label: "Ask him how the pitch works",
+            hint: "15 min",
+            run: () => {
+              ctx.advance(15);
+              changeReputation(s, 2);
+              s.flags.bd_learnedThePitch = 1;
+              applyDelta(s.meters, { morale: +4 });
+              return menu(
+                "Outside the chemist",
+                [
+                  "A badge, a pitch you are assigned, and you buy the stock. It is a job with a barrier to entry, which is the part that surprises you.",
+                  `"You want one, you go to the office Tuesday. Don't come Monday, everyone comes Monday."`,
+                ],
+                [close],
+                "good",
+              );
+            },
+          },
+          close,
+        ],
+      );
+    },
+  },
+
+  {
+    id: "bd_marketDay",
+    weight: (s, z) => (z === "highStreet" && hourOf(s.time) >= 8 && hourOf(s.time) < 15 ? 3 : 0),
+    build: (ctx) => {
+      const s = ctx.state;
+      return menu(
+        "Packing up early",
+        [
+          "A fruit stall going in at one o'clock because it has not been worth standing there since eleven.",
+          `"You want this? It's going in the bin, it won't see tomorrow." He is holding out a box of something soft.`,
+        ],
+        [
+          {
+            label: "Take the box",
+            hint: "dignity",
+            run: () => {
+              addItem(s.inventory, "trashFood", 2);
+              applyDelta(s.meters, { morale: -4 });
+              return menu(
+                "Packing up early",
+                [
+                  "Two days of eating, if you are not fussy, and you are not.",
+                  "He hands it over like it is nothing, which it is to him, and that is the part that stings.",
+                ],
+                [close],
+              );
+            },
+          },
+          {
+            label: "Give him a hand instead",
+            hint: "30 min",
+            run: () => {
+              ctx.advance(30, { exertion: 1.3 });
+              applyDelta(s.meters, { energy: -8, morale: +6 });
+              addItem(s.inventory, "sandwich");
+              earnCash(s, 6);
+              changeReputation(s, 3);
+              pushLog(s, "Helped a market trader pack up — $6 and something to eat.", "money");
+              return menu(
+                "Packing up early",
+                [
+                  "Half an hour of trestles and crates and six dollars out of the float, and he puts something decent in a bag on top of it.",
+                  `"Tuesdays and Fridays. I'm always short Tuesdays."`,
+                ],
+                [close],
+                "good",
+              );
+            },
+          },
+          close,
+        ],
+      );
+    },
+  },
+
+  {
+    id: "bd_chuggers",
+    weight: (s, z) => (z === "highStreet" && currentAppearance(s) >= 40 ? 3 : 0),
+    build: (ctx) => {
+      const s = ctx.state;
+      return menu(
+        "A tabard and a clipboard",
+        [
+          "He has picked you out of the whole pavement and he is walking backwards in front of you, which is a skill.",
+          `"Eight dollars a month. That's two coffees. Do you drink coffee?"`,
+        ],
+        [
+          {
+            label: "Tell him the truth about your month",
+            run: () => {
+              applyDelta(s.meters, { morale: -2 });
+              changeReputation(s, 1);
+              return menu(
+                "A tabard and a clipboard",
+                [
+                  "He stops walking backwards. He is about twenty-two and on commission and he has clearly not had this answer before.",
+                  `"Right. Sorry, mate. Genuinely." He lets you past and does not pick the next one for a while.`,
+                ],
+                [close],
+              );
+            },
+          },
+          {
+            label: "Say you'll think about it",
+            run: () =>
+              menu("A tabard and a clipboard", ["He knows what that means and he says have a good day anyway, and means about half of it."], [close]),
+          },
+          {
+            label: "Ask if they're hiring tabards",
+            hint: "10 min",
+            run: () => {
+              ctx.advance(10);
+              s.flags.bd_askedAboutTabards = 1;
+              applyDelta(s.meters, { morale: +3 });
+              return menu(
+                "A tabard and a clipboard",
+                [
+                  `"Agency. Everyone here's agency." He gives you a name and a street and says to mention him, which he does not have to do.`,
+                  "It is the first time in this city that somebody in a uniform has treated you as somebody who might have one.",
+                ],
+                [close],
+                "good",
+              );
+            },
+          },
+        ],
+      );
+    },
+  },
+
+  /* --------------------------------------------- Riverside, which was bare */
+
+  {
+    id: "bd_towpath",
+    weight: only("riverside", 3),
+    build: (ctx) => {
+      const s = ctx.state;
+      return menu(
+        "The towpath",
+        [
+          "A woman running, and she has clocked you from forty feet and crossed to the far side of the path without appearing to decide to.",
+          "There is nobody else on it in either direction.",
+        ],
+        [
+          {
+            label: "Stand aside and look at the water",
+            run: () => {
+              applyDelta(s.meters, { morale: -4 });
+              return menu(
+                "The towpath",
+                [
+                  "You give her the whole path and you look at the canal until she is past, because that is the arrangement.",
+                  "She says thanks. You have done nothing to be thanked for and you both know what the thanks is about.",
+                ],
+                [close],
+              );
+            },
+          },
+          {
+            label: "Carry on as you were",
+            run: () => {
+              applyDelta(s.meters, { morale: -2 });
+              changeReputation(s, -1);
+              return menu(
+                "The towpath",
+                ["She goes past at a distance and at a speed, and looks back twice before the bend.", "You have not done anything. It does not appear to matter."],
+                [close],
+              );
+            },
+          },
+        ],
+      );
+    },
+  },
+
+  {
+    id: "bd_terrace",
+    weight: (s, z) => (z === "riverside" && hourOf(s.time) >= 12 && hourOf(s.time) < 23 ? 3 : 0),
+    build: (ctx) => {
+      const s = ctx.state;
+      return menu(
+        "The terrace tables",
+        [
+          "Forty covers on the river side, all of them full, and a rope across the pavement so the path goes round.",
+          "A table of six has left most of two bottles and a bread basket, and it is nine feet away on the other side of a rope.",
+        ],
+        [
+          {
+            label: "Ask the waiter for the bread",
+            hint: "risky",
+            run: () => {
+              ctx.advance(8);
+              if (ctx.rng.chance(0.45)) {
+                addItem(s.inventory, "sandwich");
+                changeReputation(s, 1);
+                applyDelta(s.meters, { morale: +6 });
+                return menu(
+                  "The terrace tables",
+                  [
+                    "He looks at the table, and at the kitchen door, and hands the whole basket over the rope in a napkin.",
+                    `"Go round the corner with it." Which you do.`,
+                  ],
+                  [close],
+                  "good",
+                );
+              }
+              applyDelta(s.meters, { morale: -8 });
+              changeReputation(s, -3);
+              return menu(
+                "The terrace tables",
+                [
+                  "He does not answer you. He goes inside and says something, and a second man comes out and stands with his arms folded until you leave.",
+                  "Six people at the near table have watched all of it over their shoulders.",
+                ],
+                [close],
+                "bad",
+              );
+            },
+          },
+          {
+            label: "Go round the rope",
+            run: () => {
+              applyDelta(s.meters, { morale: -3 });
+              return menu("The terrace tables", ["You take the long way, on the road side of the rope, which is what the rope is for."], [close]);
+            },
+          },
+        ],
+      );
+    },
+  },
+
+  {
+    id: "bd_boatyard",
+    weight: only("riverside", 3),
+    build: (ctx) => {
+      const s = ctx.state;
+      const pay = 22;
+      return menu(
+        "The boatyard gate",
+        [
+          "A man scraping the bottom of a hull on a cradle, on his own, with about four hours of it left and the tide against him.",
+          `"You done any? Doesn't matter. It's a scraper and an arm."`,
+        ],
+        [
+          {
+            label: "Take the scraper",
+            hint: `2 hrs, $${pay}`,
+            run: () => {
+              ctx.advance(120, { exertion: 1.4 });
+              applyDelta(s.meters, { energy: -16, hygiene: -12, hunger: -10, morale: +4 });
+              earnCash(s, pay);
+              changeReputation(s, 3);
+              s.flags.bd_workedTheBoatyard = (s.flags.bd_workedTheBoatyard ?? 0) + 1;
+              pushLog(s, `Two hours scraping a hull for $${pay}.`, "money");
+              return menu(
+                "The boatyard gate",
+                [
+                  `Two hours, both arms, $${pay} out of a tin, and a forearm you will feel tomorrow.`,
+                  s.flags.bd_workedTheBoatyard >= 2
+                    ? "He has stopped asking whether you have done any."
+                    : `"There's a hull a week down here if you want them."`,
+                ],
+                [close],
+                "money",
+              );
+            },
+          },
+          {
+            label: "You haven't got two hours",
+            run: () =>
+              menu("The boatyard gate", ["He shrugs and goes back to it, and he is still at it when you come past the other way."], [close]),
+          },
+        ],
+      );
+    },
+  },
+
+  {
+    id: "bd_residents",
+    weight: (s, z) => (z === "riverside" && currentAppearance(s) < 55 ? 4 : 0),
+    build: (ctx) => {
+      const s = ctx.state;
+      return menu(
+        "A residents' committee of one",
+        [
+          "A man in a gilet has come out of a gate to ask whether you are looking for a particular address.",
+          "He is being very polite about it and he is not going back in until you have gone.",
+        ],
+        [
+          {
+            label: "Give him a house number",
+            hint: "risky",
+            run: () => {
+              if (ctx.rng.chance(0.5)) {
+                applyDelta(s.meters, { morale: +4 });
+                return menu(
+                  "A residents' committee of one",
+                  ["You say a number. He points you at it and goes in, and you walk to a door you have no business at and then past it."],
+                  [close],
+                );
+              }
+              applyDelta(s.meters, { morale: -8 });
+              changeReputation(s, -3);
+              return menu(
+                "A residents' committee of one",
+                [
+                  `"That's mine," he says. He is not even angry, which is worse.`,
+                  "He watches you the whole length of the street with a phone in his hand and does not use it.",
+                ],
+                [close],
+                "bad",
+              );
+            },
+          },
+          {
+            label: "Tell him you're walking",
+            run: () => {
+              applyDelta(s.meters, { morale: -5 });
+              return menu(
+                "A residents' committee of one",
+                [`"Right. It's just that it's private frontage." It is not, and there is a public path sign nine feet behind his head.`],
+                [close],
+              );
+            },
+          },
+          {
+            label: "Point at the footpath sign",
+            run: () => {
+              changeReputation(s, -2);
+              applyDelta(s.meters, { morale: +6 });
+              s.flags.bd_stoodYourGround = 1;
+              return menu(
+                "A residents' committee of one",
+                [
+                  "He reads it as though he has never seen it, which after eleven years on this street he certainly has.",
+                  "He goes in. You are checked by a patrol car twice in the next fortnight and you cannot prove those are related.",
+                ],
+                [close],
+              );
+            },
+          },
+        ],
+      );
+    },
+  },
+
+  {
+    id: "bd_lostDog",
+    weight: only("riverside", 2),
+    build: (ctx) => {
+      const s = ctx.state;
+      return menu(
+        "A dog with a lead on",
+        [
+          "Trailing its own lead along the railings, well fed, collar with a disc on it, and about as lost as an animal can look.",
+          "There is a number on the disc and forty feet of river with no fence between it and the water.",
+        ],
+        [
+          {
+            label: "Get hold of the lead and ring the number",
+            hint: "25 min",
+            run: () => {
+              ctx.advance(25);
+              changeReputation(s, 4);
+              applyDelta(s.meters, { morale: +10, energy: -3 });
+              s.flags.bd_foundTheDog = 1;
+              pushLog(s, "Caught a loose dog on the riverside and rang its owner.", "good");
+              return menu(
+                "A dog with a lead on",
+                [
+                  "Twenty-five minutes on a wall with a dog leaning on your leg, and a woman who arrives at a run and cannot speak for a moment.",
+                  "She offers you money and you do not take it, and you think about that for the rest of the week.",
+                ],
+                [close],
+                "good",
+              );
+            },
+          },
+          {
+            label: "Walk it to the address on the disc",
+            hint: "40 min",
+            run: () => {
+              ctx.advance(40, { exertion: 1.1 });
+              changeReputation(s, 5);
+              applyDelta(s.meters, { morale: +8, energy: -6 });
+              earnCash(s, 10);
+              s.flags.bd_foundTheDog = 1;
+              pushLog(s, "Walked a lost dog home along the riverside — $10.", "money");
+              return menu(
+                "A dog with a lead on",
+                [
+                  "Forty minutes and one of the big houses, and a man who puts ten dollars in your hand at the gate and shuts it.",
+                  "The dog watches you go from the window. You are on that street legitimately for once and it does not feel any different.",
+                ],
+                [close],
+                "money",
+              );
+            },
+          },
+          {
+            label: "Somebody will be along",
+            run: () => {
+              applyDelta(s.meters, { morale: -4 });
+              return menu("A dog with a lead on", ["You keep walking. You listen for a car all the way to the bridge and do not hear one."], [close]);
+            },
+          },
         ],
       );
     },

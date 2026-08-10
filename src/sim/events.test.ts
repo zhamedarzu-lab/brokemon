@@ -869,6 +869,40 @@ describe("no two encounters in a row", () => {
     }
   });
 
+  it("gives each Brokedale district a spread too", () => {
+    /**
+     * The same bar, applied to the other town, which it never had been —
+     * Brokemon's three zones were the only ones this test had ever looked at.
+     * Brokedale shipped with 4, 6, 4 and 3 distinct encounters against a bar of
+     * 8, and Riverside was **56% one encounter**: over half of everything that
+     * happened to you on that side of the city was the same man telling you to
+     * stand away from the same car.
+     */
+    const SPOTS = {
+      terminal: { x: 8, y: 5 },
+      blocks: { x: 8, y: 16 },
+      highStreet: { x: 8, y: 27 },
+      riverside: { x: 8, y: 36 },
+    } as const;
+    for (const [district, pos] of Object.entries(SPOTS)) {
+      const s = createState(17);
+      const seen = new Map<string, number>();
+      for (let i = 0; i < 600; i++) {
+        const ctx = makeCtx(s, i + 1);
+        ctx.advance(18, { exertion: 1.35 });
+        s.meters = { hunger: 100, thirst: 100, hygiene: 70, energy: 100, morale: 80, health: 100 };
+        s.player.town = "brokedale";
+        s.player.pos = { ...pos };
+        const title = rollEvent(ctx)?.title;
+        if (title) seen.set(title, (seen.get(title) ?? 0) + 1);
+      }
+      const total = [...seen.values()].reduce((a, b) => a + b, 0);
+      const commonest = Math.max(...seen.values(), 0);
+      expect(seen.size, `${district} has too few distinct encounters`).toBeGreaterThanOrEqual(8);
+      expect(commonest / total, `one encounter dominates ${district}`).toBeLessThan(0.25);
+    }
+  });
+
   it("does not put a split bin bag on a private road", () => {
     const s = createState(5);
     inZone(s, "heights");
