@@ -8,7 +8,6 @@ import { zoneAt } from "../world/map";
 import { dayOf, hourOf, minuteOfDay, MINUTES_PER_DAY, minutesUntilHour, withinHours } from "./time";
 import { WEATHER } from "./weather";
 import { addItem, countOf, ITEMS, removeItem, type ItemId } from "./items";
-import { rollWorkEvent } from "./events-work";
 
 export interface ActionCtx {
   state: GameState;
@@ -149,7 +148,7 @@ export function workShift(ctx: ActionCtx, job: EmploymentId): Prompt {
   // — street encounters cannot reach somebody who is indoors and working.
   return maybeFire(
     s,
-    menu(def.employer, lines, [{ label: "Clock out", run: () => rollWorkEvent(ctx, job) }], "money"),
+    menu(def.employer, lines, [{ label: "Clock out" }], "money"),
   );
 }
 

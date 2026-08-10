@@ -3,7 +3,7 @@ import "./styles.css";
 import { Input, type Button } from "./engine/input";
 import { CANVAS_H, CANVAS_W, render } from "./engine/render";
 import { interact } from "./sim/actions";
-import { EVENT_CHANCE, EVENT_STEP_INTERVAL, rollEvent } from "./sim/events";
+
 import type { ItemId } from "./sim/items";
 import { menu, say, type Prompt } from "./sim/prompt";
 import { EMPLOYMENT } from "./sim/jobs";
@@ -45,8 +45,6 @@ class Game {
   private queue: Prompt[] = [];
 
   private stepsTaken = 0;
-
-  private stepsSinceEvent = 0;
 
   private lastFrame = 0;
 
@@ -268,22 +266,12 @@ class Game {
 
   private onStepComplete(): void {
     this.stepsTaken += 1;
-    this.stepsSinceEvent += 1;
     this.state.lastMovedTime = this.state.time;
 
     const police = policeCheck(this.state, this.rng);
     if (police) {
       this.enqueue(interruptPrompt(police, this.actionCtx()));
       this.openNext();
-      return;
-    }
-
-    if (this.stepsSinceEvent >= EVENT_STEP_INTERVAL) {
-      this.stepsSinceEvent = 0;
-      if (this.rng.chance(EVENT_CHANCE)) {
-        this.enqueue(rollEvent(this.actionCtx()));
-        this.openNext();
-      }
     }
   }
 

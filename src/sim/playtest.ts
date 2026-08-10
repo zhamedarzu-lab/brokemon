@@ -17,7 +17,6 @@ import { hasMarker, isSolid, markerPos, townById, STARTING_TOWN, type Town, type
 import { approaches, sleepableBenches, type Approach } from "../world/landmarks";
 import { interact } from "./actions";
 import { boardingReasons, rideCoach, serviceFrom } from "./coach";
-import { EVENT_CHANCE, EVENT_STEP_INTERVAL, rollEvent } from "./events";
 import { countOf, type ItemId } from "./items";
 import { EMPLOYMENT, EMPLOYMENT_ORDER, employmentIn, MAX_CREDITS, type EmploymentId } from "./jobs";
 import type { Choice, Prompt } from "./prompt";
@@ -118,7 +117,6 @@ class Player {
   blocked = new Map<string, number>();
   /** What turned up on shift, by the venue it turned up at. */
   workEvents = new Map<string, number>();
-  stepsSinceEvent = 0;
   low = { hunger: 100, thirst: 100, hygiene: 100, energy: 100, morale: 100, health: 100 };
 
   constructor(seed: number) {
@@ -187,13 +185,8 @@ class Player {
     for (let i = 0; i < tiles; i++) {
       this.ctx.advance(per, { exertion: 1.35 });
       this.walkMinutes += per;
-      this.stepsSinceEvent += 1;
       // The renderer runs these on every completed step; so do we.
       policeCheck(this.s, this.rng);
-      if (this.stepsSinceEvent >= EVENT_STEP_INTERVAL) {
-        this.stepsSinceEvent = 0;
-        if (this.rng.chance(EVENT_CHANCE)) this.resolve(rollEvent(this.ctx));
-      }
     }
     this.s.player.pos = { ...dest };
   }

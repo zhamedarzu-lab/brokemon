@@ -20,7 +20,7 @@ import { EMPLOYMENT, employmentIn } from "./jobs";
 import { HOUSING } from "./social";
 import { createState, housingIn, phaseOf, REPUTATION_CEILING, reputationIn, setWon, type GameState } from "./state";
 import { advance, BLOCK_RENT_ROLL, STALL_BASE, STALL_PER_REPUTATION } from "./tick";
-import { rollEvent } from "./events";
+
 import { BLOCK_PRICE, BLOCK_REPUTATION, PITCH_PRICE } from "./venues";
 import { minuteOfDay } from "./time";
 import { type ActionCtx } from "./work";
@@ -597,58 +597,6 @@ describe("the block on St Giles Row", () => {
 
 /* ---------------------------------------------------------- encounters */
 
-describe("Brokedale's encounters", () => {
-  /** Every distinct encounter that fires standing in one district all day. */
-  function pool(y: number, seed = 3): Set<string> {
-    const p = new Player(seed);
-    p.rideOut(9);
-    p.s.player.pos = { x: 19, y };
-    p.s.cash = 300;
-    const seen = new Set<string>();
-    for (let i = 0; i < 400; i++) {
-      p.s.time += 190;
-      p.s.inventory.phone = 1;
-      p.s.meters.hygiene = 30;
-      const prompt = rollEvent(p.ctx);
-      if (prompt) seen.add(prompt.title);
-    }
-    return seen;
-  }
-
-  it("does not borrow Brokemon's", () => {
-    // The weight functions only ever saw a zone. Once Brokedale had districts
-    // of its own, sixteen Brokemon encounters fell through their ternaries and
-    // fired there — a bin lorry on Route 1, the lads outside the chip shop.
-    const here = pool(4);
-    expect(here.size).toBeGreaterThan(2);
-    for (const title of here) {
-      expect(title, `${title} is a Brokemon encounter`).not.toMatch(/bin lorry|chip shop|Route 1/i);
-    }
-  });
-
-  it("gives each district something of its own", () => {
-    const districts = [4, 15, 30, 36].map((y) => pool(y));
-    for (const [i, set] of districts.entries()) {
-      expect(set.size, `district ${i} has nothing to run into`).toBeGreaterThan(2);
-    }
-    // And they are not the same four everywhere.
-    const [terminal, blocks] = districts;
-    const shared = [...terminal!].filter((t) => blocks!.has(t));
-    expect(shared.length, "the terminal and the blocks feel identical").toBeLessThan(terminal!.size - 1);
-  });
-
-  it("leaves Brokemon's own pool alone", () => {
-    const p = new Player(9);
-    p.goto("busStop");
-    const seen = new Set<string>();
-    for (let i = 0; i < 300; i++) {
-      p.s.time += 190;
-      const prompt = rollEvent(p.ctx);
-      if (prompt) seen.add(prompt.title);
-    }
-    expect(seen.size).toBeGreaterThan(20);
-  });
-});
 
 /* ------------------------------------------------------------- the pitch */
 
