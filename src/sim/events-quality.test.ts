@@ -4,6 +4,7 @@ import { BROKEDALE_EVENTS } from "./events-brokedale";
 import { PLACE_EVENTS } from "./events-places";
 import { Rng } from "./rng";
 import { createState, type GameState } from "./state";
+import { addItem } from "./items";
 import { advance } from "./tick";
 import { markerPos, townById } from "../world/map";
 import type { ActionCtx } from "./work";
@@ -126,6 +127,88 @@ describe("place encounters know where they are", () => {
     expect(near.has("mart")).toBe(true);
     const far = nearBy(BROKEMON, { x: mart.x + NEAR_TILES + 4, y: mart.y });
     expect(far.has("mart")).toBe(false);
+  });
+
+  it("owns the pavement outside its own door", () => {
+    // Since a place event fires only when its marker is the *nearest* one, a
+    // door standing next to a busier door would never get its own encounter.
+    // Standing on the doorstep must always resolve to that door.
+    for (const town of [townById("brokemon"), townById("brokedale")]) {
+      for (const e of PLACE_EVENTS) {
+        const p = town.markers[e.place!];
+        if (!p) continue;
+        expect(nearBy(town, p).closest, `${e.id}: standing at ${e.place} resolves to another door`).toBe(e.place);
+      }
+    }
+  });
+
+  it("has no encounter written so tightly it can never happen", () => {
+    // A guard like "phase 3 and owns a bike and after nine" is easy to write
+    // and impossible to satisfy. Sweep a spread of plausible saves across every
+    // doorway in both towns; anything that never fires is dead text.
+    const saves: Array<[string, (s: GameState) => void, number]> = [
+      ["broke, morning", (s) => void (s.cash = 8), 9],
+      ["broke, ill, night", (s) => {
+        s.cash = 8;
+        s.meters.hunger = 30;
+        s.meters.health = 40;
+      }, 21],
+      ["trailer, night", (s) => {
+        s.cash = 60;
+        s.housing.brokemon = "trailer";
+      }, 22],
+      ["studying, phone and bike", (s) => {
+        s.cash = 150;
+        s.education = 2;
+        s.debt = 300;
+        addItem(s.inventory, "phone");
+        addItem(s.inventory, "bicycle");
+      }, 16],
+      ["presentable", (s) => {
+        s.cash = 150;
+        s.wardrobe.push("smartCasual");
+        s.wearing = "smartCasual";
+        s.meters.hygiene = 80;
+      }, 16],
+      ["career, evening", (s) => {
+        s.cash = 900;
+        s.education = 6;
+        s.housing.brokemon = "apartment";
+        s.employment = "executive";
+      }, 19],
+      ["career, morning", (s) => {
+        s.cash = 900;
+        s.education = 6;
+        s.housing.brokemon = "apartment";
+        s.employment = "executive";
+      }, 8],
+      ["the estate", (s) => {
+        s.cash = 5000;
+        s.housing.brokemon = "estate";
+        s.employment = "executive";
+      }, 14],
+      ["a room on the Row", (s) => {
+        s.cash = 200;
+        s.housing.brokedale = "room";
+      }, 19],
+    ];
+
+    const fired = new Set<string>();
+    for (const [, mutate, hour] of saves) {
+      for (const town of [townById("brokemon"), townById("brokedale")]) {
+        for (const marker of Object.keys(town.markers)) {
+          const s = createState(3);
+          s.player.town = town.id;
+          s.player.pos = town.markers[marker]!;
+          s.time = hour * 60;
+          mutate(s);
+          const near = nearBy(town, s.player.pos);
+          for (const e of PLACE_EVENTS) if (e.weight(s, "downtown", near) > 0) fired.add(e.id);
+        }
+      }
+    }
+    const dead = PLACE_EVENTS.filter((e) => !fired.has(e.id)).map((e) => `${e.id} (at ${e.place})`);
+    expect(dead, "written but unreachable under any plausible save").toEqual([]);
   });
 
   it("names a door that exists in one of the towns", () => {

@@ -91,7 +91,13 @@ has already been made once, on ten minutes of evidence.
   earlier decision about money retroactively pointless.
 - Encounters tied to a place live in `events-places.ts` and name the marker
   they happen at. Being outside the door outranks the ambient pool 5x, because
-  at equal weight one place event competes with eighty others.
+  at equal weight one place event competes with eighty others. **The nearest
+  door owns the pavement** — `at()` fires on `near.closest`, not `near.has`,
+  because the town is dense enough that the bank is five tiles from the
+  hospital, and `has()` alone put the A&E encounter at the bank counter. Two
+  tests hold the contract: every door resolves to itself from its own doorstep,
+  and every encounter fires for at least one of nine plausible saves, so a
+  guard written too tight shows up as dead text rather than as silence.
 - Night class is the only door to phase 3. Anything that costs energy in the
   evening competes with it directly.
 - **There are two towns now.** Housing, rent, hostel nights and reputation are
