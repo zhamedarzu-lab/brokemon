@@ -1,5 +1,6 @@
-import { zoneAt, type TownId, type ZoneId } from "../world/map";
+import { zoneAt, type Town, type TownId, type Vec2, type ZoneId } from "../world/map";
 import { BROKEDALE_EVENTS } from "./events-brokedale";
+import { PLACE_EVENTS } from "./events-places";
 import { addItem } from "./items";
 import { EMPLOYMENT } from "./jobs";
 import { applyDelta } from "./meters";
@@ -8,18 +9,64 @@ import { changeReputation, checkRequirements, currentAppearance, dirtySelf, earn
 import { hourOf } from "./time";
 import type { ActionCtx } from "./work";
 
+/**
+ * What the player is standing next to.
+ *
+ * Zones are bands thirty rows deep, which is the right grain for "the police
+ * here are worse" and far too coarse for "there is a shop". An encounter that
+ * belongs to a place should fire *at* that place: the kids outside the Mart
+ * are outside the Mart, not somewhere in Market Square.
+ *
+ * Passed as a third argument so the eighty-one encounters written against a
+ * bare zone keep working untouched.
+ */
+export interface NearBy {
+  /** Is that named place within a short walk? */
+  has(marker: string): boolean;
+  /** The nearest named place, or null if you are out in the open. */
+  closest: string | null;
+  /** Tiles to the nearest one, or Infinity. */
+  distance: number;
+}
+
+/** How close counts as "outside the Mart". About fifteen seconds' walk. */
+export const NEAR_TILES = 6;
+
+export function nearBy(town: Town, pos: Vec2): NearBy {
+  let closest: string | null = null;
+  let distance = Infinity;
+  const within = new Set<string>();
+  for (const [id, p] of Object.entries(town.markers)) {
+    // Walking distance on a grid, not as the crow flies.
+    const d = Math.abs(p.x - pos.x) + Math.abs(p.y - pos.y);
+    if (d <= NEAR_TILES) within.add(id);
+    if (d < distance) {
+      distance = d;
+      closest = id;
+    }
+  }
+  return { has: (m) => within.has(m), closest: distance <= NEAR_TILES ? closest : null, distance };
+}
+
 export interface EventDef {
   id: string;
   /** Relative weight, or 0 to exclude. */
-  weight(s: GameState, zone: ZoneId): number;
+  weight(s: GameState, zone: ZoneId, near: NearBy): number;
   build(ctx: ActionCtx): Prompt;
   /** Fire at most once per run. */
   once?: boolean;
+  /**
+   * The marker this encounter happens outside, if it is tied to one. Declared
+   * rather than inferred: a guard like "only if you owe money" makes the
+   * weight zero for a fresh save, so probing weights cannot tell a
+   * place-that-does-not-exist from a condition that is not met today.
+   */
+  place?: string;
 }
 
 const close: Choice = { label: "Move on" };
 
-const BROKEMON_EVENTS: EventDef[] = [
+export const BROKEMON_EVENTS: EventDef[] = [
   {
     id: "wallet",
     weight: (s, z) => (z === "slums" ? 1 : 3) * (s.flags.walletDone ? 0.2 : 1),
@@ -176,18 +223,38 @@ const BROKEMON_EVENTS: EventDef[] = [
     weight: (s, z) => (z === "downtown" && currentAppearance(s) >= 30 && hourOf(s.time) >= 20 ? 3 : 0),
     build: (ctx) => {
       const s = ctx.state;
-      addItem(s.inventory, "sandwich", 2);
-      applyDelta(s.meters, { morale: +12 });
-      pushLog(s, "Given day-old food at closing time.", "good");
       return menu(
         "Closing time",
         [
           "The woman locking up the deli holds out a paper bag without making it a thing.",
           '"They only go in the bin."',
-          "Two sandwiches.",
+          "There is somebody else on the corner who has been there longer than you have.",
         ],
-        [close],
-        "good",
+        [
+          {
+            label: "Take it",
+            run: () => {
+              addItem(s.inventory, "sandwich", 2);
+              applyDelta(s.meters, { morale: +12 });
+              pushLog(s, "Given day-old food at closing time.", "good");
+              return menu("Closing time", ["Two sandwiches. You eat one standing up before you have decided to."], [close], "good");
+            },
+          },
+          {
+            label: "Point at the man on the corner",
+            run: () => {
+              changeReputation(s, 3);
+              applyDelta(s.meters, { morale: +4 });
+              pushLog(s, "Sent the deli\'s leftovers to somebody who needed them more.", "good");
+              return menu(
+                "Closing time",
+                ["She takes it over herself. He does not look up and she does not wait to be thanked.", "You walk home hungry and it was still the right call."],
+                [close],
+                "good",
+              );
+            },
+          },
+        ],
       );
     },
   },
@@ -571,54 +638,62 @@ const BROKEMON_EVENTS: EventDef[] = [
     once: true,
     build: (ctx) => {
       const s = ctx.state;
-      s.flags.oldBossDone = 1;
-      const look = currentAppearance(s);
-      if (look >= 60) {
-        changeReputation(s, 8);
-        applyDelta(s.meters, { morale: +10 });
-        pushLog(s, "Ran into your old boss. Made a decent impression.", "good");
-        return menu(
-          "Someone you used to work for",
-          [
-            "Your old manager. Coming out of a coffee shop.",
-            "They look at you, then look again.",
-            '"You look well. Things working out?"',
-            "You are presentable enough that they mean it.",
-          ],
-          [
-            {
-              label: '"Getting there."',
-              run: () => {
-                changeReputation(s, 4);
-                return menu("Someone you used to work for", ["They nod and trade cards.", '"Good. Keep at it."', "They say it like they remember you were worth something."], [close], "good");
-              },
-            },
-            {
-              label: "Keep it brief and move on",
-              run: () => menu("Someone you used to work for", ["Clean exit. Your name is still intact there."], [close], "good"),
-            },
-          ],
-          "good",
-        );
-      }
-      changeReputation(s, -5);
-      applyDelta(s.meters, { morale: -12 });
-      pushLog(s, "Ran into your old boss. Awkward.", "bad");
       return menu(
         "Someone you used to work for",
         [
-          "Your old manager. Coming out of a coffee shop.",
-          "The moment they register you, something crosses their face and is quickly managed.",
-          '"Oh. Right. Well —"',
-          "There is a lot of pavement between you and they find it fast.",
+          "Your old manager, coming out of a coffee shop, and there is nowhere on this pavement to not be.",
+          "They look at you, then look again, and you can watch them deciding what this is going to be.",
         ],
         [
           {
-            label: "Let them go",
-            run: () => menu("Someone you used to work for", ["They go.", "You had forgotten how small that particular feeling was."], [close], "bad"),
+            label: "Say hello first",
+            hint: "15 min",
+            run: () => {
+              s.flags.oldBossDone = 1;
+              // Read *before* the clock moves. They see you as you walk up, and
+              // hygiene is recomputed from body and clothes on every tick, so
+              // taking the reading after fifteen minutes measured a different
+              // person from the one who said hello.
+              const presentable = currentAppearance(s) >= 60;
+              ctx.advance(15);
+              // Getting in first is the decision; how you look is what the
+              // decision is worth, which is the whole argument of the game.
+              changeReputation(s, presentable ? 6 : -4);
+              applyDelta(s.meters, { morale: presentable ? +14 : -12 });
+              pushLog(
+                s,
+                presentable ? "Ran into an old manager and got in first." : "Ran into an old manager. It did not go well.",
+                presentable ? "good" : "bad",
+              );
+              return menu(
+                "Someone you used to work for",
+                presentable
+                  ? [
+                      "You get there before they do, which changes the whole shape of it.",
+                      "They ask what you are doing now and listen to the answer, and say they will keep an ear out.",
+                    ]
+                  : [
+                      "You get there first and it does not help, because they have already seen the rest of it.",
+                      "They are kind for ninety seconds and then remember somewhere they have to be.",
+                    ],
+                [close],
+                presentable ? "good" : "bad",
+              );
+            },
+          },
+          {
+            label: "Look at your phone until they have gone",
+            run: () => {
+              s.flags.oldBossDone = 1;
+              applyDelta(s.meters, { morale: -8 });
+              return menu(
+                "Someone you used to work for",
+                ["They walk past. You do not know whether they saw you and you will think about it tonight."],
+                [close],
+              );
+            },
           },
         ],
-        "bad",
       );
     },
   },
@@ -767,8 +842,26 @@ const BROKEMON_EVENTS: EventDef[] = [
     build: (ctx) => {
       const s = ctx.state;
       const n = ctx.rng.int(2, 5);
-      addItem(s.inventory, "recyclables", n);
-      return menu("A split bin bag", [`${n} cans and bottles, still with the deposit on them.`], [close]);
+      return menu(
+        "A split bin bag",
+        [`Somebody has been through it already and given up. There are cans in there, ${n} of them at a guess.`],
+        [
+          {
+            label: "Go through it properly",
+            hint: "8 min",
+            run: () => {
+              ctx.advance(8, { exertion: 1.3 });
+              applyDelta(s.meters, { hygiene: -4 });
+              addItem(s.inventory, "recyclables", n);
+              return menu("A split bin bag", [`${n} cans and bottles, and it is all over your hands.`], [close]);
+            },
+          },
+          {
+            label: "Leave it",
+            run: () => menu("A split bin bag", ["Not today. You step round it like everybody else has."], [close]),
+          },
+        ],
+      );
     },
   },
 
@@ -820,19 +913,44 @@ const BROKEMON_EVENTS: EventDef[] = [
     once: true,
     build: (ctx) => {
       const s = ctx.state;
-      s.flags.tentClearedDone = 1;
-      applyDelta(s.meters, { morale: -10 });
-      addItem(s.inventory, "recyclables", 3);
-      pushLog(s, "The camp under the overpass has been cleared.", "bad");
       return menu(
         "Under the overpass",
         [
           "The camp is gone. Not moved — gone, and the ground swept, and a new sign bolted to the pillar.",
-          "Somebody's boots are still there, set neatly side by side against the concrete.",
-          "You take the cans out of the bin bag nobody came back for.",
+          "There is a bin bag nobody came back for, and a pair of boots set neatly side by side against the concrete.",
         ],
-        [close],
-        "bad",
+        [
+          {
+            label: "Take what is in the bag",
+            hint: "10 min",
+            run: () => {
+              s.flags.tentClearedDone = 1;
+              ctx.advance(10, { exertion: 1.2 });
+              addItem(s.inventory, "recyclables", ctx.rng.int(4, 9));
+              applyDelta(s.meters, { morale: -12 });
+              pushLog(s, "Took what was left under the overpass.", "bad");
+              return menu(
+                "Under the overpass",
+                ["Cans, mostly. You leave the boots where they are, which is not much of a line but it is the one you draw."],
+                [close],
+                "bad",
+              );
+            },
+          },
+          {
+            label: "Leave all of it",
+            run: () => {
+              s.flags.tentClearedDone = 1;
+              applyDelta(s.meters, { morale: -4 });
+              changeReputation(s, 1);
+              return menu(
+                "Under the overpass",
+                ["You leave it. Somebody may come back, and if they do there should be something to come back to."],
+                [close],
+              );
+            },
+          },
+        ],
       );
     },
   },
@@ -1492,19 +1610,46 @@ const BROKEMON_EVENTS: EventDef[] = [
     once: true,
     build: (ctx) => {
       const s = ctx.state;
-      s.flags.coatDone = 1;
-      applyDelta(s.meters, { morale: +18, health: +8 });
-      addItem(s.inventory, "poncho", 1);
-      pushLog(s, "Given a coat in the cold snap.", "good");
       return menu(
         "A carrier bag held out at arm's length",
         [
           "A man in a parked car with the engine running winds the window down and holds out a bag.",
-          '"It does not fit me any more. Genuinely."',
-          "It is a good coat. It fits.",
+          "He does not get out and he does not quite look at you. It is a good coat, and it is freezing.",
         ],
-        [close],
-        "good",
+        [
+          {
+            label: "Take it",
+            run: () => {
+              s.flags.coatDone = 1;
+              addItem(s.inventory, "poncho", 1);
+              applyDelta(s.meters, { morale: +10 });
+              pushLog(s, "Given a coat out of a car window.", "good");
+              return menu(
+                "A carrier bag held out at arm's length",
+                ["It fits. The window is up again before you have finished saying thank you."],
+                [close],
+                "good",
+              );
+            },
+          },
+          {
+            label: "Tell him to give it to the shelter",
+            run: () => {
+              s.flags.coatDone = 1;
+              changeReputation(s, 4);
+              applyDelta(s.meters, { morale: -6 });
+              pushLog(s, "Sent a stranger and his coat to the shelter.", "good");
+              return menu(
+                "A carrier bag held out at arm\'s length",
+                [
+                  "You tell him where the community center is and that they will take it.",
+                  "He looks at you properly for the first time. You are extremely cold for the rest of the day.",
+                ],
+                [close],
+              );
+            },
+          },
+        ],
       );
     },
   },
@@ -1588,23 +1733,6 @@ const BROKEMON_EVENTS: EventDef[] = [
     },
   },
 
-  {
-    id: "dog",
-    weight: (_s, z) => (z === "downtown" ? 3 : 2),
-    build: (ctx) => {
-      const s = ctx.state;
-      applyDelta(s.meters, { morale: +9 });
-      return menu(
-        "A dog",
-        [
-          "A dog comes over, leans its whole weight against your leg, and stays there.",
-          "Its owner apologises. You tell them it's fine.",
-          "It is the only thing all day that came towards you.",
-        ],
-        [close],
-      );
-    },
-  },
 
   {
     id: "sprinklers",
@@ -1619,19 +1747,42 @@ const BROKEMON_EVENTS: EventDef[] = [
 
   {
     id: "recruiter",
-    weight: (s, z) => (z === "downtown" && phaseOf(s) >= 2 && s.education >= 1 ? 2 : 0),
+    weight: (s, z) => (z === "downtown" && phaseOf(s) >= 2 && s.education >= 1 && !s.flags.recruiterDone ? 2 : 0),
     build: (ctx) => {
       const s = ctx.state;
-      changeReputation(s, 3);
       return menu(
-        "A card in your hand",
+        "A woman with a lanyard",
         [
-          "A woman from a staffing agency works the square with a lanyard and a fistful of cards.",
-          "She gives you one and actually looks at you while she does it.",
-          "Your name is worth slightly more in this town than it was this morning.",
+          "A staffing agency works the square with a fistful of cards and a target for the afternoon.",
+          '"Two minutes. What are you doing at the moment?"',
         ],
-        [close],
-        "good",
+        [
+          {
+            label: "Give her two minutes",
+            hint: "15 min",
+            run: () => {
+              s.flags.recruiterDone = 1;
+              ctx.advance(15);
+              changeReputation(s, 4);
+              applyDelta(s.meters, { morale: +6 });
+              pushLog(s, "Talked to a recruiter in the square.", "good");
+              return menu(
+                "A woman with a lanyard",
+                [
+                  "She actually looks at you while you answer, which is more than the last three did.",
+                  "Your name is worth slightly more in this town than it was fifteen minutes ago.",
+                ],
+                [close],
+                "good",
+              );
+            },
+          },
+          {
+            label: "Take the card and keep walking",
+            run: () =>
+              menu("A woman with a lanyard", ["It goes in your pocket and stays there until it goes through the wash."], [close]),
+          },
+        ],
       );
     },
   },
@@ -1874,22 +2025,6 @@ const BROKEMON_EVENTS: EventDef[] = [
   },
 
   /* --------------------------------------------------- paper bag on bench */
-  {
-    id: "paperBagBench",
-    weight: (s, z) => ((z === "slums" || z === "downtown") && phaseOf(s) <= 2 ? 2 : 0),
-    build: (ctx) => {
-      const s = ctx.state;
-      addItem(s.inventory, "sandwich", 2);
-      applyDelta(s.meters, { morale: +10 });
-      pushLog(s, "Food left on a bench — 'for anyone'.", "good");
-      return menu(
-        "A paper bag on the bench",
-        ["A brown paper bag with a folded note on top.", '"For anyone who needs it."', "Two sandwiches, a packet of crisps, a small orange juice. Still cold."],
-        [close],
-        "good",
-      );
-    },
-  },
 
   /* ----------------------------------------------- shared umbrella */
   {
@@ -1952,14 +2087,35 @@ const BROKEMON_EVENTS: EventDef[] = [
     once: true,
     build: (ctx) => {
       const s = ctx.state;
-      s.flags.busDriverDone = 1;
-      applyDelta(s.meters, { morale: +18, energy: +12 });
-      pushLog(s, "Bus driver waved you on without paying.", "good");
       return menu(
         "The number nine",
-        ["You step on and start explaining.", "He waves his hand at the machine.", '"Sit down, mate."', "You take a seat. You ride for forty minutes. Nobody says anything."],
-        [close],
-        "good",
+        ["You step on and start explaining about the fare.", "He waves his hand at the machine and does not look at you.", '"Sit down, mate."'],
+        [
+          {
+            label: "Sit down",
+            hint: "40 min, rides free",
+            run: () => {
+              s.flags.busDriverDone = 1;
+              ctx.advance(40, { sheltered: true });
+              applyDelta(s.meters, { morale: +18, energy: +10 });
+              pushLog(s, "A bus driver waved you on without paying.", "good");
+              return menu(
+                "The number nine",
+                ["Forty minutes in the warm, going nowhere in particular. Nobody says anything to you the entire time."],
+                [close],
+                "good",
+              );
+            },
+          },
+          {
+            label: "Get off and walk",
+            run: () => {
+              s.flags.busDriverDone = 1;
+              applyDelta(s.meters, { morale: +4 });
+              return menu("The number nine", ["You thank him and get off anyway. You are not sure why and neither is he."], [close]);
+            },
+          },
+        ],
       );
     },
   },
@@ -2970,12 +3126,17 @@ function cooldownMultiplier(s: GameState, id: string): number {
 }
 
 /**
- * How many of the most recent encounters are barred outright. The cooldown
- * multiplier alone still let a cheap filler event come up twice running, which
- * is the repetition a player actually notices — two split bin bags in a row
- * reads as a broken game however good the long-run distribution is.
+ * How many of the most recent encounters are barred outright.
+ *
+ * The cooldown multiplier alone still let a cheap filler event come up twice
+ * running, which is the repetition a player actually notices — two split bin
+ * bags in a row reads as a broken game however good the long-run distribution
+ * is. Two was enough to stop the immediate repeat and nothing like enough to
+ * stop the *feeling* of repetition: at eight-deep you have to see eight other
+ * things before the same stranger can stop you again, and the pool is ninety
+ * encounters deep now, so there is no shortage to draw from.
  */
-export const NO_REPEAT_WINDOW = 2;
+export const NO_REPEAT_WINDOW = 8;
 
 /**
  * The last few events seen, most recent first — but only those still inside
@@ -3011,16 +3172,27 @@ const POOLS: Record<TownId, EventDef[]> = {
   brokedale: BROKEDALE_EVENTS,
 };
 
+/**
+ * Encounters that belong to a doorway rather than a district. They live in one
+ * list across both towns because each one names the place it happens at, and
+ * a place only exists in one town anyway.
+ */
+function poolFor(town: TownId): EventDef[] {
+  return [...POOLS[town], ...PLACE_EVENTS];
+}
+
 export function rollEvent(ctx: ActionCtx): Prompt | null {
   const s = ctx.state;
-  const zone = zoneAt(townOf(s), s.player.pos.y).id;
+  const town = townOf(s);
+  const zone = zoneAt(town, s.player.pos.y).id;
+  const near = nearBy(town, s.player.pos);
   const fired: Record<string, number> = s.flags;
 
-  const available = POOLS[s.player.town].filter((e) => !(e.once && fired[`ev:${e.id}`]));
+  const available = poolFor(s.player.town).filter((e) => !(e.once && fired[`ev:${e.id}`]));
   const barred = new Set(recentIds(s, NO_REPEAT_WINDOW));
 
   const weigh = (pool: EventDef[]) =>
-    pool.map((e) => [e, e.weight(s, zone) * cooldownMultiplier(s, e.id)] as const);
+    pool.map((e) => [e, e.weight(s, zone, near) * cooldownMultiplier(s, e.id)] as const);
 
   // Try without the last couple of encounters first. If that leaves nothing
   // this zone can offer, fall back to the full pool rather than show nothing.

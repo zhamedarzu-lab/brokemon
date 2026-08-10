@@ -84,6 +84,14 @@ has already been made once, on ten minutes of evidence.
   exactly the hours of the top two jobs and a Regional Director could never
   walk in, which locked the estate behind a scheduling impossibility. Check
   this whenever a shift or an opening time moves.
+- **Encounters have two rules and both are tested.** Every one is a decision —
+  if the only button is "Move on" it is a pop-up, and pop-ups teach the player
+  to stop reading. And nothing is *given* before a choice: `build()` may set up
+  a situation and cost you, only a `run()` may pay you. Free money makes every
+  earlier decision about money retroactively pointless.
+- Encounters tied to a place live in `events-places.ts` and name the marker
+  they happen at. Being outside the door outranks the ambient pool 5x, because
+  at equal weight one place event competes with eighty others.
 - Night class is the only door to phase 3. Anything that costs energy in the
   evening competes with it directly.
 - **There are two towns now.** Housing, rent, hostel nights and reputation are

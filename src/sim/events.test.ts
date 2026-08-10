@@ -373,6 +373,7 @@ describe("oldBoss event", () => {
       delete s.flags.oldBossDone;
     }
     expect(prompt).not.toBeNull();
+    drive(prompt, "say hello");
     expect(s.reputation[STARTING_TOWN]).toBeGreaterThan(0);
   });
 
@@ -390,6 +391,7 @@ describe("oldBoss event", () => {
       delete s.flags.oldBossDone;
     }
     expect(prompt).not.toBeNull();
+    drive(prompt, "say hello");
     expect(s.reputation[STARTING_TOWN]).toBeLessThan(0);
   });
 });
