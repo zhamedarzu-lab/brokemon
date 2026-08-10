@@ -437,7 +437,7 @@ export const WORK_EVENTS: WorkEvent[] = [
             run: () => {
               applyDelta(s.meters, { morale: -6 });
               if (ctx.rng.chance(0.75)) {
-                s.wardrobe.includes("smartCasual") || s.wardrobe.push("smartCasual");
+                if (!s.wardrobe.includes("smartCasual")) s.wardrobe.push("smartCasual");
                 pushLog(s, "Took a coat from the back of a chair.", "plain");
                 return menu(
                   def.employer,

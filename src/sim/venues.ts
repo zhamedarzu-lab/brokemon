@@ -51,6 +51,7 @@ import {
 import { withinHours } from "./time";
 import {
   caffeineCup,
+  clockInHint,
   collectAssignment,
   grantOrTakeBadge,
   fmtHour,
@@ -224,7 +225,7 @@ const mart: Venue = (ctx) => {
   if (staffJob) {
     choices.push({
       label: "Clock in",
-      hint: staffWindow === "open" ? "on time" : staffWindow === "late" ? "late" : "not your hours",
+      hint: clockInHint(s, staffJob),
       run: () => workShift(ctx, staffJob),
     });
   }
@@ -921,10 +922,9 @@ const corporatePlaza: Venue = (ctx) => {
   const choices: Choice[] = [];
 
   if (s.employment && EMPLOYMENT[s.employment].location === "corporatePlaza") {
-    const w = shiftWindow(s, s.employment);
     choices.push({
       label: "Go up to your floor",
-      hint: w === "open" ? "on time" : w === "late" ? "late" : "not your hours",
+      hint: clockInHint(s, s.employment),
       run: () => workShift(ctx, s.employment as EmploymentId),
     });
   }
@@ -942,7 +942,7 @@ const corporatePlaza: Venue = (ctx) => {
     });
   } else if (phaseOf(s) >= 3) {
     const reasons: string[] = [];
-    if (s.cash + s.bank < BUSINESS_PRICE) reasons.push(`the buy-in is $${BUSINESS_PRICE.toLocaleString()}`);
+    if (s.cash + s.bank < BUSINESS_PRICE) reasons.push(`the buy-in is $${BUSINESS_PRICE.toLocaleString()} and you have $${(s.cash + s.bank).toLocaleString()}`);
     if (s.credit < 700) reasons.push(`they want a 700 credit score, you have ${s.credit}`);
     choices.push(
       reasons.length === 0
@@ -1135,10 +1135,9 @@ const jobBoard: Venue = (ctx) => {
   // happens inside a worked shift you are never even let go — just employed
   // forever at nothing a day.
   if (s.employment && EMPLOYMENT[s.employment].location === "jobBoard") {
-    const w = shiftWindow(s, s.employment);
     choices.push({
       label: "Clock in",
-      hint: w === "open" ? "on time" : w === "late" ? "late" : "not your hours",
+      hint: clockInHint(s, s.employment),
       run: () => workShift(ctx, s.employment as EmploymentId),
     });
   }
@@ -1764,14 +1763,13 @@ const depot: Venue = (ctx) => {
     ]);
   }
 
-  const w = shiftWindow(s, job);
   return menu(
     "Eastgate Depot",
     [`${EMPLOYMENT[job].name}. Shift ${fmtHour(EMPLOYMENT[job].shiftStart)}–${fmtHour(EMPLOYMENT[job].shiftEnd)}.`],
     [
       {
         label: "Clock in",
-        hint: w === "open" ? "on time" : w === "late" ? "late" : "not your hours",
+        hint: clockInHint(s, job),
         run: () => workShift(ctx, job),
       },
       BACK,

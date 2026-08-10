@@ -10,7 +10,7 @@ import { Rng } from "./rng";
 import { HEIGHTS_GATE_LOOK } from "./social";
 import { createState, type GameState } from "./state";
 import { advance } from "./tick";
-import { grantOrTakeBadge, type ActionCtx } from "./work";
+import { clockInHint, grantOrTakeBadge, type ActionCtx } from "./work";
 
 function bot(seed = 1): { s: GameState; ctx: ActionCtx } {
   const s = createState(seed);
@@ -140,5 +140,34 @@ describe("workplace incidents", () => {
     const onceIds = WORK_EVENTS.filter((x) => x.once).map((x) => x.id);
     expect(onceIds.length).toBeGreaterThan(0);
     for (const id of onceIds) expect([undefined, 1]).toContain(s.flags[`wk:${id}`]);
+  });
+});
+
+/* ------------------------------------------------------ what the button says */
+
+describe("the clock-in hint", () => {
+  it("tells somebody sixteen minutes early that they are early, not shut out", () => {
+    // "Not your hours" was shown both to somebody sixteen minutes early and to
+    // somebody sixteen hours out. The mid-game is nothing but this button.
+    const { s } = bot();
+    const start = EMPLOYMENT.officeAdmin.shiftStart;
+    s.time = start * 60 - 16;
+    expect(clockInHint(s, "officeAdmin")).toMatch(/starts in 16 min/);
+  });
+
+  it("still says on time, and late", () => {
+    const { s } = bot();
+    const start = EMPLOYMENT.officeAdmin.shiftStart;
+    s.time = start * 60 + 10;
+    expect(clockInHint(s, "officeAdmin")).toBe("on time");
+    // Two hours in: still inside a 9-to-5, well past the 45 minutes of grace.
+    s.time = start * 60 + 2 * 60;
+    expect(clockInHint(s, "officeAdmin")).toBe("late");
+  });
+
+  it("names the start time when the shift is a long way off", () => {
+    const { s } = bot();
+    s.time = (EMPLOYMENT.officeAdmin.shiftStart + 12) * 60;
+    expect(clockInHint(s, "officeAdmin")).toMatch(/start/);
   });
 });

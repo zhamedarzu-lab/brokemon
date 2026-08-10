@@ -29,6 +29,21 @@ export function shiftLength(job: EmploymentId): number {
 
 export type ShiftWindow = "early" | "open" | "late" | "closed";
 
+/**
+ * What the clock-in option says about itself.
+ *
+ * "Not your hours" was shown both to somebody sixteen minutes early and to
+ * somebody sixteen hours out, which reads the same as "you cannot work today"
+ * — and the mid-game is nothing but this button.
+ */
+export function clockInHint(s: GameState, job: EmploymentId): string {
+  const window = shiftWindow(s, job);
+  if (window === "open") return "on time";
+  if (window === "late") return "late";
+  const until = minutesUntilHour(s.time, EMPLOYMENT[job].shiftStart);
+  return window === "early" ? `starts in ${fmtDuration(until)}` : `${fmtHour(EMPLOYMENT[job].shiftStart)} start`;
+}
+
 export function shiftWindow(s: GameState, job: EmploymentId): ShiftWindow {
   const d = EMPLOYMENT[job];
   if (withinHours(s.time, d.shiftStart, d.shiftEnd)) {
@@ -206,7 +221,10 @@ export function panhandle(ctx: ActionCtx): Prompt {
 
   pushLog(s, `Panhandled for $${take}.`, take > 0 ? "money" : "plain");
   // Titled by where you actually are — there is a corner in Brokedale too.
-  return menu(`Corner of ${zoneAt(townOf(s), s.player.pos.y).name}`, lines, [{ label: "Get up" }], take > 0 ? "money" : "plain");
+  // Zone names carry their own article ("The Outskirts"), so it goes lowercase
+  // rather than reading "Corner of The Outskirts".
+  const where = zoneAt(townOf(s), s.player.pos.y).name.replace(/^The /, "the ");
+  return menu(`Corner of ${where}`, lines, [{ label: "Get up" }], take > 0 ? "money" : "plain");
 }
 
 export function scavenge(ctx: ActionCtx, key: string): Prompt {

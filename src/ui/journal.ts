@@ -1,9 +1,10 @@
 import { ITEMS, type ItemId } from "../sim/items";
-import { EMPLOYMENT, EMPLOYMENT_ORDER, MAX_CREDITS } from "../sim/jobs";
+import { EMPLOYMENT, employmentIn, hiringRequirements, MAX_CREDITS } from "../sim/jobs";
 import { METER_LABEL, METER_ORDER } from "../sim/meters";
 import { HOUSING, OUTFITS } from "../sim/social";
 import { type GameState, PHASE_NAMES, checkRequirements, currentAppearance, housingIn, netWorth, phaseOf, reputationIn, reputationLabel } from "../sim/state";
 import { formatClock } from "../sim/time";
+import { TOWNS, townById, type TownId } from "../world/map";
 
 function investmentDisplay(s: GameState): string {
   if (s.investments === 0) return "—";
@@ -209,7 +210,17 @@ export class Journal {
       { n: 1, name: "The Streets", done: phase > 1, goal: "Soap, clean clothes, and a bed with a door — rent the trailer or take a hostel cot." },
       { n: 2, name: "Odd Jobs", done: phase > 2, goal: "A steady job, a phone employers can call, and night-class credits." },
       { n: 3, name: "The Career Track", done: phase > 3, goal: "A professional job and the apartment lease. Clear the debt, build the credit score." },
-      { n: 4, name: "The Apex", done: s.won, goal: "The estate on the hill, plus the franchise or the mayor's office." },
+      {
+        n: 4,
+        name: "The Apex",
+        done: s.won,
+        // Two of them, and they mean opposite things. A player who has moved
+        // to Brokedale was being told the only way out was a hill in a town
+        // they no longer live in.
+        goal:
+          "Either the estate on the hill — plus the franchise or the mayor's office — " +
+          "or the block on St Giles Row, which you can only buy once you have rented in it.",
+      },
     ]
       .map(
         (st) => `
@@ -220,18 +231,30 @@ export class Journal {
       )
       .join("");
 
-    const jobs = EMPLOYMENT_ORDER.map((id) => {
-      const def = EMPLOYMENT[id];
-      const gate = checkRequirements(s, def.requires);
-      const worked = s.shiftsWorked[id] ?? 0;
-      return `
+    // Grouped by town, because there are two ladders now and one of them is
+    // forty minutes up the road — a flat list of nine was telling a Brokemon
+    // player they did not qualify for a warehouse job in a city they have
+    // never been to. Read against the *hiring* requirements, too: whether you
+    // are tired this afternoon is a question for the door, not the interview.
+    const jobs = (Object.keys(TOWNS) as TownId[])
+      .map((town) => {
+        const rungs = employmentIn(town)
+          .map((id) => {
+            const def = EMPLOYMENT[id];
+            const gate = checkRequirements(s, hiringRequirements(def));
+            const worked = s.shiftsWorked[id] ?? 0;
+            return `
         <div class="ladder-job ${gate.ok ? "open" : "shut"} ${s.employment === id ? "current" : ""}">
           <b>${def.name}</b>
           <span class="pay">$${def.pay}/shift</span>
           <span class="req">${gate.ok ? "You qualify." : gate.reasons.join("; ")}</span>
           ${worked ? `<span class="req">${worked} shift${worked === 1 ? "" : "s"} worked</span>` : ""}
         </div>`;
-    }).join("");
+          })
+          .join("");
+        return `<h4>${townById(town).name}</h4>${rungs}`;
+      })
+      .join("");
 
     const postWin =
       s.won && s.postWinGoal > 0
