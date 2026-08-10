@@ -200,3 +200,44 @@ describe("running on empty pulls on the other half", () => {
     expect(couplingCost).toBeLessThan(ordinaryDecay);
   });
 });
+
+describe("one wash lasts a day", () => {
+  /**
+   * The design claim is that hygiene is something you keep rather than
+   * something you top up: a shelter shower restores about 70 and a laundry
+   * about 80, so a day has to cost meaningfully less than that or you are back
+   * at the machine before the day is out.
+   *
+   * A day here is sixteen hours up and about at walking effort, then eight
+   * asleep. Measured at the rates this test was written against: 36 body and
+   * 38 clothes in rags. Before they were given room it was 46 and 58 — a
+   * shower every day and a half, laundry every thirty-four hours.
+   */
+  function aDay(outfitRank: number): { body: number; clothes: number } {
+    const meters = fresh();
+    const sub = freshSub({ bodyClean: 100, clothesClean: 100 });
+    decay(meters, { ...IDLE, minutes: 16 * 60, exertion: 1.2, outfitRank }, sub);
+    decay(meters, { ...IDLE, minutes: 8 * 60, asleep: true, outfitRank }, sub);
+    return { body: 100 - sub.bodyClean, clothes: 100 - sub.clothesClean };
+  }
+
+  const SHOWER = 70;
+  const LAUNDRY = 80;
+
+  it("costs less than half a day's worth more than a shower gives back", () => {
+    expect(aDay(0).body).toBeLessThan(SHOWER * 0.6);
+  });
+
+  it("leaves rags wearable for two days on one wash", () => {
+    // Rags are the worst rank and the one a phase-1 player is stuck in, so it
+    // is the rank that decides whether the laundromat is a chore or a trap.
+    expect(aDay(0).clothes * 2).toBeLessThan(LAUNDRY + 10);
+  });
+
+  it("still rewards better clothes with less looking after", () => {
+    const ranks = [0, 1, 2, 3, 4].map((r) => aDay(r).clothes);
+    for (let i = 1; i < ranks.length; i++) {
+      expect(ranks[i]!, `rank ${i} is no cleaner to keep than rank ${i - 1}`).toBeLessThan(ranks[i - 1]!);
+    }
+  });
+});

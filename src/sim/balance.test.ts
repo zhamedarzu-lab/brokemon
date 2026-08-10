@@ -3,9 +3,19 @@ import { markerPos, STARTING_TOWN, townById, zoneAt } from "../world/map";
 /** These bots only ever walk Brokemon Town. */
 const TOWN = townById(STARTING_TOWN);
 
-import { approaches, sleepableBenches, type Approach } from "../world/landmarks";
+import {
+  approaches,
+  sleepableBenches,
+  type Approach,
+} from "../world/landmarks";
 import { interact } from "./actions";
-import { CLASS_COST, EMPLOYMENT, EMPLOYMENT_ORDER, GIGS, energyToFinish } from "./jobs";
+import {
+  CLASS_COST,
+  EMPLOYMENT,
+  EMPLOYMENT_ORDER,
+  GIGS,
+  energyToFinish,
+} from "./jobs";
 import { countOf, type ItemId } from "./items";
 import type { Choice, Prompt } from "./prompt";
 import { Rng } from "./rng";
@@ -41,7 +51,8 @@ class Bot {
     this.ctx = {
       state: this.state,
       rng: this.rng,
-      advance: (minutes, opts) => void advance(this.state, this.rng, { minutes, ...opts }),
+      advance: (minutes, opts) =>
+        void advance(this.state, this.rng, { minutes, ...opts }),
       teleport: (x, y) => {
         this.state.player.pos = { x, y };
       },
@@ -78,7 +89,11 @@ class Bot {
 
   /** True if the option exists and isn't greyed out. */
   canChoose(prompt: Prompt | null, label: string): boolean {
-    return Boolean(prompt?.choices?.some((c) => !c.locked && c.label.toLowerCase().includes(label.toLowerCase())));
+    return Boolean(
+      prompt?.choices?.some(
+        (c) => !c.locked && c.label.toLowerCase().includes(label.toLowerCase()),
+      ),
+    );
   }
 
   waitUntilHour(hour: number): void {
@@ -88,7 +103,12 @@ class Bot {
 
   eatIfHungry(): void {
     const s = this.state;
-    const order: ItemId[] = ["sandwich", "hotMeal", "instantNoodles", "trashFood"];
+    const order: ItemId[] = [
+      "sandwich",
+      "hotMeal",
+      "instantNoodles",
+      "trashFood",
+    ];
     while (s.meters.hunger < 60) {
       const pick = order.find((id) => countOf(s.inventory, id) > 0);
       if (!pick) break;
@@ -119,7 +139,9 @@ class Bot {
     // Laundry isn't available at the shelter, but for test stability we also
     // push clothes up so the combined meter holds above the threshold.
     if (this.state.clothesClean < 50) this.state.clothesClean = 50;
-    this.state.meters.hygiene = Math.round((this.state.bodyClean + this.state.clothesClean) / 2);
+    this.state.meters.hygiene = Math.round(
+      (this.state.bodyClean + this.state.clothesClean) / 2,
+    );
   }
 }
 
@@ -230,20 +252,104 @@ describe("phase 1 — the streets", () => {
     for (const seed of [7, 3, 11, 21, 42, 1, 2, 5, 13, 99]) {
       const bot = new Bot(seed);
       for (let day = 0; day < 14; day++) survivalDay(bot);
-      expect(bot.state.meters.health, `seed ${seed} died on the street`).toBeGreaterThan(0);
-      expect(bot.state.daysSurvived, `seed ${seed} lost days to collapsing`).toBeGreaterThanOrEqual(13);
+      expect(
+        bot.state.meters.health,
+        `seed ${seed} died on the street`,
+      ).toBeGreaterThan(0);
+      expect(
+        bot.state.daysSurvived,
+        `seed ${seed} lost days to collapsing`,
+      ).toBeGreaterThanOrEqual(13);
       collapses.push(bot.state.collapses);
     }
     const mean = collapses.reduce((a, b) => a + b, 0) / collapses.length;
-    expect(mean, `collapses per fortnight across ten seeds: ${collapses.join(", ")}`).toBeLessThanOrEqual(3.5);
-    expect(Math.max(...collapses), "one seed is having a much worse fortnight than the rest").toBeLessThanOrEqual(6);
+    expect(
+      mean,
+      `collapses per fortnight across ten seeds: ${collapses.join(", ")}`,
+    ).toBeLessThanOrEqual(3.5);
+    expect(
+      Math.max(...collapses),
+      "one seed is having a much worse fortnight than the rest",
+    ).toBeLessThanOrEqual(6);
   });
 
   it("earns enough over two weeks to buy in to phase 2", () => {
-    const bot = new Bot(11);
-    for (let day = 0; day < 14; day++) survivalDay(bot);
-    // Soap ($4) + thrift clothes ($15) + a hostel cot ($9) is the way off the street.
-    expect(bot.state.cash).toBeGreaterThan(28);
+    // Soap ($4) + thrift clothes ($15) + a hostel cot ($9): $28 is the price of
+    // getting off the street, and a fortnight of scraping has to reach it.
+    //
+    // Measured on what the fortnight *earns*, not on what is in the bot's
+    // pocket on the fourteenth night. This bot has no savings goal — it buys
+    // food the moment it is hungry — so its purse swings $12 to $514 across ten
+    // seeds while its earnings sit in a tight $582–716 band. The purse measures
+    // the bot's spending policy; the earnings measure the game. Asserting on
+    // the purse, on one seed, is how this test spent a year looking green.
+    const BUY_IN = 28;
+    const earnings: number[] = [];
+    const purses: number[] = [];
+    for (const seed of [11, 7, 3, 21, 42, 1, 2, 5, 13, 99]) {
+      const bot = new Bot(seed);
+      for (let day = 0; day < 14; day++) survivalDay(bot);
+      earnings.push(bot.state.totalEarned);
+      purses.push(bot.state.cash);
+    }
+    for (const [i, earned] of earnings.entries()) {
+      expect(earned, `seed ${i} earned only $${earned} in a fortnight`).toBeGreaterThan(200);
+    }
+    // And a bot that spends as it goes still typically has the buy-in on it.
+    const median = [...purses].sort((a, b) => a - b)[Math.floor(purses.length / 2)]!;
+    expect(median, `purses: ${purses.join(", ")}`).toBeGreaterThan(BUY_IN);
+  });
+
+  it("does not charge you for washing before you sit down", () => {
+    /**
+     * Sympathy used to be a single point at appearance 32 falling away in both
+     * directions, so a shelter shower — which moves a phase-1 player from about
+     * 32 to about 50 — took roughly a third off the only income they had. The
+     * optimal beggar kept themselves half-dirty on purpose, and it only showed
+     * up as a bug when hygiene was made easier to hold and a fortnight on the
+     * street stopped covering the $28 to get off it.
+     *
+     * Rough and washed both have to sit inside the plateau.
+     */
+    function takeAt(hygiene: number): number {
+      const bot = new Bot(19);
+      let total = 0;
+      for (let i = 0; i < 60; i++) {
+        bot.state.meters.hygiene = hygiene;
+        bot.state.bodyClean = hygiene;
+        bot.state.clothesClean = hygiene;
+        bot.state.meters.morale = 80;
+        bot.state.meters.energy = 80;
+        const before = bot.state.cash;
+        bot.standOn("panhandleSpot");
+        bot.drive(bot.press(), "sit down and ask", "get up");
+        total += bot.state.cash - before;
+      }
+      return total;
+    }
+    const rough = takeAt(30);
+    const washed = takeAt(60);
+    expect(washed, `rough $${rough} vs washed $${washed}`).toBeGreaterThan(rough * 0.85);
+  });
+
+  it("still pays nothing to somebody who visibly does not need it", () => {
+    const bot = new Bot(19);
+    bot.state.meters.hygiene = 100;
+    bot.state.bodyClean = 100;
+    bot.state.clothesClean = 100;
+    bot.state.wardrobe.push("tailored");
+    bot.state.wearing = "tailored";
+    expect(currentAppearance(bot.state)).toBeGreaterThan(75);
+    let total = 0;
+    for (let i = 0; i < 20; i++) {
+      bot.state.meters.morale = 80;
+      bot.state.meters.energy = 80;
+      const before = bot.state.cash;
+      bot.standOn("panhandleSpot");
+      bot.drive(bot.press(), "sit down and ask", "get up");
+      total += bot.state.cash - before;
+    }
+    expect(total, "a man in a tailored suit is doing well on the corner").toBe(0);
   });
 
   it("does not let panhandling alone make anyone rich", () => {
@@ -258,7 +364,11 @@ describe("phase 1 — the streets", () => {
       bot.state.meters.energy = 80;
     }
     // Twenty hours on the corner. It should read as grim, not as a strategy.
-    expect(total).toBeLessThan(200);
+    //
+    // The ceiling was $200 against a measured $52–72 across ten seeds, which is
+    // three times slack — it would have sat green through a doubling of what
+    // the corner pays. $110 still leaves room for the spread and would notice.
+    expect(total).toBeLessThan(110);
   });
 
   it("pays out from an untouched dumpster on the first morning", () => {
@@ -268,7 +378,8 @@ describe("phase 1 — the streets", () => {
     expect(prompt?.lines.join(" ")).not.toContain("already been through");
     // Cans go straight in the bag; food is offered rather than given.
     const gotSomething =
-      countOf(bot.state.inventory, "recyclables") > 0 || bot.canChoose(prompt, "take it");
+      countOf(bot.state.inventory, "recyclables") > 0 ||
+      bot.canChoose(prompt, "take it");
     expect(gotSomething).toBe(true);
   });
 
@@ -322,7 +433,14 @@ describe("phase 1 — the streets", () => {
 describe("phase 2 — off the street", () => {
   it("opens the hostel as soon as you have the nightly rate", () => {
     const bot = new Bot(9);
-    bot.state.meters = { hunger: 90, thirst: 90, hygiene: 60, energy: 40, morale: 60, health: 90 };
+    bot.state.meters = {
+      hunger: 90,
+      thirst: 90,
+      hygiene: 60,
+      energy: 40,
+      morale: 60,
+      health: 90,
+    };
     bot.state.bodyClean = 60;
     bot.state.clothesClean = 60;
     bot.state.cash = 3;
@@ -351,7 +469,14 @@ describe("phase 2 — off the street", () => {
   it("pays better for a mart shift than for a day on the corner", () => {
     const bot = new Bot(13);
     const s = bot.state;
-    s.meters = { hunger: 90, thirst: 90, hygiene: 85, energy: 90, morale: 70, health: 90 };
+    s.meters = {
+      hunger: 90,
+      thirst: 90,
+      hygiene: 85,
+      energy: 90,
+      morale: 70,
+      health: 90,
+    };
     s.bodyClean = 85;
     s.clothesClean = 85;
     s.wearing = "thrift";
@@ -370,7 +495,14 @@ describe("phase 2 — off the street", () => {
     const bot = new Bot(13);
     const s = bot.state;
     // Clean enough to be let through the door, nowhere near clean enough to work.
-    s.meters = { hunger: 90, thirst: 90, hygiene: 55, energy: 90, morale: 70, health: 90 };
+    s.meters = {
+      hunger: 90,
+      thirst: 90,
+      hygiene: 55,
+      energy: 90,
+      morale: 70,
+      health: 90,
+    };
     s.bodyClean = 55;
     s.clothesClean = 55;
     s.employment = "martClerk";
@@ -458,8 +590,8 @@ describe("phase 3 and 4 — the ladder", () => {
     const bot = new Bot(7);
     const s = bot.state;
     setHousing(s, "estate");
-    s.businessOwned = true;      // qualifies for "Run for mayor" option
-    s.reputation[STARTING_TOWN] = 100;          // odds capped at 95 % — almost guaranteed win
+    s.businessOwned = true; // qualifies for "Run for mayor" option
+    s.reputation[STARTING_TOWN] = 100; // odds capped at 95 % — almost guaranteed win
     s.cash = CAMPAIGN_PRICE + 1_000;
     bot.waitUntilHour(10);
 
@@ -479,7 +611,14 @@ describe("phase 3 and 4 — the ladder", () => {
     const bot = new Bot(4);
     const s = bot.state;
     s.cash = 200;
-    s.meters = { hunger: 90, thirst: 90, hygiene: 70, energy: 90, morale: 70, health: 90 };
+    s.meters = {
+      hunger: 90,
+      thirst: 90,
+      hygiene: 70,
+      energy: 90,
+      morale: 70,
+      health: 90,
+    };
     s.bodyClean = 70;
     s.clothesClean = 70;
     bot.waitUntilHour(19);
@@ -496,7 +635,8 @@ describe("phase 3 and 4 — the ladder", () => {
 /** The assignment the board just handed out, with an address on it. */
 function takeAssignment(s: GameState): Assignment {
   const a = s.assignment;
-  if (!a || a.targets.length === 0) throw new Error("the board handed out a job with no address");
+  if (!a || a.targets.length === 0)
+    throw new Error("the board handed out a job with no address");
   return a;
 }
 
@@ -505,20 +645,34 @@ describe("jobs the town can actually deliver on", () => {
     // Yard work asks for a strong back and nothing else, but one of the
     // addresses was behind the security gate. Taking it burned the day's only
     // yard slot on a job that could never be finished.
-    const bot = new Bot(1);
-    const s = bot.state;
-    s.meters = { hunger: 90, thirst: 90, hygiene: 20, energy: 90, morale: 60, health: 90 };
-    s.bodyClean = 20;
-    s.clothesClean = 20;
-    expect(currentAppearance(s)).toBeLessThan(70);
+    // Sampled across four seeds rather than one: this is a "never" about a
+    // random draw, and thirty draws on a single seed can miss a rare bad spot.
+    for (const seed of [1, 4, 9, 23]) {
+      const bot = new Bot(seed);
+      const s = bot.state;
+      s.meters = {
+        hunger: 90,
+        thirst: 90,
+        hygiene: 20,
+        energy: 90,
+        morale: 60,
+        health: 90,
+      };
+      s.bodyClean = 20;
+      s.clothesClean = 20;
+      expect(currentAppearance(s)).toBeLessThan(70);
 
-    for (let i = 0; i < 30; i++) {
-      s.assignment = null;
-      s.gigsToday = {};
-      bot.standOn("jobBoard");
-      bot.drive(bot.press(), "Yard work", "Take the job");
-      const job = takeAssignment(s);
-      expect(zoneAt(TOWN, job.targets[0]!.y).id, `sent to ${job.label}`).not.toBe("heights");
+      for (let i = 0; i < 30; i++) {
+        s.assignment = null;
+        s.gigsToday = {};
+        bot.standOn("jobBoard");
+        bot.drive(bot.press(), "Yard work", "Take the job");
+        const job = takeAssignment(s);
+        expect(
+          zoneAt(TOWN, job.targets[0]!.y).id,
+          `sent to ${job.label}`,
+        ).not.toBe("heights");
+      }
     }
   });
 
@@ -537,7 +691,8 @@ describe("jobs the town can actually deliver on", () => {
       s.gigsToday = {};
       bot.standOn("jobBoard");
       bot.drive(bot.press(), "Yard work", "Take the job");
-      sawTheHill = zoneAt(TOWN, takeAssignment(s).targets[0]!.y).id === "heights";
+      sawTheHill =
+        zoneAt(TOWN, takeAssignment(s).targets[0]!.y).id === "heights";
     }
     expect(sawTheHill).toBe(true);
   });
@@ -546,17 +701,29 @@ describe("jobs the town can actually deliver on", () => {
     // Grounds Crew carried an experience requirement of zero shifts, which no
     // check can ever fail — so the best-paid job of the tier was open on the
     // first morning and the two beneath it were content nobody would touch.
-    const withExperience = EMPLOYMENT_ORDER.filter((id) => EMPLOYMENT[id].requires.experience);
+    const withExperience = EMPLOYMENT_ORDER.filter(
+      (id) => EMPLOYMENT[id].requires.experience,
+    );
     expect(withExperience.length).toBeGreaterThan(0);
     for (const id of withExperience) {
-      expect(EMPLOYMENT[id].requires.experience!.shifts, `${id} asks for no shifts`).toBeGreaterThan(0);
+      expect(
+        EMPLOYMENT[id].requires.experience!.shifts,
+        `${id} asks for no shifts`,
+      ).toBeGreaterThan(0);
     }
   });
 
   it("does not open the best phase-2 job to someone off the bench", () => {
     const bot = new Bot(1);
     const s = bot.state;
-    s.meters = { hunger: 90, thirst: 90, hygiene: 70, energy: 90, morale: 60, health: 90 };
+    s.meters = {
+      hunger: 90,
+      thirst: 90,
+      hygiene: 70,
+      energy: 90,
+      morale: 60,
+      health: 90,
+    };
     s.bodyClean = 70;
     s.clothesClean = 70;
     expect(checkRequirements(s, EMPLOYMENT.landscaper.requires).ok).toBe(false);
@@ -570,7 +737,14 @@ describe("the Mart after hours", () => {
     const bot = new Bot(1);
     const s = bot.state;
     s.employment = "nightStock";
-    s.meters = { hunger: 90, thirst: 90, hygiene: 90, energy: 90, morale: 60, health: 90 };
+    s.meters = {
+      hunger: 90,
+      thirst: 90,
+      hygiene: 90,
+      energy: 90,
+      morale: 60,
+      health: 90,
+    };
     s.bodyClean = 90;
     s.clothesClean = 90;
     s.time = 23 * 60 + 30; // shop shut at 11, shift runs to 3AM
@@ -639,7 +813,14 @@ describe("night school after a day's work", () => {
     // Wait for the class to open first — twelve hours of clock would otherwise
     // burn off the very energy we are trying to arrive with.
     bot.waitUntilHour(19);
-    s.meters = { hunger: 70, thirst: 70, hygiene: 60, energy, morale: 60, health: 90 };
+    s.meters = {
+      hunger: 70,
+      thirst: 70,
+      hygiene: 60,
+      energy,
+      morale: 60,
+      health: 90,
+    };
     s.bodyClean = 60;
     s.clothesClean = 60;
     bot.standOn("college");
@@ -686,7 +867,9 @@ describe("the job board says what a job will take out of you", () => {
   it("shows the energy you need to finish, not just to start", () => {
     const bot = new Bot(5);
     bot.standOn("jobBoard");
-    const shown = (bot.press()?.choices ?? []).find((c) => c.label === "Deliver flyers");
+    const shown = (bot.press()?.choices ?? []).find(
+      (c) => c.label === "Deliver flyers",
+    );
     expect(shown?.hint).toContain("energy");
   });
 
@@ -694,7 +877,9 @@ describe("the job board says what a job will take out of you", () => {
     // What strands a player is not the total bill, it is arriving at the last
     // address already under the number, with the stack of paper still in the
     // bag when the window closes.
-    expect(energyToFinish("flyers")).toBeGreaterThan(GIGS.flyers.requires.energy ?? 0);
+    expect(energyToFinish("flyers")).toBeGreaterThan(
+      GIGS.flyers.requires.energy ?? 0,
+    );
     // One stop, so there is nothing to burn before the only check there is.
     expect(energyToFinish("yardWork")).toBe(GIGS.yardWork.requires.energy ?? 0);
   });
@@ -703,7 +888,9 @@ describe("the job board says what a job will take out of you", () => {
     const bot = new Bot(5);
     bot.state.meters.energy = energyToFinish("flyers") - 1;
     bot.standOn("jobBoard");
-    const shown = (bot.press()?.choices ?? []).find((c) => c.label === "Deliver flyers");
+    const shown = (bot.press()?.choices ?? []).find(
+      (c) => c.label === "Deliver flyers",
+    );
     expect(shown?.hint).toContain("run dry");
   });
 
@@ -711,7 +898,9 @@ describe("the job board says what a job will take out of you", () => {
     const bot = new Bot(5);
     bot.state.meters.energy = 100;
     bot.standOn("jobBoard");
-    const shown = (bot.press()?.choices ?? []).find((c) => c.label === "Deliver flyers");
+    const shown = (bot.press()?.choices ?? []).find(
+      (c) => c.label === "Deliver flyers",
+    );
     expect(shown?.hint).not.toContain("run dry");
   });
 });

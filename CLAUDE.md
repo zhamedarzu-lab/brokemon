@@ -98,12 +98,25 @@ has already been made once, on ten minutes of evidence.
   tests hold the contract: every door resolves to itself from its own doorstep,
   and every encounter fires for at least one of nine plausible saves, so a
   guard written too tight shows up as dead text rather than as silence.
-- **Hunger and thirst are sized to a cadence, and the rig prints it.** The
-  target is two meals and three drinks a day; `npm run playtest` ends with the
-  measured figures. At the old rates it ran 2.3 and 3.1 — the target hit exactly,
-  with no headroom, so every meter was one you nursed. 3.0/hr and 4.2/hr put it
-  at 2.0 and 3.0 with room to spare. If either figure drifts past about 2.5 or
-  3.5, `DECAY_PER_HOUR` is why.
+- **Panhandling has a plateau, not a peak.** Sympathy is flat across appearance
+  28–50 and falls away on both sides. It used to be a single point at 32, which
+  priced *washing*: a shelter shower moves a phase-1 player from ~32 to ~50 and
+  took a third off the only income they had. Flattening the bottom too is the
+  other mistake — it handed 2.4x to a bot sitting at appearance 2.
+- **Hunger, thirst and hygiene are sized to a cadence, and the rig prints it.** The
+  target is two meals, three drinks, one wash a day and laundry every few;
+  `npm run playtest` ends with all four measured. At the old rates it ran 2.3 and
+  3.1 — the target hit exactly, with no headroom, so every meter was one you
+  nursed. 3.0/hr and 4.2/hr put it at 2.0 and 3.0 with room to spare. Hygiene at
+  1.5/hr body and rags at 2.0/hr costs 36 and 38 a day against a +70 shower and
+  a +80 laundry, so one wash covers two days.
+- **A meter that decays slower can still cost you a run, through the rig.** The
+  hygiene change looked like it cost 11 days until the cause turned out to be
+  `wash()`'s trigger: at a target of 65 the bot lived in the band just above its
+  job's hygiene door, and every shift or downpour put it under one and cost a
+  strike — 407 re-hires a run against 337 at a target of 80. Compared fairly,
+  slower decay costs 3 days, inside the noise. **A/B the rig's policy before
+  believing a meter change.**
 - **Bins are a round, not a button.** `TRASH` in `venues.ts` gives fourteen
   doors their own bins, each with its own can/food mix and its own refill clock;
   `searchTrash` in `work.ts` runs all of them and the loose street dumpsters.

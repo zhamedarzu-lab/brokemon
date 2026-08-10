@@ -461,7 +461,7 @@ const HOME_MARKER: Partial<Record<HousingId, string>> = {
   room: "weeklyRooms",
 };
 
-export const TOPUPS = { meals: 0, drinks: 0 };
+export const TOPUPS = { meals: 0, drinks: 0, washes: 0, laundry: 0 };
 
 function drink(p: Player): void {
   const water = scenery(townOf(p.s)).water;
@@ -498,9 +498,32 @@ function nearest(p: Player, options: Approach[]): Approach {
  * (49/70), which read as an impossible job requirement and was actually an
  * instrument that had never heard of a launderette.
  */
-function wash(p: Player, target = 65): void {
+/**
+ * The threshold is a trigger, not a dose — a shower restores 70-odd points
+ * whenever you take one, so `target` only decides how far you let yourself
+ * drift first.
+ *
+ * At 65 the bot spent its whole run in the band just above the door
+ * requirements of the job it held, and every lump of dirt — a shift, a downpour
+ * — put it under one and cost it a strike. Three strikes drop you the length of
+ * the ladder. It was being re-hired every four days for a hundred and fifty
+ * days: 407 hires a run against 337 at a target of 80, and seventeen days of
+ * run length, for a tenth of a wash a day more. A competent player who knows
+ * their job has a hygiene door does not live on the edge of it.
+ */
+function wash(p: Player, target = 80): void {
   const s = p.s;
   if (s.meters.hygiene >= target) return;
+  const bodyBefore = s.bodyClean;
+  try {
+    washBody(p, target);
+  } finally {
+    if (s.bodyClean > bodyBefore) TOPUPS.washes++;
+  }
+}
+
+function washBody(p: Player, target: number): void {
+  const s = p.s;
 
   // Clothes first when they are the half that is dragging: they are the
   // expensive half to fix and the one with opening hours.
@@ -533,7 +556,9 @@ function washClothes(p: Player): void {
   if (!at || s.cash < at.need) return;
   if (!withinHours(s.time, at.fromHour, at.toHour)) return;
   p.goto(at.marker);
+  const before = s.clothesClean;
   p.drive(p.press(), ...at.take);
+  if (s.clothesClean > before) TOPUPS.laundry++;
 }
 
 /**
@@ -1494,6 +1519,7 @@ function summarise(lengths: number[]): void {
   // that is a meter the player is nursing rather than managing.
   const days = lengths.reduce((a, b) => a + b, 0);
   console.log(
-    `Per day: ${(TOPUPS.meals / days).toFixed(1)} meals, ${(TOPUPS.drinks / days).toFixed(1)} drinks.`,
+    `Per day: ${(TOPUPS.meals / days).toFixed(1)} meals, ${(TOPUPS.drinks / days).toFixed(1)} drinks, ` +
+      `${(TOPUPS.washes / days).toFixed(1)} washes, ${(TOPUPS.laundry / days).toFixed(1)} laundry.`,
   );
 }

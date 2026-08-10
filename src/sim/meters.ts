@@ -40,7 +40,11 @@ export const METER_LABEL: Record<MeterId, string> = {
 export const DECAY_PER_HOUR: Record<MeterId, number> = {
   hunger: 3.0,
   thirst: 4.2,
-  hygiene: 1.9,
+  // Body cleanliness. A day used to cost about 46 of it against a +70 shower,
+  // which is a wash every day and a half — so hygiene was a bar you were
+  // topping up rather than one you kept. At 1.5 a day costs 36 and one shower
+  // comfortably covers two.
+  hygiene: 1.5,
   // A 15-hour day at light exertion burned 61 of a 100-point bar, against the
   // 75 a hostel bed gives back — so energy slid downhill no matter what you
   // did. Work also charges its own lump cost on top of this.
@@ -80,8 +84,17 @@ export interface HygieneSub {
   clothesClean: number;
 }
 
-/** Clothes-cleanliness points lost per in-game hour, indexed by outfit rank (0=rags … 4=tailored). */
-const CLOTHES_DECAY_BY_RANK = [3.0, 1.8, 1.2, 0.8, 0.5];
+/**
+ * Clothes-cleanliness points lost per in-game hour, indexed by outfit rank
+ * (0=rags … 4=tailored).
+ *
+ * Sized so one wash covers about two days at every rank. Rags used to shed 58
+ * points a day against an $8 laundry that gives 80, which put you back at the
+ * machine every thirty-four hours — and the whole point of better clothes is
+ * that they need less looking after, which only reads if the bad ones are
+ * survivable in the first place.
+ */
+const CLOTHES_DECAY_BY_RANK = [2.0, 1.3, 0.9, 0.6, 0.4];
 
 /**
  * What running on empty does to the other half.

@@ -200,9 +200,24 @@ export function panhandle(ctx: ActionCtx): Prompt {
   ctx.advance(gig.minutes, { exertion: 1 });
   applyDelta(s.meters, gig.cost);
 
-  // Sympathy peaks in the middle. Too clean and you look fine; filthy and
-  // people look at their phones until they are past you.
-  const sympathy = clamp01(1 - Math.abs(look - 32) / 52);
+  // Sympathy has a plateau in the middle rather than a peak.
+  //
+  // It used to be a single point at 32 falling away in both directions, which
+  // quietly priced staying clean: a shelter shower moves a phase-1 player from
+  // about 32 to about 50 and that took a third off the only income they had.
+  // The optimal beggar kept themselves half-dirty on purpose. Widening the top
+  // to 28–50 means ordinary self-care costs nothing and looking well-off still
+  // costs everything.
+  //
+  // The bottom keeps its falloff. A first attempt flattened that too and
+  // handed 2.4x to a bot sitting at appearance 2 — being unwashed is not
+  // supposed to be a strategy in either direction.
+  const sympathy =
+    look < 28
+      ? clamp01(0.45 + (look / 28) * 0.55) // filthy: people find somewhere else to look
+      : look <= 50
+        ? 1 // rough but human, and a plateau rather than a point
+        : clamp01(1 - (look - 50) / 25); // visibly doing fine: nothing
   const hour = hourOf(s.time);
   const traffic = hour >= 8 && hour < 20 ? 1 : 0.35;
   const weather = WEATHER[s.weather].payScale;
