@@ -3,7 +3,7 @@ import { tileAt } from "../world/tiles";
 import { countOf } from "./items";
 import { applyDelta } from "./meters";
 import { menu, say, type Choice, type Prompt } from "./prompt";
-import { currentAppearance, pushLog, townOf, type GameState } from "./state";
+import { currentAppearance, pushLog, restoreBody, townOf, type GameState } from "./state";
 import { HEIGHTS_GATE_LOOK, HOUSING } from "./social";
 import { VENUES } from "./venues";
 import { panhandle, searchTrash, sleep, STREET_BIN, STREET_DUMPSTER, workAssignmentStop, type ActionCtx } from "./work";
@@ -169,8 +169,17 @@ function tileAction(ctx: ActionCtx, cell: Vec2): Prompt | null {
             label: "Wash your face and hands",
             hint: "10 min",
             run: () => {
+              const last = s.flags["fountain:wash"];
+              if (last !== undefined && last > s.time - 240) {
+                const minsLeft = Math.ceil(last + 240 - s.time);
+                const h = Math.floor(minsLeft / 60);
+                const m = minsLeft % 60;
+                const wait = h > 0 ? `${h}h ${m}m` : `${m}m`;
+                return menu(water.title, [`You have done this recently. Give it ${wait} before it does you any good.`], [BACK]);
+              }
               ctx.advance(10);
-              applyDelta(s.meters, { hygiene: +8, morale: +2 });
+              restoreBody(s, 4);
+              s.flags["fountain:wash"] = s.time;
               return menu(water.title, ["It is not a wash. It is better than nothing and people watch you do it."], [BACK]);
             },
           },
