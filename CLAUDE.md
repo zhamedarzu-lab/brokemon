@@ -61,7 +61,23 @@ has already been made once, on ten minutes of evidence.
   load time into `town.markers`, and the glyph vocabulary is shared, so a
   second town writing `!` gets the same corner for free.
 - `src/sim/coach.ts` — the intercity link. Timetable, fares, journey time.
-- `src/engine/render.ts`, `src/ui/` — presentation only.
+- `src/engine/render.ts`, `src/ui/` — presentation only. **The town is drawn
+  isometrically.** The simulation never knew what projection it was in and still
+  does not: it is a grid and a `{x, y}`, and the whole change lives in
+  `render.ts`. Three things there are worth knowing before touching it:
+  - Tile art is still authored as 16x16 squares. `inTileSpace` skews the unit
+    square onto the ground diamond and `inWallSpace` stands it up on a box face,
+    so a hundred and forty lines of speckles, brickwork and marble veining came
+    through the change unedited. Write new tile art the same way.
+  - Draw order is **painter's by `x + y`**, not row-major. A plain nested loop
+    puts (5,0) before (0,1) and walls end up drawn over what is standing in
+    front of them.
+  - Anything tall between the camera and the player is drawn at 0.32 alpha, and
+    its *floor* stays solid — `globalAlpha` composites against what is already
+    painted, so fading a whole tile at the edge of the view makes a black hole
+    rather than something you can see past. The spawn is two rows from the
+    southern retaining wall, which is the tallest thing in the game, so without
+    this the first frame of a new game hides the player completely.
 - `docs/playtest-findings.md` — open balance and design items, ranked, with the
   numbers behind each. Keep it current when something on the list gets fixed.
 
