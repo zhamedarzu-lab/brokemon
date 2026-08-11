@@ -26,6 +26,7 @@ const BINDINGS: Record<string, Button> = {
 export class Input {
   private held = new Set<Button>();
   private pressed = new Set<Button>();
+  private stick = { x: 0, y: 0 };
   private detach: () => void;
 
   constructor(target: EventTarget = window) {
@@ -71,15 +72,61 @@ export class Input {
   }
 
   /**
-   * Direction to walk this frame. Held keys win, but a press that arrived and
-   * released between two frames still counts — otherwise a quick tap on the
-   * on-screen d-pad does nothing at all.
+   * Where the player is pushing, as a step of -1, 0 or 1 on each axis.
+   *
+   * Two keys at once make a diagonal, which is the whole point: the town is
+   * drawn isometrically and its streets run diagonally on screen, so W and A
+   * together walk *along* one instead of stepping around it.
+   *
+   * Held keys win, but a press that arrived and released between two frames
+   * still counts — otherwise a quick tap does nothing at all. Opposite keys
+   * cancel, so rolling a thumb across the pad never freezes you.
    */
-  heldDirection(): "up" | "down" | "left" | "right" | null {
-    const dirs = ["up", "down", "left", "right"] as const;
-    for (const d of dirs) if (this.held.has(d)) return d;
-    for (const d of dirs) if (this.pressed.has(d)) return d;
-    return null;
+  heldVector(): { x: number; y: number } {
+    const on = (b: Button) => this.held.has(b) || this.pressed.has(b);
+    let x = (on("right") ? 1 : 0) - (on("left") ? 1 : 0);
+    let y = (on("down") ? 1 : 0) - (on("up") ? 1 : 0);
+    // An analogue stick beats the buttons when it is off centre.
+    if (this.stick.x !== 0 || this.stick.y !== 0) {
+      x = this.stick.x;
+      y = this.stick.y;
+    }
+    return { x, y };
+  }
+
+  /**
+   * The on-screen joystick, in steps rather than degrees.
+   *
+   * A thumbstick that reports a continuous angle is no use to a grid: the
+   * player still moves one tile at a time. What it reports is which of the
+   * eight neighbours they are leaning towards, and the dead zone is the
+   * difference between a stick you can hold still and one that walks you into
+   * a wall while you think.
+   */
+  setStick(dx: number, dy: number): void {
+    const mag = Math.hypot(dx, dy);
+    if (mag < 0.34) {
+      this.stick = { x: 0, y: 0 };
+      return;
+    }
+    // Eight sectors, so a diagonal is as easy to hold as a cardinal.
+    const sector = Math.round(Math.atan2(dy, dx) / (Math.PI / 4));
+    const steps = [
+      [1, 0],
+      [1, 1],
+      [0, 1],
+      [-1, 1],
+      [-1, 0],
+      [-1, -1],
+      [0, -1],
+      [1, -1],
+    ] as const;
+    const [x, y] = steps[((sector % 8) + 8) % 8]!;
+    this.stick = { x, y };
+  }
+
+  clearStick(): void {
+    this.stick = { x: 0, y: 0 };
   }
 
   /** Call at the end of every frame. */
@@ -101,6 +148,7 @@ export class Input {
   clearHeld(): void {
     this.held.clear();
     this.pressed.clear();
+    this.stick = { x: 0, y: 0 };
   }
 
   dispose(): void {

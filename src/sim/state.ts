@@ -6,7 +6,16 @@ import { appearance, housingRank, outfitRank, OUTFITS, type HousingId, type Outf
 import type { Meters } from "./meters";
 import type { WeatherId } from "./weather";
 
-export type Facing = "up" | "down" | "left" | "right";
+/** Eight ways to face. The four diagonals arrived with diagonal movement. */
+export type Facing =
+  | "up"
+  | "down"
+  | "left"
+  | "right"
+  | "upLeft"
+  | "upRight"
+  | "downLeft"
+  | "downRight";
 
 /** One value per town. Anything you can hold in two places at once lives in one of these. */
 export type PerTown<T> = Record<TownId, T>;

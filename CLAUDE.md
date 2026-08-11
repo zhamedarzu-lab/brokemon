@@ -78,6 +78,20 @@ has already been made once, on ten minutes of evidence.
     rather than something you can see past. The spawn is two rows from the
     southern retaining wall, which is the tallest thing in the game, so without
     this the first frame of a new game hides the player completely.
+- `src/sim/move.ts` — **the movement rules, read by both the game loop and the
+  walking rig.** Which steps are legal, which way a step leaves you facing, and
+  what a step costs. Movement is eight-way: two keys at once on a keyboard, an
+  eight-sector thumbstick on touch. Two things there are load-bearing:
+  - **A diagonal costs root two.** It covers 1.41 tiles of ground and takes
+    1.41x as long, so ground covered per second is the same in every direction
+    and diagonals buy shorter *routes*, not speed. Charging one would have given
+    every path in the game a 41% discount.
+  - **A diagonal needs both squares it passes between to be clear.** The looser
+    rule lets you clip a corner, and in a town whose doorways are one tile wide
+    it would be a second, invisible way into every building.
+  The rig's pathfinder is a Dijkstra over the same rules, not a BFS — a rig that
+  walked diagonals for free would report a town 30% smaller than the one being
+  played, in the same walking figure the findings are built on.
 - `docs/playtest-findings.md` — open balance and design items, ranked, with the
   numbers behind each. Keep it current when something on the list gets fixed.
 

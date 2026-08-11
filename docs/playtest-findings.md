@@ -133,6 +133,14 @@ What the removal cost and what it exposed:
 | 65 | Three dialogues fired without the player doing anything | Weather changes opened a box on every turn to wet or cold; overnight income opened one every single day once you owned anything; the fever notice opened every time you caught one. All three are in the HUD or the Log already. Weather is silent now, income and fever open once per run |
 | 66 | Run length, with no events at all | Ten seeds: **169 → 206 days** before the reputation fix, **193** after, 10/10 winning, sd 4. The encounters were a net income source; losing them makes the run about a seventh longer and considerably quieter |
 
+## Diagonal movement
+
+| # | Item | What was found |
+|---|------|----------------|
+| 67 | You could not walk down a diagonal street | The town is drawn isometrically and its streets run diagonally on screen, so a four-direction grid had the control fighting the projection. Movement is eight-way now — two keys at once on a keyboard, an eight-sector thumbstick on touch, replacing a d-pad that could only ever ask for four. Brokedale's walking drops **91 → 77 minutes a day**; run length moves 193 → 192 across ten seeds, which is inside a noise floor of 2 |
+| 68 | The rig would have priced diagonals at zero | Its pathfinder was a breadth-first search counting steps, which is right only while every step is worth one tile. It is a Dijkstra over `move.ts` now. Left alone it would have reported a town 30% smaller than the one being played, in the same walking figure this document is built on |
+| 69 | The Brokedale report compared against a number nothing computed | `164 min a day in Brokemon` was a literal in a template string. Measured over ten seeds it is **303**. It had been wrong by a factor of nearly two for an unknown length of time, in the line that exists to justify the whole second town |
+
 ## Open — ranked by how much they cost the player
 
 - **One Brokedale seed loses its job 93 times.** Seed 7 re-hires 93 times across

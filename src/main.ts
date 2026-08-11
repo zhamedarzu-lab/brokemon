@@ -2,6 +2,7 @@ import "./styles.css";
 
 import { Input, type Button } from "./engine/input";
 import { CANVAS_H, CANVAS_W, render } from "./engine/render";
+import { canStep, facingFor, stepCost } from "./sim/move";
 import { interact } from "./sim/actions";
 
 import type { ItemId } from "./sim/items";
@@ -16,7 +17,7 @@ import { cap, consume, type ActionCtx } from "./sim/work";
 import { Dialogue } from "./ui/dialogue";
 import { Hud } from "./ui/hud";
 import { Journal } from "./ui/journal";
-import { hasMarker, isSolid, markerPos } from "./world/map";
+import { hasMarker, markerPos } from "./world/map";
 
 const STEP_MS = 180;
 const ROLLER_SKATES_STEP_MS = 162;
@@ -31,6 +32,8 @@ class Game {
   private state: GameState;
 
   private rng: Rng;
+  /** Root two while the current step is a diagonal, 1 otherwise. */
+  private stepScale = 1;
 
   private input: Input;
 
@@ -235,7 +238,7 @@ class Game {
       STEP_MS;
 
     if (p.moveFrom !== null) {
-      p.moveProgress += dt / stepMs;
+      p.moveProgress += dt / (stepMs * this.stepScale);
       this.tick(dt / MS_PER_MINUTE, { exertion: 1.35 });
       if (p.moveProgress >= 1) {
         p.moveProgress = 0;
@@ -245,22 +248,33 @@ class Game {
       return;
     }
 
-    const dir = this.input.heldDirection();
-    if (!dir) return;
+    const push = this.input.heldVector();
+    const facing = facingFor(push.x, push.y);
+    if (!facing) return;
 
-    p.facing = dir;
+    p.facing = facing;
     if (s.meters.energy <= 0 && this.rng.chance(0.35)) {
       // Running on empty: you keep stopping.
       return;
     }
 
-    const d = dir === "up" ? [0, -1] : dir === "down" ? [0, 1] : dir === "left" ? [-1, 0] : [1, 0];
-    const nx = p.pos.x + d[0]!;
-    const ny = p.pos.y + d[1]!;
-    if (isSolid(townOf(s), nx, ny)) return;
+    const town = townOf(s);
+    let dx = push.x;
+    let dy = push.y;
+    if (!canStep(town, p.pos, dx, dy)) {
+      // A diagonal into a corner still walks: keep whichever half is clear, so
+      // holding W and A along a wall slides down it instead of stopping dead.
+      if (dx !== 0 && dy !== 0 && canStep(town, p.pos, dx, 0)) dy = 0;
+      else if (dx !== 0 && dy !== 0 && canStep(town, p.pos, 0, dy)) dx = 0;
+      else return;
+    }
 
+    // A diagonal covers root two tiles of ground and takes root two as long.
+    // Without this, every route in the game would be 41% cheaper the moment
+    // diagonals existed.
+    this.stepScale = stepCost(dx, dy);
     p.moveFrom = { ...p.pos };
-    p.pos = { x: nx, y: ny };
+    p.pos = { x: p.pos.x + dx, y: p.pos.y + dy };
     p.moveProgress = 0;
   }
 
@@ -337,6 +351,67 @@ class Game {
       // Stops iPadOS turning a quick double tap on a button into a page zoom.
       el.addEventListener("dblclick", (e) => e.preventDefault());
     });
+
+    this.wireStick();
+  }
+
+  /**
+   * The thumbstick.
+   *
+   * A d-pad can only ask for four directions, and this town's streets run
+   * diagonally on screen — so the pad was the control fighting the projection.
+   * The stick reports one of eight neighbours, not an angle, because the player
+   * still moves a tile at a time; `Input.setStick` does that reduction and the
+   * dead zone that makes the thing holdable.
+   *
+   * It follows the finger from wherever it lands rather than from the centre of
+   * the pad, which is what stops your thumb drifting off the control while you
+   * are looking at the game instead of at your hand.
+   */
+  private wireStick(): void {
+    const stick = document.querySelector<HTMLElement>("#stick");
+    const knob = document.querySelector<HTMLElement>("#stick-knob");
+    if (!stick || !knob) return;
+
+    const RADIUS = 42;
+    let pointer: number | null = null;
+    let origin = { x: 0, y: 0 };
+
+    const move = (dx: number, dy: number) => {
+      const mag = Math.hypot(dx, dy);
+      const clamp = mag > RADIUS ? RADIUS / mag : 1;
+      knob.style.transform = `translate(${dx * clamp}px, ${dy * clamp}px)`;
+      this.input.setStick(dx / RADIUS, dy / RADIUS);
+    };
+    const release = () => {
+      pointer = null;
+      stick.classList.remove("active");
+      knob.style.transform = "";
+      this.input.clearStick();
+    };
+
+    stick.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      pointer = e.pointerId;
+      stick.setPointerCapture(e.pointerId);
+      stick.classList.add("active");
+      origin = { x: e.clientX, y: e.clientY };
+      this.input.clearStick();
+    });
+    stick.addEventListener("pointermove", (e) => {
+      if (pointer !== e.pointerId) return;
+      e.preventDefault();
+      move(e.clientX - origin.x, e.clientY - origin.y);
+    });
+    // Only a real lift releases the stick. `lostpointercapture` is not one — it
+    // fires as a *consequence* of taking the capture on some engines, and
+    // treating it as a release killed the drag on its very first frame.
+    for (const type of ["pointerup", "pointercancel"] as const) {
+      stick.addEventListener(type, (e) => {
+        if (pointer !== e.pointerId) return;
+        release();
+      });
+    }
   }
 
   private toggleMinimap(): void {

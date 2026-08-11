@@ -13,6 +13,7 @@
 /** Declared rather than typed in: this file runs under vite-node, not the app. */
 declare const process: { argv: string[] };
 
+import { canStep, DIAGONAL_COST, stepCost, STEPS } from "./move";
 import { hasMarker, isSolid, markerPos, townById, STARTING_TOWN, type Town, type TownId, type Vec2 } from "../world/map";
 import { approaches, sleepableBenches, type Approach } from "../world/landmarks";
 import { interact } from "./actions";
@@ -52,7 +53,18 @@ const MS_PER_MINUTE = 260;
  */
 const TOWN: Town = townById(STARTING_TOWN);
 
-/** BFS from a tile to every reachable tile. Cached — the grids never change. */
+/**
+ * Cost from a tile to every reachable tile, in whole-tile equivalents.
+ *
+ * This was a breadth-first search counting steps, which was right while every
+ * step was worth one tile. It is a Dijkstra now, because a diagonal costs root
+ * two — and a rig that walked diagonals for free would have reported a town
+ * 30% smaller than the one being played, in the same "minutes a day walking"
+ * figure the findings doc is built on.
+ *
+ * The legality rule comes from `move.ts` rather than being written again here:
+ * the bot and the player have to disagree about nothing.
+ */
 const pathCache = new Map<string, number[][]>();
 
 function distanceField(town: Town, from: Vec2): number[][] {
@@ -60,27 +72,67 @@ function distanceField(town: Town, from: Vec2): number[][] {
   const hit = pathCache.get(k);
   if (hit) return hit;
 
-  const dist: number[][] = Array.from({ length: town.height }, () => new Array<number>(town.width).fill(-1));
-  const queue: Vec2[] = [from];
+  const dist: number[][] = Array.from({ length: town.height }, () => new Array<number>(town.width).fill(Infinity));
   dist[from.y]![from.x] = 0;
-  for (let head = 0; head < queue.length; head++) {
-    const cur = queue[head]!;
-    const d = dist[cur.y]![cur.x]!;
-    for (const [dx, dy] of [[0, -1], [0, 1], [-1, 0], [1, 0]] as const) {
-      const nx = cur.x + dx;
-      const ny = cur.y + dy;
-      if (nx < 0 || ny < 0 || nx >= town.width || ny >= town.height) continue;
-      if (dist[ny]![nx] !== -1) continue;
-      if (isSolid(town, nx, ny)) continue;
-      dist[ny]![nx] = d + 1;
-      queue.push({ x: nx, y: ny });
+  // A binary heap: costs are 1 and root two, so a plain queue no longer works.
+  const heap: Array<{ x: number; y: number; d: number }> = [{ ...from, d: 0 }];
+  const push = (node: { x: number; y: number; d: number }) => {
+    heap.push(node);
+    let i = heap.length - 1;
+    while (i > 0) {
+      const parent = (i - 1) >> 1;
+      if (heap[parent]!.d <= heap[i]!.d) break;
+      [heap[parent], heap[i]] = [heap[i]!, heap[parent]!];
+      i = parent;
     }
+  };
+  const pop = () => {
+    const top = heap[0]!;
+    const last = heap.pop()!;
+    if (heap.length > 0) {
+      heap[0] = last;
+      let i = 0;
+      for (;;) {
+        const l = i * 2 + 1;
+        const r = l + 1;
+        let small = i;
+        if (l < heap.length && heap[l]!.d < heap[small]!.d) small = l;
+        if (r < heap.length && heap[r]!.d < heap[small]!.d) small = r;
+        if (small === i) break;
+        [heap[small], heap[i]] = [heap[i]!, heap[small]!];
+        i = small;
+      }
+    }
+    return top;
+  };
+
+  while (heap.length > 0) {
+    const cur = pop();
+    if (cur.d > dist[cur.y]![cur.x]!) continue;
+    for (const step of STEPS) {
+      const nx = cur.x + step.x;
+      const ny = cur.y + step.y;
+      if (nx < 0 || ny < 0 || nx >= town.width || ny >= town.height) continue;
+      if (!canStep(town, cur, step.x, step.y)) continue;
+      const next = cur.d + stepCost(step.x, step.y);
+      if (next >= dist[ny]![nx]!) continue;
+      dist[ny]![nx] = next;
+      push({ x: nx, y: ny, d: next });
+    }
+  }
+
+  // -1 for "no route", which is what every caller has always tested for.
+  for (const row of dist) {
+    for (let x = 0; x < row.length; x++) if (row[x] === Infinity) row[x] = -1;
   }
   pathCache.set(k, dist);
   return dist;
 }
 
-/** Tiles between two walkable cells of one town, or -1 if there is no route. */
+/**
+ * Ground between two walkable cells of one town, in whole-tile equivalents, or
+ * -1 if there is no route. Fractional now that diagonals exist.
+ */
 export function tileDistance(town: Town, a: Vec2, b: Vec2): number {
   if (isSolid(town, a.x, a.y) || isSolid(town, b.x, b.y)) return -1;
   return distanceField(town, a)[b.y]![b.x]!;
@@ -182,12 +234,12 @@ class Player {
       return;
     }
     const per = this.stepMinutes();
-    for (let i = 0; i < tiles; i++) {
-      this.ctx.advance(per, { exertion: 1.35 });
-      this.walkMinutes += per;
-      // The renderer runs these on every completed step; so do we.
-      policeCheck(this.s, this.rng);
-    }
+    // `tiles` is ground covered, not steps taken — a diagonal is one step and
+    // 1.41 tiles. Time is charged on the ground; the police check happens per
+    // step, which is what the renderer does on every completed move.
+    this.ctx.advance(per * tiles, { exertion: 1.35 });
+    this.walkMinutes += per * tiles;
+    for (let i = 0; i < Math.round(tiles / DIAGONAL_COST); i++) policeCheck(this.s, this.rng);
     this.s.player.pos = { ...dest };
   }
 
@@ -1401,7 +1453,10 @@ function brokedaleReport(seed: number, days: number): void {
       `$${fmt(s.cash + s.bank)} · ${s.collapses} collapse(s) · rep ${reputationIn(s)}`,
   );
   const walk = p.days.reduce((a, d) => a + d.walkMinutes, 0) / Math.max(1, p.days.length);
-  console.log(`  ${walk.toFixed(0)} min a day walking — against ${164} in Brokemon, which is the point of moving.`);
+  // A recorded measurement, not a live one, and it says so.
+  console.log(
+    `  ${walk.toFixed(0)} min a day walking — against ~${BROKEMON_WALK_MINUTES} in Brokemon (recorded), which is the point of moving.`,
+  );
   const blocks = [...p.blocked.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8);
   if (blocks.length) {
     console.log(`\n  most common blocks:`);
@@ -1516,6 +1571,16 @@ const seeds = args.map(Number).filter((n: number) => !Number.isNaN(n));
  * moves the mean by a single day. Four seconds of compute is a cheap price for
  * not tuning the game against noise.
  */
+/**
+ * Minutes a day the Brokemon routine spends walking, measured over ten seeds
+ * with diagonal movement in.
+ *
+ * The line below used to compare against a bare `164`, which nothing computed
+ * and nothing checked; the real figure is nearer twice that. Re-measure with
+ * `npm run playtest` and the day rows' walk column if this is ever in doubt.
+ */
+const BROKEMON_WALK_MINUTES = 303;
+
 const DEFAULT_SEEDS = [2026, 7, 11, 99, 3, 42, 77, 500, 1234, 8888];
 
 if (args.includes("--crossing")) {

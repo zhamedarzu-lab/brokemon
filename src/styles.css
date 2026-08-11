@@ -823,25 +823,40 @@ kbd {
   transform: scale(0.94);
 }
 
-.dpad {
-  --pad-size: 62px;
-  display: grid;
-  grid-template-columns: repeat(3, auto);
-  grid-template-rows: repeat(3, auto);
-  gap: 5px;
+/* An eight-way thumbstick. The d-pad it replaced could only ever ask for
+   four directions, and the streets in an isometric town run diagonally. */
+.stick {
+  --pad-size: 118px;
+  /* #touch is a flex row; without this the stick is shrunk into an ellipse. */
+  flex: 0 0 auto;
+  position: relative;
+  width: var(--pad-size);
+  height: var(--pad-size);
+  pointer-events: auto;
+  touch-action: none;
 }
-.dpad [data-btn="up"] {
-  grid-area: 1 / 2;
+.stick-base {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(22, 22, 28, 0.55);
+  backdrop-filter: blur(6px);
 }
-.dpad [data-btn="left"] {
-  grid-area: 2 / 1;
+.stick-knob {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 44%;
+  height: 44%;
+  margin: -22% 0 0 -22%;
+  border-radius: 50%;
+  border: 1px solid rgba(240, 200, 90, 0.5);
+  background: rgba(240, 200, 90, 0.28);
+  transition: transform 60ms ease-out;
+  will-change: transform;
 }
-.dpad [data-btn="right"] {
-  grid-area: 2 / 3;
-}
-.dpad [data-btn="down"] {
-  grid-area: 3 / 2;
-}
+.stick.active .stick-knob { transition: none; }
 
 .abuttons {
   --pad-size: 56px;
@@ -989,8 +1004,8 @@ kbd {
 
 /* Small phones: shrink the pad so it doesn't eat the screen. */
 @media (pointer: coarse) and (max-height: 460px) {
-  .dpad {
-    --pad-size: 48px;
+  .stick {
+    --pad-size: 92px;
   }
   .abuttons {
     --pad-size: 44px;

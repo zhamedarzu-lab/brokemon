@@ -1,6 +1,7 @@
 import { glyphAt, zoneAt, type Town, type Vec2 } from "../world/map";
 import { tileAt } from "../world/tiles";
 import { countOf } from "./items";
+import { facingCandidates, FACING_DELTA } from "./move";
 import { applyDelta } from "./meters";
 import { menu, say, type Choice, type Prompt } from "./prompt";
 import { currentAppearance, pushLog, restoreBody, townOf, type GameState } from "./state";
@@ -35,8 +36,13 @@ export function markerAt(town: Town, x: number, y: number): string | undefined {
 
 export function facingTile(s: GameState): Vec2 {
   const { pos, facing } = s.player;
-  const d = facing === "up" ? { x: 0, y: -1 } : facing === "down" ? { x: 0, y: 1 } : facing === "left" ? { x: -1, y: 0 } : { x: 1, y: 0 };
+  const d = FACING_DELTA[facing];
   return { x: pos.x + d.x, y: pos.y + d.y };
+}
+
+/** The tile you're pointed at, plus — on a diagonal — the two it sits between. */
+export function facingTiles(s: GameState): Vec2[] {
+  return facingCandidates(s.player.pos, s.player.facing);
 }
 
 /**
@@ -46,14 +52,18 @@ export function facingTile(s: GameState): Vec2 {
 export function interact(ctx: ActionCtx): Prompt | null {
   const s = ctx.state;
   const here = s.player.pos;
-  const there = facingTile(s);
+  // Facing diagonally, the tile you are pointed at is the diagonal one — but
+  // you are also standing beside the two it sits between, and a player who
+  // cannot see the grid should not have to line up with it.
+  const ahead = facingTiles(s);
+  const reach = [here, ...ahead];
 
-  for (const cell of [here, there]) {
+  for (const cell of reach) {
     const stop = assignmentStopAt(s, cell);
     if (stop >= 0) return workAssignmentStop(ctx, stop);
   }
 
-  for (const cell of [here, there]) {
+  for (const cell of reach) {
     const marker = markerAt(townOf(s), cell.x, cell.y);
     if (marker) {
       const prompt = markerAction(ctx, marker);
@@ -61,7 +71,11 @@ export function interact(ctx: ActionCtx): Prompt | null {
     }
   }
 
-  return tileAction(ctx, there);
+  for (const cell of ahead) {
+    const prompt = tileAction(ctx, cell);
+    if (prompt) return prompt;
+  }
+  return null;
 }
 
 export function assignmentStopAt(s: GameState, cell: Vec2): number {
@@ -315,15 +329,17 @@ function heightsGate(ctx: ActionCtx, cell: Vec2): Prompt {
 /** Short label for the tile you're facing, shown as the A-button hint. */
 export function interactionLabel(s: GameState): string | null {
   const here = s.player.pos;
-  const there = facingTile(s);
+  const ahead = facingTiles(s);
+  const reach = [here, ...ahead];
 
-  for (const cell of [here, there]) {
+  for (const cell of reach) {
     if (assignmentStopAt(s, cell) >= 0) return s.assignment?.gig === "yardWork" ? "Start work" : "Deliver";
   }
-  for (const cell of [here, there]) {
+  for (const cell of reach) {
     const marker = markerAt(townOf(s), cell.x, cell.y);
     if (marker && (VENUES[marker] || marker === "panhandleSpot")) return VENUE_LABELS[marker] ?? "Enter";
   }
+  const there = ahead.find((c) => tileAt(glyphAt(townOf(s), c.x, c.y)).interaction) ?? ahead[0]!;
   const tile = tileAt(glyphAt(townOf(s), there.x, there.y));
   switch (tile.interaction) {
     case "bench":
