@@ -109,8 +109,32 @@ function inWallSpace(
   ctx.restore();
 }
 
+/**
+ * Paint the next drawing as an upright billboard centred on the tile.
+ *
+ * Trees, lamp posts and road signs are authored as front-facing sprites —
+ * skewing them onto the top diamond lays them flat (green roof), and mapping
+ * them through `inWallSpace` turns their vertical posts into diagonal stripes.
+ * This transform simply stands the 16×16 art up with its top aligned to the
+ * top of the box and its centre on `ox`, no skew applied.
+ */
+function inBillboardSpace(ctx: CanvasRenderingContext2D, ox: number, oy: number, h: number, paint: () => void): void {
+  ctx.save();
+  ctx.translate(ox - TILE / 2, oy - h);
+  paint();
+  ctx.restore();
+}
+
 /** Details that are a vertical surface, and so want their art on the faces. */
-const FACED = new Set(["wall", "cliff"]);
+const FACED = new Set(["wall", "cliff", "dumpster", "bin", "fence", "hedge"]);
+
+/**
+ * Details that stand upright as sprites — the artwork is authored front-on and
+ * should not be skewed onto the top diamond or the parallelogram wall face.
+ * A tree canopy lying flat on the top of a box reads as a green roof; standing
+ * up it reads as a tree. Same logic for lamp posts and road signs.
+ */
+const BILLBOARD = new Set(["tree", "lamp", "sign"]);
 
 function diamondPath(ctx: CanvasRenderingContext2D, ox: number, oy: number, grow = 0): void {
   const w = TW / 2 + grow;
@@ -374,7 +398,11 @@ function drawTile(
     ctx.lineTo(ox - TW / 2, oy + TH / 2);
     ctx.closePath();
     ctx.fill();
+  } else if (stands > 0 && BILLBOARD.has(tile.detail ?? "")) {
+    // Tree, lamp, sign: draw the sprite upright, no skew.
+    inBillboardSpace(ctx, ox, oy, stands, () => paintDetail(ctx, tile, x, y, t));
   } else {
+    // Bench, gate, and all floor tiles: art on the top face.
     inTileSpace(ctx, ox, top, () => paintDetail(ctx, tile, x, y, t));
   }
   if (fade < 1) ctx.globalAlpha = 1;
@@ -843,9 +871,20 @@ function drawDoorSigns(ctx: CanvasRenderingContext2D, town: Town, cam: Camera): 
     if (!sign) continue;
 
     const cx = isoX(pos.x, pos.y) - cam.px;
-    // Above the top face of the wall the door is cut into, where a real sign
-    // would be — the door tile stands up now, so this has to clear it.
-    const cy = isoY(pos.x, pos.y) - cam.py + TH / 2 - STANDS.wall! - 7;
+
+    // The marker tile itself has been replaced by a floor glyph, so its own
+    // STANDS value is always 0. Look at the four neighbours to find the
+    // tallest structure this door is cut into — a building door is surrounded
+    // by wall/roof tiles; a bus stop sits on open pavement and has no tall
+    // neighbours, so the sign floats just above ground rather than at wall height.
+    const buildingH = (
+      [[-1, 0], [1, 0], [0, -1], [0, 1]] as const
+    ).reduce((max, [dx, dy]) => {
+      const g = glyphAt(town, pos.x + dx, pos.y + dy);
+      return Math.max(max, STANDS[tileAt(g ?? "_").detail ?? ""] ?? 0);
+    }, 0);
+
+    const cy = isoY(pos.x, pos.y) - cam.py + TH / 2 - buildingH - 7;
     if (cx < -40 || cy < -8 || cx > CANVAS_W + 40 || cy > CANVAS_H + 8) continue;
 
     const tw = bitmapTextWidth(sign);
