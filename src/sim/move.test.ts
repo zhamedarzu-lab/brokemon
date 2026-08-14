@@ -11,6 +11,7 @@ import { describe, expect, it } from "vitest";
 import { townById } from "../world/map";
 import { isSolid } from "../world/map";
 import { canStep, DIAGONAL_COST, facingFor, FACING_DELTA, stepCost, STEPS } from "./move";
+import { facingOnScreen, isoX, isoY, screenPushToStep } from "../engine/render";
 
 const town = townById("brokemon");
 
@@ -111,5 +112,69 @@ describe("cutting corners", () => {
       }
     }
     expect(found, "no diagonal is legal anywhere in the town").toBe(true);
+  });
+});
+
+describe("screen-relative controls", () => {
+  /**
+   * The controls are wired to the screen, not to the grid.
+   *
+   * Under this projection the grid's cardinals point at the screen's diagonals,
+   * so a scheme wired straight to the grid sends the player towards the bottom
+   * *left* when they press down. Everything here checks the 45-degree rotation
+   * that fixes it, against the projection itself rather than against a table
+   * somebody typed out — if `isoX`/`isoY` ever change, these fail.
+   */
+  const PUSHES = [
+    ["down", 0, 1],
+    ["down-right", 1, 1],
+    ["right", 1, 0],
+    ["up-right", 1, -1],
+    ["up", 0, -1],
+    ["up-left", -1, -1],
+    ["left", -1, 0],
+    ["down-left", -1, 1],
+  ] as const;
+
+  it("sends the player where they pushed, on screen", () => {
+    for (const [name, dx, dy] of PUSHES) {
+      const step = screenPushToStep(dx, dy);
+      // Where that step actually lands, in screen pixels.
+      const sx = isoX(step.x, step.y);
+      const sy = isoY(step.x, step.y);
+      expect(Math.sign(sx), `pushing ${name} moves the wrong way horizontally`).toBe(dx);
+      expect(Math.sign(sy), `pushing ${name} moves the wrong way vertically`).toBe(dy);
+    }
+  });
+
+  it("maps the eight pushes onto the eight steps, one to one", () => {
+    const seen = new Set(PUSHES.map(([, dx, dy]) => JSON.stringify(screenPushToStep(dx, dy))));
+    expect(seen.size).toBe(8);
+    for (const step of STEPS) expect(seen.has(JSON.stringify(step))).toBe(true);
+  });
+
+  it("stands still for no push", () => {
+    expect(screenPushToStep(0, 0)).toEqual({ x: 0, y: 0 });
+  });
+
+  it("costs root two to walk straight down the screen", () => {
+    // Straight down the screen is a grid diagonal, and it covers 1.41 tiles of
+    // ground. Rotating the controls must not quietly make that free.
+    const down = screenPushToStep(0, 1);
+    expect(stepCost(down.x, down.y)).toBeCloseTo(Math.SQRT2, 10);
+    const downRight = screenPushToStep(1, 1);
+    expect(stepCost(downRight.x, downRight.y)).toBe(1);
+  });
+
+  it("draws the face pointing the way the player is walking", () => {
+    // Press down, walk down, look down. The grid facing underneath is south-east.
+    const lookAfterPushing = (dx: number, dy: number) => {
+      const step = screenPushToStep(dx, dy);
+      return facingOnScreen(facingFor(step.x, step.y)!);
+    };
+    expect(lookAfterPushing(0, 1)).toBe("down");
+    expect(lookAfterPushing(0, -1)).toBe("up");
+    expect(lookAfterPushing(1, 0)).toBe("right");
+    expect(lookAfterPushing(-1, 0)).toBe("left");
   });
 });

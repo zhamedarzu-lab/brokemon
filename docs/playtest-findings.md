@@ -141,6 +141,8 @@ What the removal cost and what it exposed:
 | 68 | The rig would have priced diagonals at zero | Its pathfinder was a breadth-first search counting steps, which is right only while every step is worth one tile. It is a Dijkstra over `move.ts` now. Left alone it would have reported a town 30% smaller than the one being played, in the same walking figure this document is built on |
 | 69 | The Brokedale report compared against a number nothing computed | `164 min a day in Brokemon` was a literal in a template string. Measured over ten seeds it is **303**. It had been wrong by a factor of nearly two for an unknown length of time, in the line that exists to justify the whole second town |
 
+| 70 | The controls were wired to the grid, not to the screen | Press down, walk towards the bottom *left*. Under this projection the grid's cardinals point at the screen's diagonals, so a scheme wired straight to the grid fights the view — and the player steers by what they can see. The input is rotated 45 degrees in one place, `screenPushToStep`, which turns out to be exact rather than approximate: the eight screen directions map one-to-one onto the eight grid steps via `sign(dx+dy), sign(dy-dx)`. Nothing downstream changed — same grid, same pathfinder, same cost per step, same 192 days across ten seeds |
+
 ## Open — ranked by how much they cost the player
 
 - **One Brokedale seed loses its job 93 times.** Seed 7 re-hires 93 times across

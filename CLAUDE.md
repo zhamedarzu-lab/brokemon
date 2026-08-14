@@ -1,6 +1,6 @@
 # Brokemon
 
-A top-down grid town where the only thing you're catching is a break.
+An isometric grid town where the only thing you're catching is a break.
 
 ## Workflow
 
@@ -86,7 +86,21 @@ has already been made once, on ten minutes of evidence.
 - `src/sim/move.ts` — **the movement rules, read by both the game loop and the
   walking rig.** Which steps are legal, which way a step leaves you facing, and
   what a step costs. Movement is eight-way: two keys at once on a keyboard, an
-  eight-sector thumbstick on touch. Two things there are load-bearing:
+  eight-sector thumbstick on touch.
+
+  **The controls are screen-relative, and the rotation lives in `render.ts`.**
+  Press down and the character walks down the *screen*, not down the grid. Those
+  are 45 degrees apart here — the grid's cardinals point at the screen's
+  diagonals — so wiring the keys straight to the grid sent the player towards
+  the bottom-left when they pressed down, which reads as broken even once you
+  know why. `screenPushToStep` is the single place that rotation happens, it is
+  exact rather than approximate (`sign(dx+dy), sign(dy-dx)`), and `move.test.ts`
+  checks it against `isoX`/`isoY` rather than against a table, so changing the
+  projection fails the tests instead of quietly breaking the controls. Note the
+  consequence: a single key is a grid *diagonal* and costs root two; two keys
+  make a grid cardinal and cost one.
+
+  Two things in `move.ts` itself are load-bearing:
   - **A diagonal costs root two.** It covers 1.41 tiles of ground and takes
     1.41x as long, so ground covered per second is the same in every direction
     and diagonals buy shorter *routes*, not speed. Charging one would have given

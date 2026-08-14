@@ -5,6 +5,8 @@ import { WEATHER } from "../sim/weather";
 import { townOf, type GameState } from "../sim/state";
 import { OUTFITS } from "../sim/social";
 import { assignmentStopAt, DOOR_SIGNS, facingTile } from "../sim/actions";
+import { FACING_DELTA } from "../sim/move";
+import type { Facing } from "../sim/state";
 
 /**
  * The town is isometric.
@@ -56,6 +58,49 @@ export function isoX(x: number, y: number): number {
 }
 export function isoY(x: number, y: number): number {
   return (x + y) * (TH / 2);
+}
+
+/**
+ * A direction the player pushed, turned into a step on the grid.
+ *
+ * The controls are **screen-relative**: press down and the character walks down
+ * the screen. That is not the same as walking down the grid, and the difference
+ * is the whole reason this function exists.
+ *
+ * Under this projection the grid's four cardinals point at the screen's four
+ * *diagonals* — north is up-and-right, south is down-and-left — so a control
+ * scheme wired straight to the grid has "down" send the player towards the
+ * bottom-left corner. It reads as broken even when you know why it happens,
+ * because you steer by what you can see.
+ *
+ * So the input is rotated 45 degrees, which turns out to be exact rather than
+ * approximate: the eight screen directions map one-to-one onto the eight grid
+ * steps, and the map is `sign(dx + dy), sign(dy - dx)`.
+ *
+ *   push down       -> grid (+1,+1), which renders as straight down
+ *   push down-right -> grid (+1, 0), which renders as down and right
+ *
+ * Nothing downstream knows about this. The grid, the pathfinder, the cost of a
+ * step and every walking figure in the findings doc are unchanged — this is the
+ * player's hand being rotated, not the world.
+ */
+export function screenPushToStep(dx: number, dy: number): { x: number; y: number } {
+  return { x: Math.sign(dx + dy), y: Math.sign(dy - dx) };
+}
+
+/**
+ * Which way a grid facing points on screen, for the two pixels of eye.
+ *
+ * The inverse of the rotation above, and needed for the same reason: a player
+ * who has pressed "down" is facing grid south-east, and drawing them looking
+ * south-east would have them looking off to the left of where they are walking.
+ */
+export function facingOnScreen(facing: Facing): "up" | "down" | "left" | "right" {
+  const d = FACING_DELTA[facing];
+  const sx = d.x - d.y;
+  const sy = d.x + d.y;
+  if (Math.abs(sy) >= Math.abs(sx)) return sy > 0 ? "down" : "up";
+  return sx > 0 ? "right" : "left";
 }
 
 /** The tile under a screen point — the inverse of the pair above. */
@@ -703,14 +748,17 @@ function drawPlayer(ctx: CanvasRenderingContext2D, s: GameState, cam: Camera, t:
     ctx.fillRect(sx + 5, sy + 5 - bob, 6, 2);
   }
 
-  // Eyes, if we're facing the camera at all
+  // Eyes, if we're facing the camera at all. Screen-relative, because the
+  // controls are: pressing down means walking down the screen, and the face
+  // has to agree with that rather than with the grid underneath it.
+  const look = facingOnScreen(p.facing);
   ctx.fillStyle = "#20181a";
-  if (p.facing === "down") {
+  if (look === "down") {
     ctx.fillRect(sx + 6, sy + 4 - bob, 1, 1);
     ctx.fillRect(sx + 9, sy + 4 - bob, 1, 1);
-  } else if (p.facing === "left") {
+  } else if (look === "left") {
     ctx.fillRect(sx + 5, sy + 4 - bob, 1, 1);
-  } else if (p.facing === "right") {
+  } else if (look === "right") {
     ctx.fillRect(sx + 10, sy + 4 - bob, 1, 1);
   }
 

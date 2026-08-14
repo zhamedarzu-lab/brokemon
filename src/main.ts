@@ -1,7 +1,7 @@
 import "./styles.css";
 
 import { Input, type Button } from "./engine/input";
-import { CANVAS_H, CANVAS_W, render } from "./engine/render";
+import { CANVAS_H, CANVAS_W, render, screenPushToStep } from "./engine/render";
 import { canStep, facingFor, stepCost } from "./sim/move";
 import { interact } from "./sim/actions";
 
@@ -248,8 +248,12 @@ class Game {
       return;
     }
 
+    // What the player asked for is a direction on screen; what the grid needs
+    // is a step. In an isometric view those are 45 degrees apart — see
+    // `screenPushToStep`, which is the only place that difference lives.
     const push = this.input.heldVector();
-    const facing = facingFor(push.x, push.y);
+    const step = screenPushToStep(push.x, push.y);
+    const facing = facingFor(step.x, step.y);
     if (!facing) return;
 
     p.facing = facing;
@@ -259,11 +263,13 @@ class Game {
     }
 
     const town = townOf(s);
-    let dx = push.x;
-    let dy = push.y;
+    let dx = step.x;
+    let dy = step.y;
     if (!canStep(town, p.pos, dx, dy)) {
-      // A diagonal into a corner still walks: keep whichever half is clear, so
-      // holding W and A along a wall slides down it instead of stopping dead.
+      // Blocked head-on, keep whichever half is clear. With screen-relative
+      // controls this is what makes walking into a building slide you along its
+      // frontage instead of stopping you dead against it — a single key is a
+      // grid diagonal, and both of its halves run along the walls you can see.
       if (dx !== 0 && dy !== 0 && canStep(town, p.pos, dx, 0)) dy = 0;
       else if (dx !== 0 && dy !== 0 && canStep(town, p.pos, 0, dy)) dx = 0;
       else return;
