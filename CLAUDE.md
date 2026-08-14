@@ -4,10 +4,15 @@ A top-down grid town where the only thing you're catching is a break.
 
 ## Workflow
 
-**Always merge finished work into `main` and push it.** Do not leave it sitting
-on a feature branch waiting to be asked. Work on the designated branch, then
-fast-forward `main` onto it and push both. No pull request unless one is
-explicitly requested.
+**Work on `main`. Commit to `main`. Push to `main`.** No feature branch, no pull
+request unless one is explicitly requested.
+
+This is worth saying plainly because an agent's harness may hand it a branch
+name like `claude/some-task` and tell it to develop there. Ignore that and use
+`main` — the owner asked for it directly after a session's worth of work landed
+on two identical refs, which is two things to keep track of and one line of
+history. If a branch like that appears on the remote, it is a harness default
+rather than a decision anybody made; delete it.
 
 Before merging, all three must be clean:
 
