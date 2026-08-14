@@ -296,6 +296,21 @@ body {
   max-width: 46%;
 }
 
+/*
+ * On a phone the frame is only ~230px tall, and three stacked toasts reach far
+ * enough down the screen to bury the meters behind them — the two things a
+ * player most needs on the first morning, on top of each other. Keep the two
+ * most recent; the Log tab has the rest and always did.
+ */
+@container frame (max-height: 320px) {
+  .toast:nth-last-child(n + 3) {
+    display: none;
+  }
+  .toasts {
+    max-width: 60%;
+  }
+}
+
 .toast {
   background: rgba(10, 10, 14, 0.86);
   border-left: 2px solid var(--line);
@@ -826,7 +841,10 @@ kbd {
 /* An eight-way thumbstick. The d-pad it replaced could only ever ask for
    four directions, and the streets in an isometric town run diagonally. */
 .stick {
-  --pad-size: 118px;
+  /* Scales with the screen. At a fixed 118px the stick plus the four action
+     buttons came to 426px, which overflows a 390px phone and clipped the GO
+     button off the right edge. */
+  --pad-size: clamp(84px, 26vw, 118px);
   /* #touch is a flex row; without this the stick is shrunk into an ellipse. */
   flex: 0 0 auto;
   position: relative;
@@ -859,14 +877,15 @@ kbd {
 .stick.active .stick-knob { transition: none; }
 
 .abuttons {
-  --pad-size: 56px;
+  --pad-size: clamp(42px, 13vw, 56px);
   display: flex;
-  gap: 10px;
+  gap: clamp(6px, 2vw, 10px);
   align-items: flex-end;
+  flex: 0 0 auto;
 }
 
 .abuttons .btn-go {
-  --pad-size: 82px;
+  --pad-size: clamp(60px, 19vw, 82px);
   border-radius: 50%;
   border-color: rgba(240, 200, 90, 0.55);
   background: rgba(240, 200, 90, 0.18);

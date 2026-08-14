@@ -8,8 +8,7 @@
  * 41% discount the moment diagonals existed.
  */
 import { describe, expect, it } from "vitest";
-import { townById } from "../world/map";
-import { isSolid } from "../world/map";
+import { isSolid, TOWNS, townById, type Vec2 } from "../world/map";
 import { canStep, DIAGONAL_COST, facingFor, FACING_DELTA, stepCost, STEPS } from "./move";
 import { facingOnScreen, isoX, isoY, screenPushToStep, screenStepLength, stepPacing } from "../engine/render";
 
@@ -215,5 +214,70 @@ describe("how a step is paced against what it costs", () => {
     // satisfy both invariants above.
     const lengths = STEPS.map((s) => screenStepLength(s.x, s.y));
     expect(Math.max(...lengths) / Math.min(...lengths)).toBeCloseTo(2, 6);
+  });
+});
+
+describe("the town is still fully walkable", () => {
+  /**
+   * The corner rule is the kind of thing that strands tiles.
+   *
+   * It refuses a diagonal unless both squares it passes between are clear,
+   * which is right — otherwise you clip through the corner of a building — but
+   * tighten it a notch further and alcoves, doorways and one-tile gaps start
+   * cutting themselves off from the map. Nothing else in the suite would
+   * notice: the game would still run, and a venue would simply have become
+   * impossible to walk to.
+   */
+  function reachableFrom(town: (typeof TOWNS)[keyof typeof TOWNS], start: Vec2): Set<string> {
+    const seen = new Set([`${start.x},${start.y}`]);
+    const queue: Vec2[] = [start];
+    for (let i = 0; i < queue.length; i++) {
+      const cur = queue[i]!;
+      for (const step of STEPS) {
+        if (!canStep(town, cur, step.x, step.y)) continue;
+        const next = { x: cur.x + step.x, y: cur.y + step.y };
+        const key = `${next.x},${next.y}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        queue.push(next);
+      }
+    }
+    return seen;
+  }
+
+  it.each(Object.values(TOWNS).map((t) => [t.name, t] as const))("%s has no tile you cannot leave", (_name, town) => {
+    const trapped: string[] = [];
+    for (let y = 0; y < town.height; y++) {
+      for (let x = 0; x < town.width; x++) {
+        if (isSolid(town, x, y)) continue;
+        if (!STEPS.some((s) => canStep(town, { x, y }, s.x, s.y))) trapped.push(`${x},${y}`);
+      }
+    }
+    expect(trapped).toEqual([]);
+  });
+
+  it.each(Object.values(TOWNS).map((t) => [t.name, t] as const))("%s can be walked door to door", (_name, town) => {
+    /**
+     * Brokemon's Heights are the one exception and they are deliberate: rows
+     * 0–14 sit behind a security gate, which is a solid tile you are let
+     * through rather than walk through, so no flood fill can cross it.
+     */
+    const start = town.markers.spawn ?? town.markers.coachTerminal!;
+    const seen = reachableFrom(town, start);
+    const gated = (v: Vec2) => town.id === "brokemon" && v.y <= 14;
+
+    const stranded: string[] = [];
+    for (let y = 0; y < town.height; y++) {
+      for (let x = 0; x < town.width; x++) {
+        if (isSolid(town, x, y) || gated({ x, y })) continue;
+        if (!seen.has(`${x},${y}`)) stranded.push(`${x},${y}`);
+      }
+    }
+    expect(stranded.slice(0, 20)).toEqual([]);
+
+    for (const [id, at] of Object.entries(town.markers)) {
+      if (gated(at)) continue;
+      expect(seen.has(`${at.x},${at.y}`), `${town.id}: cannot walk to ${id}`).toBe(true);
+    }
   });
 });
