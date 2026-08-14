@@ -11,7 +11,7 @@ import { describe, expect, it } from "vitest";
 import { townById } from "../world/map";
 import { isSolid } from "../world/map";
 import { canStep, DIAGONAL_COST, facingFor, FACING_DELTA, stepCost, STEPS } from "./move";
-import { facingOnScreen, isoX, isoY, screenPushToStep } from "../engine/render";
+import { facingOnScreen, isoX, isoY, screenPushToStep, screenStepLength, stepPacing } from "../engine/render";
 
 const town = townById("brokemon");
 
@@ -176,5 +176,44 @@ describe("screen-relative controls", () => {
     expect(lookAfterPushing(0, -1)).toBe("up");
     expect(lookAfterPushing(1, 0)).toBe("right");
     expect(lookAfterPushing(-1, 0)).toBe("left");
+  });
+});
+
+describe("how a step is paced against what it costs", () => {
+  /**
+   * Two numbers that used to be one, and had to come apart when the controls
+   * were rotated to the screen.
+   *
+   * A step is worth 1 or root-two *tiles* of ground; the clock charges that, or
+   * crossing the map gets cheaper depending on which way you walked. The same
+   * step is worth 16 or 32 *pixels*, because the projection squashes the
+   * vertical two to one; the animation is paced by that, or walking down the
+   * screen looks like half the speed of walking across it.
+   */
+  it("spends exactly the game time the ground is worth, whichever way you go", () => {
+    for (const step of STEPS) {
+      const { animScale, timeRate } = stepPacing(step.x, step.y);
+      expect(
+        animScale * timeRate,
+        `a step of (${step.x},${step.y}) charges the wrong amount of time`,
+      ).toBeCloseTo(stepCost(step.x, step.y), 10);
+    }
+  });
+
+  it("moves the player the same number of pixels a second in every direction", () => {
+    const rates = STEPS.map((step) => {
+      const { animScale } = stepPacing(step.x, step.y);
+      // Pixels covered per unit of step duration.
+      return screenStepLength(step.x, step.y) / animScale;
+    });
+    for (const rate of rates) expect(rate).toBeCloseTo(rates[0]!, 10);
+  });
+
+  it("was not already uniform, which is why this exists", () => {
+    // Guard against somebody "simplifying" the pacing back to one number: the
+    // pixel lengths genuinely differ two to one, so a single scale cannot
+    // satisfy both invariants above.
+    const lengths = STEPS.map((s) => screenStepLength(s.x, s.y));
+    expect(Math.max(...lengths) / Math.min(...lengths)).toBeCloseTo(2, 6);
   });
 });

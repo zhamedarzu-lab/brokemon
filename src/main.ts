@@ -1,8 +1,8 @@
 import "./styles.css";
 
 import { Input, type Button } from "./engine/input";
-import { CANVAS_H, CANVAS_W, render, screenPushToStep } from "./engine/render";
-import { canStep, facingFor, stepCost } from "./sim/move";
+import { CANVAS_H, CANVAS_W, render, screenPushToStep, stepPacing } from "./engine/render";
+import { canStep, facingFor } from "./sim/move";
 import { interact } from "./sim/actions";
 
 import type { ItemId } from "./sim/items";
@@ -32,8 +32,16 @@ class Game {
   private state: GameState;
 
   private rng: Rng;
-  /** Root two while the current step is a diagonal, 1 otherwise. */
-  private stepScale = 1;
+  /**
+   * How the current step is paced, and what it costs.
+   *
+   * These are two different numbers and used to be one. The step takes as long
+   * as it needs to move the player a constant number of *pixels* per second,
+   * and it charges as much game time as the *ground* it covers — see the note
+   * on `beginStep`.
+   */
+  private stepAnimScale = 1;
+  private stepTimeRate = 1;
 
   private input: Input;
 
@@ -238,8 +246,8 @@ class Game {
       STEP_MS;
 
     if (p.moveFrom !== null) {
-      p.moveProgress += dt / (stepMs * this.stepScale);
-      this.tick(dt / MS_PER_MINUTE, { exertion: 1.35 });
+      p.moveProgress += dt / (stepMs * this.stepAnimScale);
+      this.tick((dt * this.stepTimeRate) / MS_PER_MINUTE, { exertion: 1.35 });
       if (p.moveProgress >= 1) {
         p.moveProgress = 0;
         p.moveFrom = null;
@@ -275,13 +283,33 @@ class Game {
       else return;
     }
 
-    // A diagonal covers root two tiles of ground and takes root two as long.
-    // Without this, every route in the game would be 41% cheaper the moment
-    // diagonals existed.
-    this.stepScale = stepCost(dx, dy);
+    this.beginStep(dx, dy);
     p.moveFrom = { ...p.pos };
     p.pos = { x: p.pos.x + dx, y: p.pos.y + dy };
     p.moveProgress = 0;
+  }
+
+  /**
+   * Pace the step by the screen and charge it by the ground.
+   *
+   * These pulled apart the moment the controls were rotated to the screen. A
+   * step is worth 1 or root-two *tiles*, and the clock has to charge that or
+   * the map gets cheaper depending on the route you take. But the same step is
+   * worth 16 or 32 *pixels*, because the projection squashes the vertical by
+   * two to one — so pacing the animation by ground made walking down the screen
+   * look like half the speed of walking across it.
+   *
+   * So: the animation runs for as long as it takes to cover its pixels at one
+   * constant rate, and the clock is scaled to spend exactly the game time that
+   * step's ground is worth, however long the animation took. Constant apparent
+   * speed in every direction, and a minute of walking still buys the same
+   * distance whichever way you went — which is what every balance figure in
+   * `docs/playtest-findings.md` is denominated in.
+   */
+  private beginStep(dx: number, dy: number): void {
+    const pacing = stepPacing(dx, dy);
+    this.stepAnimScale = pacing.animScale;
+    this.stepTimeRate = pacing.timeRate;
   }
 
   private onStepComplete(): void {

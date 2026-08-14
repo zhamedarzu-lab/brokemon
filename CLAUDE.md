@@ -100,6 +100,19 @@ has already been made once, on ten minutes of evidence.
   consequence: a single key is a grid *diagonal* and costs root two; two keys
   make a grid cardinal and cost one.
 
+  **A step is paced by pixels and charged by ground, and those are two numbers**
+  (`stepPacing`). They came apart the moment the controls were rotated. A step
+  is worth 1 or root-two tiles and the clock must charge that, or crossing the
+  map gets cheaper depending on the route. The same step is worth 16 or 32
+  *pixels*, because the projection squashes the vertical two to one — so pacing
+  the animation by ground made walking down the screen look like half the speed
+  of walking across it, at 60 px/s against 105. `animScale` stretches the
+  duration so apparent speed is constant; `timeRate` scales the clock during it
+  so the ground still costs what it costs. The invariant
+  `animScale * timeRate === ground` is tested; do not collapse them back into
+  one number, because the pixel lengths genuinely differ two to one and no
+  single scale satisfies both.
+
   Two things in `move.ts` itself are load-bearing:
   - **A diagonal costs root two.** It covers 1.41 tiles of ground and takes
     1.41x as long, so ground covered per second is the same in every direction

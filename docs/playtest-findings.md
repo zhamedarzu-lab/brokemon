@@ -143,6 +143,8 @@ What the removal cost and what it exposed:
 
 | 70 | The controls were wired to the grid, not to the screen | Press down, walk towards the bottom *left*. Under this projection the grid's cardinals point at the screen's diagonals, so a scheme wired straight to the grid fights the view — and the player steers by what they can see. The input is rotated 45 degrees in one place, `screenPushToStep`, which turns out to be exact rather than approximate: the eight screen directions map one-to-one onto the eight grid steps via `sign(dx+dy), sign(dy-dx)`. Nothing downstream changed — same grid, same pathfinder, same cost per step, same 192 days across ten seeds |
 
+| 71 | Walking down the screen looked half the speed of walking across it | Reported as "I move faster on the diagonal". The ground speed was already constant — measured 5.0–5.6 tiles/s in every direction, so the root-two charge was doing its job — but *screen* speed was not: 60 px/s up and down against 105 left and right, which is the projection's 2:1 vertical squash showing through the pacing. A step is now paced by its pixels and charged by its ground, two numbers instead of one. Measured after: 86–101 px/s, and the remaining spread is obstacles rather than direction. Ten seeds unchanged at 192 days |
+
 ## Open — ranked by how much they cost the player
 
 - **One Brokedale seed loses its job 93 times.** Seed 7 re-hires 93 times across

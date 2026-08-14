@@ -89,6 +89,46 @@ export function screenPushToStep(dx: number, dy: number): { x: number; y: number
 }
 
 /**
+ * How far a step moves the player across the screen, in pixels.
+ *
+ * Not the same as how much ground it covers, and that gap is the whole problem
+ * this exists to solve. The projection squashes the vertical by two to one, so
+ * a step straight down the screen is 16 pixels and a step straight across is
+ * 32 — walking down looked half the speed of walking right even though both
+ * cover 1.41 tiles of ground in the same time.
+ */
+export function screenStepLength(dx: number, dy: number): number {
+  return Math.hypot((dx - dy) * (TW / 2), (dx + dy) * (TH / 2));
+}
+
+/** Screen pixels in a step that covers exactly one tile of ground. */
+export const SCREEN_PX_PER_TILE = screenStepLength(1, 0);
+
+/**
+ * How to pace a step and what to charge for it — two numbers, not one.
+ *
+ * They pulled apart the moment the controls were rotated to the screen. A step
+ * is worth 1 or root-two *tiles* of ground and the clock has to charge that, or
+ * crossing the map gets cheaper depending on the route. But the same step is
+ * worth 16 or 32 *pixels*, because this projection squashes the vertical two to
+ * one — so pacing the animation by ground made walking down the screen look
+ * like half the speed of walking across it, which is exactly what it looked
+ * like.
+ *
+ * `animScale` stretches the step's duration so the player crosses a constant
+ * number of pixels per second whichever way they go. `timeRate` then scales how
+ * fast the clock runs during it, so the step still spends precisely the game
+ * time its ground is worth however long the animation took.
+ *
+ * The invariant, checked in `move.test.ts`: `animScale * timeRate === ground`.
+ */
+export function stepPacing(dx: number, dy: number): { animScale: number; timeRate: number } {
+  const ground = Math.abs(dx) === 1 && Math.abs(dy) === 1 ? Math.SQRT2 : 1;
+  const animScale = screenStepLength(dx, dy) / SCREEN_PX_PER_TILE;
+  return { animScale, timeRate: ground / animScale };
+}
+
+/**
  * Which way a grid facing points on screen, for the two pixels of eye.
  *
  * The inverse of the rotation above, and needed for the same reason: a player
