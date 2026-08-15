@@ -149,12 +149,38 @@ What the removal cost and what it exposed:
 
 ## Open — ranked by how much they cost the player
 
-- **One Brokedale seed loses its job 93 times.** Seed 7 re-hires 93 times across
-  400 days against seed 11's 2, with zero missed shifts — so it is being struck
-  out on a door requirement rather than failing to turn up, and it never holds a
-  job long enough to build standing. It is the only one of five seeds that does
-  not finish. This is the top open item and it is the same family as the strikes
-  finding below.
+- **Brokedale bots are sacked for lateness while never missing a shift.**
+  Diagnosed, not fixed. One seed in five falls into it — it moves between seeds
+  as other things change, so it is a state rather than a seed: ~91 firings across
+  400 days, reputation pinned around 20-25, and the block (which wants 40) never
+  bought.
+
+  The mechanism, measured by instrumenting `maybeFire`: **zero** of those
+  firings come from the "sent home unfit" path. Every one comes from the
+  `maybeFire` at the *end* of a worked shift, reached purely through the `late`
+  branch — a late arrival is worth a full strike, the same as turning up unfit,
+  and three of them inside a fortnight ends the job. The bot works every shift
+  it is rostered for and is sacked anyway.
+
+  **Nothing logged it**, which is why it survived this long. Both harnesses
+  watch for *missed* shifts, and this is not one — `shiftsWorked` increments
+  normally, so the rig prints a clean day.
+
+  Two attempts that did **not** work, so nobody repeats them:
+  - Giving the rig three hours before its shift instead of one: byte-identical
+    output. `waitUntil` only waits forward, and the bot is already past that
+    hour by the time it gets there, so the change was a no-op.
+  - Making a late arrival a strike only on a *repeat* within seven days: it made
+    things worse, taking the churn from 1 seed in 5 to 4 in 5. Cash went up
+    sharply ($12k to $48-60k) and reputation did not move, so the extra
+    employment changes look like promotions the bot could suddenly hold onto
+    rather than fewer firings — which suggests the "HIRED" note conflates
+    promotion with re-hire and should be split before the next attempt.
+
+  Whoever picks this up: fix the rig's note first so hires and firings are
+  distinguishable, then measure. The instrumentation is two lines — a counter in
+  `maybeFire` and a list of `gate.reasons[0]` — and it is what turned this from
+  "job churn" into an exact mechanism in one run.
 
 
 
