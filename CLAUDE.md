@@ -1,6 +1,6 @@
 # Brokemon
 
-An isometric grid town where the only thing you're catching is a break.
+A grid town seen from above and a little to the side, where the only thing you're catching is a break.
 
 ## Workflow
 
@@ -67,22 +67,32 @@ has already been made once, on ten minutes of evidence.
   second town writing `!` gets the same corner for free.
 - `src/sim/coach.ts` — the intercity link. Timetable, fares, journey time.
 - `src/engine/render.ts`, `src/ui/` — presentation only. **The town is drawn
-  isometrically.** The simulation never knew what projection it was in and still
-  does not: it is a grid and a `{x, y}`, and the whole change lives in
-  `render.ts`. Three things there are worth knowing before touching it:
-  - Tile art is still authored as 16x16 squares. `inTileSpace` skews the unit
-    square onto the ground diamond and `inWallSpace` stands it up on a box face,
-    so a hundred and forty lines of speckles, brickwork and marble veining came
-    through the change unedited. Write new tile art the same way.
-  - Draw order is **painter's by `x + y`**, not row-major. A plain nested loop
-    puts (5,0) before (0,1) and walls end up drawn over what is standing in
-    front of them.
-  - Anything tall between the camera and the player is drawn at 0.32 alpha, and
-    its *floor* stays solid — `globalAlpha` composites against what is already
-    painted, so fading a whole tile at the edge of the view makes a black hole
-    rather than something you can see past. The spawn is two rows from the
-    southern retaining wall, which is the tallest thing in the game, so without
-    this the first frame of a new game hides the player completely.
+  straight-on and tilted**, like a bird looking down at about 49 degrees. The
+  simulation has never known what projection it is in — it is a grid and a
+  `{x, y}` — and this is the third one it has survived without a line changing.
+  Four things there are worth knowing before touching it:
+  - `sx = x * TW`, `sy = y * TD - z * TZ`, with **TW 20, TD 15, TZ 15**. The 4:3
+    ratio is not cosmetic: it makes every diagonal a whole number of pixels
+    (20, 15, 25 is a 3-4-5 triangle), which a true 45 degrees would not, and in
+    pixel art that is a clean edge against a shimmering one.
+  - **There is no rotation.** The town used to be isometric, which put the
+    grid's cardinals at 45 degrees to the screen's and meant pressing down
+    walked you towards the bottom left. `screenPushToStep` is the identity now
+    and is kept only so the tests still have something to check and a future
+    projection has one obvious place to put its rotation back.
+  - Draw order is **row-major, north to south**. Depth is the row, because the
+    camera looks straight down the grid. The isometric version had to sort by
+    `x + y` and iterate diamonds; this is the simpler thing a straight-on
+    camera buys.
+  - Tile art is still authored as 16x16 squares. `inTileSpace` is now a plain
+    vertical squash and `inWallSpace` a plain upright rectangle — no skew at
+    all, so the art is crisper than it was isometric. You see **one** side of a
+    box, not two, which is flatter; the contrast between the front face and the
+    top is doing all the work of making it read solid.
+  - Anything tall in the rows *in front of* you is drawn at 0.32 alpha with its
+    floor left solid. `globalAlpha` composites against what is already painted,
+    so fading a whole tile makes a black hole rather than something you can see
+    past.
 - `src/sim/move.ts` — **the movement rules, read by both the game loop and the
   walking rig.** Which steps are legal, which way a step leaves you facing, and
   what a step costs. Movement is eight-way: two keys at once on a keyboard, an

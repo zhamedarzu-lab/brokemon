@@ -10,7 +10,7 @@
 import { describe, expect, it } from "vitest";
 import { isSolid, TOWNS, townById, type Vec2 } from "../world/map";
 import { canStep, DIAGONAL_COST, facingFor, FACING_DELTA, stepCost, STEPS } from "./move";
-import { facingOnScreen, isoX, isoY, screenPushToStep, screenStepLength, stepPacing } from "../engine/render";
+import { facingOnScreen, screenPushToStep, screenStepLength, screenX, screenY, stepPacing } from "../engine/render";
 
 const town = townById("brokemon");
 
@@ -118,11 +118,11 @@ describe("screen-relative controls", () => {
   /**
    * The controls are wired to the screen, not to the grid.
    *
-   * Under this projection the grid's cardinals point at the screen's diagonals,
-   * so a scheme wired straight to the grid sends the player towards the bottom
-   * *left* when they press down. Everything here checks the 45-degree rotation
-   * that fixes it, against the projection itself rather than against a table
-   * somebody typed out — if `isoX`/`isoY` ever change, these fail.
+   * The camera looks straight down the grid, so this is now the identity — and
+   * these checks are what says so. They are written against the projection
+   * rather than against a table somebody typed out, so they went on holding
+   * when the town stopped being isometric, and they would catch a future
+   * projection that reintroduced a twist without rotating the input to match.
    */
   const PUSHES = [
     ["down", 0, 1],
@@ -139,8 +139,8 @@ describe("screen-relative controls", () => {
     for (const [name, dx, dy] of PUSHES) {
       const step = screenPushToStep(dx, dy);
       // Where that step actually lands, in screen pixels.
-      const sx = isoX(step.x, step.y);
-      const sy = isoY(step.x, step.y);
+      const sx = screenX(step.x, step.y);
+      const sy = screenY(step.x, step.y);
       expect(Math.sign(sx), `pushing ${name} moves the wrong way horizontally`).toBe(dx);
       expect(Math.sign(sy), `pushing ${name} moves the wrong way vertically`).toBe(dy);
     }
@@ -156,13 +156,22 @@ describe("screen-relative controls", () => {
     expect(screenPushToStep(0, 0)).toEqual({ x: 0, y: 0 });
   });
 
-  it("costs root two to walk straight down the screen", () => {
-    // Straight down the screen is a grid diagonal, and it covers 1.41 tiles of
-    // ground. Rotating the controls must not quietly make that free.
-    const down = screenPushToStep(0, 1);
-    expect(stepCost(down.x, down.y)).toBeCloseTo(Math.SQRT2, 10);
-    const downRight = screenPushToStep(1, 1);
-    expect(stepCost(downRight.x, downRight.y)).toBe(1);
+  it("charges a single key for one tile and two keys for root two", () => {
+    /**
+     * The camera looks straight down the grid, so a single key is a grid
+     * cardinal worth one tile and two keys make a diagonal worth 1.41. That is
+     * the right way round and it was not always: while the town was isometric
+     * the controls had to be rotated 45 degrees, which made every single key a
+     * grid *diagonal* and charged root two for pressing one button.
+     */
+    for (const [dx, dy] of [[0, 1], [0, -1], [1, 0], [-1, 0]] as const) {
+      const step = screenPushToStep(dx, dy);
+      expect(stepCost(step.x, step.y)).toBe(1);
+    }
+    for (const [dx, dy] of [[1, 1], [-1, 1], [1, -1], [-1, -1]] as const) {
+      const step = screenPushToStep(dx, dy);
+      expect(stepCost(step.x, step.y)).toBeCloseTo(Math.SQRT2, 10);
+    }
   });
 
   it("draws the face pointing the way the player is walking", () => {
@@ -209,11 +218,12 @@ describe("how a step is paced against what it costs", () => {
   });
 
   it("was not already uniform, which is why this exists", () => {
-    // Guard against somebody "simplifying" the pacing back to one number: the
-    // pixel lengths genuinely differ two to one, so a single scale cannot
-    // satisfy both invariants above.
+    // Guard against somebody "simplifying" the pacing back to one number: a
+    // tile is 16 across and 12 deep, so the pixel lengths genuinely differ and
+    // no single scale can satisfy both invariants above. Four to three now,
+    // where the isometric view made it two to one.
     const lengths = STEPS.map((s) => screenStepLength(s.x, s.y));
-    expect(Math.max(...lengths) / Math.min(...lengths)).toBeCloseTo(2, 6);
+    expect(Math.max(...lengths) / Math.min(...lengths)).toBeCloseTo(20 / 12, 6);
   });
 });
 

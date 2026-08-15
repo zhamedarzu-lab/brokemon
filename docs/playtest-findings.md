@@ -145,6 +145,8 @@ What the removal cost and what it exposed:
 
 | 71 | Walking down the screen looked half the speed of walking across it | Reported as "I move faster on the diagonal". The ground speed was already constant — measured 5.0–5.6 tiles/s in every direction, so the root-two charge was doing its job — but *screen* speed was not: 60 px/s up and down against 105 left and right, which is the projection's 2:1 vertical squash showing through the pacing. A step is now paced by its pixels and charged by its ground, two numbers instead of one. Measured after: 86–101 px/s, and the remaining spread is obstacles rather than direction. Ten seeds unchanged at 192 days |
 
+| 72 | Isometric fought the controls, so the rotation went | The 45-degree twist was the thing making the town hard to steer: the grid's cardinals pointed at the screen's diagonals, and no amount of rotating the input back stopped the view arguing with the keys. The camera looks straight down the grid now and tilts ~49 degrees, keeping the boxes. `screenPushToStep` is the identity, draw order is row-major instead of `x + y`, and the art lost both its skews. Same grid, same corner rule, same root-two cost, same Dijkstra — ten seeds unchanged at 192 days, 10/10 winning |
+
 ## Open — ranked by how much they cost the player
 
 - **One Brokedale seed loses its job 93 times.** Seed 7 re-hires 93 times across

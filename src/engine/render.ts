@@ -22,20 +22,40 @@ import type { Facing } from "../sim/state";
  * and forty lines of speckles, brickwork and marble veining survived the change
  * untouched.
  */
+/** Stable per-tile pseudo-noise so scenery doesn't shimmer as you walk. */
+function hash(x: number, y: number, salt = 0): number {
+  let h = (x * 374761393 + y * 668265263 + salt * 2246822519) | 0;
+  h = (h ^ (h >>> 13)) * 1274126177;
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+
 export const TILE = 16;
-/** A tile's diamond on screen: 2:1, the standard isometric ratio. */
-export const TW = 32;
-export const TH = 16;
+/**
+ * A tile on screen: 20 across, 15 deep, and 15 pixels per unit of height.
+ *
+ * The camera looks straight down the grid and tilts about 49 degrees, which is
+ * near enough the 45 that was asked for. The 4:3 ratio is not: it makes every
+ * diagonal a whole number of pixels (20, 15, 25 is a 3-4-5 triangle), which a
+ * true 45 would not, and in pixel art that is the difference between a clean
+ * edge and a shimmering one.
+ *
+ * The size is a second decision. At 16x12 the screen held 21 tiles by 20 and a
+ * street read as a field of identical grey squares; 20x15 shows about 17 by 16,
+ * which is close to what the old top-down view framed and gives each tile
+ * enough pixels to carry its art.
+ */
+export const TW = 20;
+export const TD = 15;
+export const TZ = 15;
 export const CANVAS_W = 336;
 export const CANVAS_H = 240;
 
 /**
  * How far a tile stands up off the ground, in pixels.
  *
- * Zero means it is floor and gets a flat diamond. Anything else is drawn as a
- * box: two side faces and a raised top. This is the whole reason to be
- * isometric — in a top-down view a wall and a pavement are both a square, and
- * here a wall is a thing you cannot see past.
+ * Zero means it is floor and gets a flat rectangle. Anything else is drawn as a
+ * box: a front face and a top. This is the whole reason to tilt the camera at
+ * all — looking straight down, a wall and a pavement are both a square.
  */
 const STANDS: Record<string, number> = {
   wall: 15,
@@ -52,53 +72,44 @@ const STANDS: Record<string, number> = {
   bench: 6,
 };
 
-/** Screen position of a tile's top vertex, before the camera is subtracted. */
-export function isoX(x: number, y: number): number {
-  return (x - y) * (TW / 2);
+/** Screen position of a tile's back-left corner, before the camera. */
+export function screenX(x: number, _y: number): number {
+  return x * TW;
 }
-export function isoY(x: number, y: number): number {
-  return (x + y) * (TH / 2);
+export function screenY(_x: number, y: number): number {
+  return y * TD;
 }
 
 /**
  * A direction the player pushed, turned into a step on the grid.
  *
- * The controls are **screen-relative**: press down and the character walks down
- * the screen. That is not the same as walking down the grid, and the difference
- * is the whole reason this function exists.
+ * It is the identity, and that is the point.
  *
- * Under this projection the grid's four cardinals point at the screen's four
- * *diagonals* — north is up-and-right, south is down-and-left — so a control
- * scheme wired straight to the grid has "down" send the player towards the
- * bottom-left corner. It reads as broken even when you know why it happens,
- * because you steer by what you can see.
+ * The town used to be drawn isometrically, which put the grid's cardinals at
+ * 45 degrees to the screen's — press down, walk towards the bottom left. This
+ * function existed to rotate the input back, and the rotation was correct and
+ * still felt wrong, because a player steers by what they can see and the view
+ * kept arguing with the keys.
  *
- * So the input is rotated 45 degrees, which turns out to be exact rather than
- * approximate: the eight screen directions map one-to-one onto the eight grid
- * steps, and the map is `sign(dx + dy), sign(dy - dx)`.
- *
- *   push down       -> grid (+1,+1), which renders as straight down
- *   push down-right -> grid (+1, 0), which renders as down and right
- *
- * Nothing downstream knows about this. The grid, the pathfinder, the cost of a
- * step and every walking figure in the findings doc are unchanged — this is the
- * player's hand being rotated, not the world.
+ * The camera looks straight down the grid now. Down is down. It is kept as a
+ * function rather than deleted so the tests that check "pushing down moves you
+ * down the screen" still have something to check, and so a future projection
+ * has one obvious place to put its rotation.
  */
 export function screenPushToStep(dx: number, dy: number): { x: number; y: number } {
-  return { x: Math.sign(dx + dy), y: Math.sign(dy - dx) };
+  return { x: dx, y: dy };
 }
 
 /**
  * How far a step moves the player across the screen, in pixels.
  *
- * Not the same as how much ground it covers, and that gap is the whole problem
- * this exists to solve. The projection squashes the vertical by two to one, so
- * a step straight down the screen is 16 pixels and a step straight across is
- * 32 — walking down looked half the speed of walking right even though both
- * cover 1.41 tiles of ground in the same time.
+ * Not the same as how much ground it covers. A tile is 16 wide and 12 deep, so
+ * walking east is 16 pixels and walking south is 12 — the tilt foreshortens the
+ * depth axis, and without correcting for it walking south looks slower than
+ * walking east even though both cover one tile.
  */
 export function screenStepLength(dx: number, dy: number): number {
-  return Math.hypot((dx - dy) * (TW / 2), (dx + dy) * (TH / 2));
+  return Math.hypot(dx * TW, dy * TD);
 }
 
 /** Screen pixels in a step that covers exactly one tile of ground. */
@@ -107,18 +118,16 @@ export const SCREEN_PX_PER_TILE = screenStepLength(1, 0);
 /**
  * How to pace a step and what to charge for it — two numbers, not one.
  *
- * They pulled apart the moment the controls were rotated to the screen. A step
- * is worth 1 or root-two *tiles* of ground and the clock has to charge that, or
- * crossing the map gets cheaper depending on the route. But the same step is
- * worth 16 or 32 *pixels*, because this projection squashes the vertical two to
- * one — so pacing the animation by ground made walking down the screen look
- * like half the speed of walking across it, which is exactly what it looked
- * like.
+ * A step is worth 1 or root-two *tiles* of ground and the clock has to charge
+ * that, or crossing the map gets cheaper depending on the route. But the same
+ * step is worth 12, 16 or 20 *pixels*, because the projection foreshortens the
+ * depth axis four to three — so pacing the animation by ground makes walking
+ * south look slower than walking east.
  *
  * `animScale` stretches the step's duration so the player crosses a constant
- * number of pixels per second whichever way they go. `timeRate` then scales how
- * fast the clock runs during it, so the step still spends precisely the game
- * time its ground is worth however long the animation took.
+ * number of pixels a second whichever way they go. `timeRate` then scales the
+ * clock during it, so the step still spends precisely the game time its ground
+ * is worth however long the animation took.
  *
  * The invariant, checked in `move.test.ts`: `animScale * timeRate === ground`.
  */
@@ -128,154 +137,11 @@ export function stepPacing(dx: number, dy: number): { animScale: number; timeRat
   return { animScale, timeRate: ground / animScale };
 }
 
-/**
- * Which way a grid facing points on screen, for the two pixels of eye.
- *
- * The inverse of the rotation above, and needed for the same reason: a player
- * who has pressed "down" is facing grid south-east, and drawing them looking
- * south-east would have them looking off to the left of where they are walking.
- */
+/** Which way a grid facing points on screen, for the two pixels of eye. */
 export function facingOnScreen(facing: Facing): "up" | "down" | "left" | "right" {
   const d = FACING_DELTA[facing];
-  const sx = d.x - d.y;
-  const sy = d.x + d.y;
-  if (Math.abs(sy) >= Math.abs(sx)) return sy > 0 ? "down" : "up";
-  return sx > 0 ? "right" : "left";
-}
-
-/** The tile under a screen point — the inverse of the pair above. */
-export function screenToTile(sx: number, sy: number): { x: number; y: number } {
-  return { x: Math.floor(sx / TW + sy / TH), y: Math.floor(sy / TH - sx / TW) };
-}
-
-/**
- * Paint the next drawing into this tile's diamond.
- *
- * The transform maps the unit square (0,0)-(TILE,TILE) onto the diamond whose
- * top vertex is (ox, oy), so anything written for the old top-down view lands
- * on the ground plane correctly and needs no edits.
- */
-function inTileSpace(ctx: CanvasRenderingContext2D, ox: number, oy: number, paint: () => void): void {
-  ctx.save();
-  ctx.transform(TW / 2 / TILE, TH / 2 / TILE, -TW / 2 / TILE, TH / 2 / TILE, ox, oy);
-  paint();
-  ctx.restore();
-}
-
-/**
- * Paint into one of the two vertical faces of a box.
- *
- * Brickwork and windows belong on the side of a wall, not on the top of it.
- * Painting every tile's art onto the top face was the first thing that looked
- * wrong about the isometric view: buildings came out as plain slabs with a
- * brick pattern lying flat across the roof of each one.
- *
- * The same unit square, mapped onto a parallelogram standing up instead of a
- * diamond lying down — art written for the old view still needs no edits.
- */
-function inWallSpace(
-  ctx: CanvasRenderingContext2D,
-  ox: number,
-  oy: number,
-  h: number,
-  side: "left" | "right",
-  paint: () => void,
-): void {
-  const hw = TW / 2;
-  const hh = TH / 2;
-  ctx.save();
-  if (side === "right") {
-    // From the right corner, running to the near corner and downward.
-    ctx.transform(-hw / TILE, hh / TILE, 0, h / TILE, ox + hw, oy + hh - h);
-  } else {
-    ctx.transform(hw / TILE, hh / TILE, 0, h / TILE, ox - hw, oy + hh - h);
-  }
-  paint();
-  ctx.restore();
-}
-
-/**
- * Paint the next drawing as an upright billboard centred on the tile.
- *
- * Trees, lamp posts and road signs are authored as front-facing sprites —
- * skewing them onto the top diamond lays them flat (green roof), and mapping
- * them through `inWallSpace` turns their vertical posts into diagonal stripes.
- * This transform simply stands the 16×16 art up with its top aligned to the
- * top of the box and its centre on `ox`, no skew applied.
- */
-function inBillboardSpace(ctx: CanvasRenderingContext2D, ox: number, oy: number, h: number, paint: () => void): void {
-  ctx.save();
-  ctx.translate(ox - TILE / 2, oy - h);
-  paint();
-  ctx.restore();
-}
-
-/** Details that are a vertical surface, and so want their art on the faces. */
-const FACED = new Set(["wall", "cliff", "dumpster", "bin", "fence", "hedge"]);
-
-/**
- * Details that stand upright as sprites — the artwork is authored front-on and
- * should not be skewed onto the top diamond or the parallelogram wall face.
- * A tree canopy lying flat on the top of a box reads as a green roof; standing
- * up it reads as a tree. Same logic for lamp posts and road signs.
- */
-const BILLBOARD = new Set(["tree", "lamp", "sign"]);
-
-function diamondPath(ctx: CanvasRenderingContext2D, ox: number, oy: number, grow = 0): void {
-  const w = TW / 2 + grow;
-  const h = TH / 2 + grow;
-  ctx.beginPath();
-  ctx.moveTo(ox, oy - grow);
-  ctx.lineTo(ox + w, oy + h);
-  ctx.lineTo(ox, oy + TH + grow);
-  ctx.lineTo(ox - w, oy + h);
-  ctx.closePath();
-}
-
-/** Darken or lighten a `#rrggbb`, for the two side faces of a box. */
-function shade(hex: string, k: number): string {
-  const n = parseInt(hex.slice(1), 16);
-  const r = Math.min(255, Math.round(((n >> 16) & 255) * k));
-  const g = Math.min(255, Math.round(((n >> 8) & 255) * k));
-  const b = Math.min(255, Math.round((n & 255) * k));
-  return `rgb(${r},${g},${b})`;
-}
-
-/**
- * A tile that stands up: the two faces you can see, then the top.
- *
- * Light comes from the upper right, so the right face keeps most of the colour
- * and the left face goes dark. Without the split every building read as one
- * flat silhouette.
- */
-function drawBox(ctx: CanvasRenderingContext2D, ox: number, oy: number, h: number, color: string): void {
-  const hw = TW / 2;
-  const hh = TH / 2;
-  // Right face.
-  ctx.fillStyle = shade(color, 0.72);
-  ctx.beginPath();
-  ctx.moveTo(ox + hw, oy + hh - h);
-  ctx.lineTo(ox, oy + TH - h);
-  ctx.lineTo(ox, oy + TH);
-  ctx.lineTo(ox + hw, oy + hh);
-  ctx.closePath();
-  ctx.fill();
-  // Left face.
-  ctx.fillStyle = shade(color, 0.48);
-  ctx.beginPath();
-  ctx.moveTo(ox - hw, oy + hh - h);
-  ctx.lineTo(ox, oy + TH - h);
-  ctx.lineTo(ox, oy + TH);
-  ctx.lineTo(ox - hw, oy + hh);
-  ctx.closePath();
-  ctx.fill();
-}
-
-/** Stable per-tile pseudo-noise so scenery doesn't shimmer as you walk. */
-function hash(x: number, y: number, salt = 0): number {
-  let h = (x * 374761393 + y * 668265263 + salt * 2246822519) | 0;
-  h = (h ^ (h >>> 13)) * 1274126177;
-  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+  if (Math.abs(d.y) >= Math.abs(d.x)) return d.y > 0 ? "down" : "up";
+  return d.x > 0 ? "right" : "left";
 }
 
 export interface Camera {
@@ -296,19 +162,111 @@ export function playerTile(s: GameState): { x: number; y: number } {
 }
 
 /**
- * The camera simply centres the player.
+ * The camera centres the player, and clamps to the town.
  *
- * The top-down camera clamped to the town rectangle so you never saw past the
- * edge. A grid seen from a corner is a diamond, not a rectangle, so there is no
- * rectangle to clamp to — the corners of the screen are always outside the map
- * and the void colour behind them is the honest answer.
+ * The isometric camera could not clamp — a grid seen from a corner is a
+ * diamond and there is no rectangle to hold it inside. Straight-on the map is a
+ * rectangle again, so the view can stay on it and the player never stares into
+ * the void unless the town is smaller than the screen.
  */
 export function cameraFor(state: GameState): Camera {
+  const town = townOf(state);
   const at = playerTile(state);
+  const px = screenX(at.x, at.y) + TW / 2 - CANVAS_W / 2;
+  const py = screenY(at.x, at.y) + TD / 2 - CANVAS_H / 2;
+  const maxX = Math.max(0, town.width * TW - CANVAS_W);
+  const maxY = Math.max(0, town.height * TD - CANVAS_H);
   return {
-    px: Math.round(isoX(at.x, at.y) - CANVAS_W / 2),
-    py: Math.round(isoY(at.x, at.y) - CANVAS_H / 2 + TH / 2),
+    px: Math.round(Math.min(Math.max(px, 0), maxX)),
+    py: Math.round(Math.min(Math.max(py, 0), maxY)),
   };
+}
+
+/** The tile under a screen point — the inverse of the projection. */
+export function screenToTile(sx: number, sy: number): { x: number; y: number } {
+  return { x: Math.floor(sx / TW), y: Math.floor(sy / TD) };
+}
+
+function inTileSpace(ctx: CanvasRenderingContext2D, ox: number, oy: number, paint: () => void): void {
+  ctx.save();
+  // The unit square onto the tile's ground rectangle: a vertical squash and
+  // nothing else. The isometric version skewed it onto a diamond, which put a
+  // diagonal edge through every speckle; straight-on the art stays crisp and
+  // axis-aligned, and needs no more editing than it did before.
+  ctx.transform(TW / TILE, 0, 0, TD / TILE, ox, oy);
+  paint();
+  ctx.restore();
+}
+
+/**
+ * Paint into the front face of a box.
+ *
+ * Brickwork and windows belong on the side of a wall, not on the top of it.
+ *
+ * Looking straight down the grid there is exactly one side you can see — the
+ * one facing you — and it is a plain upright rectangle. The isometric version
+ * showed two and had to skew the art onto a parallelogram for each; this is the
+ * trade that came with dropping the rotation, and the art is crisper for it.
+ */
+function inWallSpace(ctx: CanvasRenderingContext2D, ox: number, oy: number, h: number, paint: () => void): void {
+  ctx.save();
+  ctx.transform(TW / TILE, 0, 0, h / TILE, ox, oy + TD - h);
+  paint();
+  ctx.restore();
+}
+
+/**
+ * Paint the next drawing as an upright billboard centred on the tile.
+ *
+ * Trees, lamp posts and road signs are authored as front-facing sprites —
+ * skewing them onto the top diamond lays them flat (green roof), and mapping
+ * them through `inWallSpace` turns their vertical posts into diagonal stripes.
+ * This transform simply stands the 16×16 art up with its top aligned to the
+ * top of the box and its centre on `ox`, no skew applied.
+ */
+function inBillboardSpace(ctx: CanvasRenderingContext2D, ox: number, oy: number, h: number, paint: () => void): void {
+  ctx.save();
+  ctx.translate(ox + (TW - TILE) / 2, oy + TD - h);
+  paint();
+  ctx.restore();
+}
+
+/** Details that are a vertical surface, and so want their art on the faces. */
+const FACED = new Set(["wall", "cliff", "dumpster", "bin", "fence", "hedge"]);
+
+/**
+ * Details that stand upright as sprites — the artwork is authored front-on and
+ * should not be skewed onto the top diamond or the parallelogram wall face.
+ * A tree canopy lying flat on the top of a box reads as a green roof; standing
+ * up it reads as a tree. Same logic for lamp posts and road signs.
+ */
+const BILLBOARD = new Set(["tree", "lamp", "sign"]);
+
+function tileRect(ctx: CanvasRenderingContext2D, ox: number, oy: number, grow = 0): void {
+  ctx.beginPath();
+  ctx.rect(ox - grow, oy - grow, TW + grow * 2, TD + grow * 2);
+}
+
+/** Darken or lighten a `#rrggbb`, for the two side faces of a box. */
+function shade(hex: string, k: number): string {
+  const n = parseInt(hex.slice(1), 16);
+  const r = Math.min(255, Math.round(((n >> 16) & 255) * k));
+  const g = Math.min(255, Math.round(((n >> 8) & 255) * k));
+  const b = Math.min(255, Math.round((n & 255) * k));
+  return `rgb(${r},${g},${b})`;
+}
+
+/**
+ * A tile that stands up: the face you can see, and then the top.
+ *
+ * Straight-on there is one visible side rather than two, so a box is a front
+ * rectangle and a top rectangle. That is flatter than an isometric box and it
+ * is the cost of the camera not being rotated — the contrast between the two
+ * faces is doing all the work, so keep them well apart.
+ */
+function drawBox(ctx: CanvasRenderingContext2D, ox: number, oy: number, h: number, color: string): void {
+  ctx.fillStyle = shade(color, 0.62);
+  ctx.fillRect(ox, oy + TD - h, TW, h);
 }
 
 /**
@@ -319,23 +277,16 @@ export function cameraFor(state: GameState): Camera {
  * view, and stingily is how you get buildings popping in at the bottom.
  */
 function visibleBounds(cam: Camera): { x0: number; x1: number; y0: number; y1: number } {
-  let x0 = Infinity;
-  let x1 = -Infinity;
-  let y0 = Infinity;
-  let y1 = -Infinity;
-  for (const [sx, sy] of [
-    [0, 0],
-    [CANVAS_W, 0],
-    [0, CANVAS_H],
-    [CANVAS_W, CANVAS_H],
-  ] as const) {
-    const at = screenToTile(sx + cam.px, sy + cam.py);
-    x0 = Math.min(x0, at.x);
-    x1 = Math.max(x1, at.x);
-    y0 = Math.min(y0, at.y);
-    y1 = Math.max(y1, at.y);
-  }
-  return { x0: x0 - 2, x1: x1 + 3, y0: y0 - 2, y1: y1 + 3 };
+  const topLeft = screenToTile(cam.px, cam.py);
+  const bottomRight = screenToTile(cam.px + CANVAS_W, cam.py + CANVAS_H);
+  return {
+    x0: topLeft.x - 1,
+    x1: bottomRight.x + 1,
+    // Generous below, because a tall tile several rows down still pokes up into
+    // view, and stingy is how you get buildings popping in at the bottom.
+    y0: topLeft.y - 1,
+    y1: bottomRight.y + 3,
+  };
 }
 
 export function render(ctx: CanvasRenderingContext2D, state: GameState, timeMs: number, minimapOpen = false): void {
@@ -347,44 +298,39 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState, timeMs: 
 
   const b = visibleBounds(cam);
   const at = playerTile(state);
-  const playerDepth = Math.round(at.x) + Math.round(at.y);
+  const playerRow = Math.round(at.y);
   let playerDrawn = false;
 
-  /**
-   * Painter's algorithm, by depth.
-   *
-   * Everything on screen is sorted by `x + y`, because that is the axis running
-   * away from the camera: a tile with a larger sum is nearer and paints over
-   * one behind it. A plain row-major loop does not do this — (5,0) and (0,1)
-   * come out in the wrong order — and getting it wrong means walls drawn on top
-   * of the things standing in front of them.
-   */
-  const px = isoX(at.x, at.y) - cam.px;
-  const py = isoY(at.x, at.y) - cam.py + TH / 2;
+  const px = screenX(at.x, at.y) - cam.px;
 
-  for (let d = b.x0 + b.y0; d <= b.x1 + b.y1; d++) {
+  /**
+   * Painter's algorithm, row by row, north to south.
+   *
+   * The camera looks straight down the grid, so depth *is* the row: a tile with
+   * a larger y is nearer and paints over the one behind it. The isometric
+   * version had to sort by `x + y` and iterate diamonds, because there the grid
+   * ran diagonally away from the viewer. This is the simpler thing that a
+   * straight-on camera buys.
+   */
+  for (let y = b.y0; y <= b.y1; y++) {
     for (let x = b.x0; x <= b.x1; x++) {
-      const y = d - x;
-      if (y < b.y0 || y > b.y1) continue;
-      const ox = isoX(x, y) - cam.px;
-      const oy = isoY(x, y) - cam.py;
+      const ox = screenX(x, y) - cam.px;
+      const oy = screenY(x, y) - cam.py;
       /**
        * Anything tall standing between you and the camera goes translucent.
        *
-       * This is not a nicety. The spawn is two rows from the southern retaining
-       * wall, which is the tallest thing in the game and painted last because
-       * it is nearest — so the first frame of a new game had the player
-       * completely hidden behind it. Walking south past any building did the
-       * same thing.
+       * Only the rows *in front of* you can hide you now, and only the ones
+       * close enough that their top edge still reaches back over your head —
+       * a narrow band directly below, rather than the two diagonal arms an
+       * isometric view had to fade.
        */
-      const stands = (STANDS[tileAt(glyphAt(town, x, y) ?? "_").detail ?? ""] ?? 0) > 0;
-      const inFront =
-        stands && d > playerDepth && Math.abs(ox - px) < TW * 0.75 && oy - py > -TH * 3 && oy - py < TH * 2;
+      const stands = STANDS[tileAt(glyphAt(town, x, y) ?? "_").detail ?? ""] ?? 0;
+      const inFront = stands > 0 && y > playerRow && (y - playerRow) * TD < stands + TD && Math.abs(ox - px) <= TW;
       drawTile(ctx, town, x, y, ox, oy, timeMs, inFront ? 0.32 : 1);
     }
     // The player belongs in the sort, not on top of it — otherwise you walk
     // through the front wall of every building you pass.
-    if (!playerDrawn && d >= playerDepth) {
+    if (!playerDrawn && y >= playerRow) {
       drawFacingCursor(ctx, state, cam, timeMs);
       drawPlayer(ctx, state, cam, timeMs);
       playerDrawn = true;
@@ -415,7 +361,7 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState, timeMs: 
  */
 function drawOutside(ctx: CanvasRenderingContext2D, x: number, y: number, ox: number, oy: number): void {
   ctx.fillStyle = hash(x, y, 91) > 0.5 ? "#23291f" : "#202619";
-  diamondPath(ctx, ox, oy, 0.5);
+  tileRect(ctx, ox, oy, 0.5);
   ctx.fill();
 }
 
@@ -445,7 +391,7 @@ function drawTile(
   // the tile stays solid and only what stands up goes translucent.
   if (fade < 1) {
     ctx.fillStyle = shade(tile.color, 0.5);
-    diamondPath(ctx, ox, oy, 0.5);
+    tileRect(ctx, ox, oy, 0.5);
     ctx.fill();
     ctx.globalAlpha = fade;
   }
@@ -458,31 +404,15 @@ function drawTile(
   ctx.fillStyle = stands > 0 ? shade(tile.color, 1.06) : tile.color;
   // A hair of overlap: neighbouring diamonds share an edge and antialiasing
   // leaves a lit seam along every one of them otherwise.
-  diamondPath(ctx, ox, top, 0.5);
+  tileRect(ctx, ox, top, 0.5);
   ctx.fill();
 
   if (stands > 0 && FACED.has(tile.detail ?? "")) {
-    // The top of a wall is its cap: flat, plain, and slightly lit. Everything
-    // that makes it a wall goes on the two faces you can actually see.
-    inWallSpace(ctx, ox, oy, stands, "right", () => paintDetail(ctx, tile, x, y, t));
-    inWallSpace(ctx, ox, oy, stands, "left", () => paintDetail(ctx, tile, x, y, t));
-    // Re-shade the faces after the art, so the lighting survives it.
-    ctx.fillStyle = "rgba(0,0,0,0.30)";
-    ctx.beginPath();
-    ctx.moveTo(ox + TW / 2, oy + TH / 2 - stands);
-    ctx.lineTo(ox, oy + TH - stands);
-    ctx.lineTo(ox, oy + TH);
-    ctx.lineTo(ox + TW / 2, oy + TH / 2);
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = "rgba(0,0,0,0.52)";
-    ctx.beginPath();
-    ctx.moveTo(ox - TW / 2, oy + TH / 2 - stands);
-    ctx.lineTo(ox, oy + TH - stands);
-    ctx.lineTo(ox, oy + TH);
-    ctx.lineTo(ox - TW / 2, oy + TH / 2);
-    ctx.closePath();
-    ctx.fill();
+    // The top of a wall is its cap: flat, plain, and lit. Everything that makes
+    // it a wall goes on the one face you can see from here.
+    inWallSpace(ctx, ox, oy, stands, () => paintDetail(ctx, tile, x, y, t));
+    ctx.fillStyle = "rgba(0,0,0,0.34)";
+    ctx.fillRect(ox, oy + TD - stands, TW, stands);
   } else if (stands > 0 && BILLBOARD.has(tile.detail ?? "")) {
     // Tree, lamp, sign: draw the sprite upright, no skew.
     inBillboardSpace(ctx, ox, oy, stands, () => paintDetail(ctx, tile, x, y, t));
@@ -741,12 +671,12 @@ function speckle(ctx: CanvasRenderingContext2D, x: number, y: number, sx: number
 function drawPlayer(ctx: CanvasRenderingContext2D, s: GameState, cam: Camera, t: number): void {
   const p = s.player;
   const at = playerTile(s);
-  // Feet at the middle of the tile's diamond; the sprite itself stays upright.
-  // Skewing the player the way the ground is skewed would lay them flat on it.
-  const footX = Math.round(isoX(at.x, at.y) - cam.px);
-  const footY = Math.round(isoY(at.x, at.y) - cam.py + TH / 2);
+  // Feet at the middle of the tile, sprite upright. Nothing about the player is
+  // squashed — the tilt foreshortens the ground, not the things standing on it.
+  const footX = Math.round(screenX(at.x, at.y) - cam.px + TW / 2);
+  const footY = Math.round(screenY(at.x, at.y) - cam.py + TD);
   const sx = footX - TILE / 2;
-  const sy = footY - TILE + 2;
+  const sy = footY - TILE;
 
   const walking = p.moveFrom !== null;
   const bob = walking ? (Math.floor(t / 110) % 2 === 0 ? 0 : 1) : 0;
@@ -754,7 +684,7 @@ function drawPlayer(ctx: CanvasRenderingContext2D, s: GameState, cam: Camera, t:
   // Shadow, flattened onto the ground plane.
   ctx.fillStyle = "rgba(0,0,0,0.28)";
   ctx.beginPath();
-  ctx.ellipse(footX, footY, 6, 3, 0, 0, Math.PI * 2);
+  ctx.ellipse(footX, footY - 1, 6, 3, 0, 0, Math.PI * 2);
   ctx.fill();
 
   const outfit = OUTFITS[s.wearing];
@@ -844,8 +774,8 @@ function drawLighting(ctx: CanvasRenderingContext2D, s: GameState, cam: Camera):
         for (let x = b.x0; x <= b.x1; x++) {
           if (glyphAt(townOf(s), x, y) !== "L") continue;
           // At the top of the lamp post, not at its foot.
-          const cx = isoX(x, y) - cam.px;
-          const cy = isoY(x, y) - cam.py + TH / 2 - STANDS.lamp!;
+          const cx = screenX(x, y) - cam.px + TW / 2;
+          const cy = screenY(x, y) - cam.py + TD - STANDS.lamp!;
           const g = ctx.createRadialGradient(cx, cy, 2, cx, cy, 46);
           g.addColorStop(0, `rgba(255,214,140,${0.55 * darkness})`);
           g.addColorStop(1, "rgba(255,214,140,0)");
@@ -958,7 +888,7 @@ function drawDoorSigns(ctx: CanvasRenderingContext2D, town: Town, cam: Camera): 
     const sign = DOOR_SIGNS[id];
     if (!sign) continue;
 
-    const cx = isoX(pos.x, pos.y) - cam.px;
+    const cx = screenX(pos.x, pos.y) - cam.px + TW / 2;
 
     // The marker tile itself has been replaced by a floor glyph, so its own
     // STANDS value is always 0. Look at the four neighbours to find the
@@ -972,7 +902,7 @@ function drawDoorSigns(ctx: CanvasRenderingContext2D, town: Town, cam: Camera): 
       return Math.max(max, STANDS[tileAt(g ?? "_").detail ?? ""] ?? 0);
     }, 0);
 
-    const cy = isoY(pos.x, pos.y) - cam.py + TH / 2 - buildingH - 7;
+    const cy = screenY(pos.x, pos.y) - cam.py + TD - buildingH - 8;
     if (cx < -40 || cy < -8 || cx > CANVAS_W + 40 || cy > CANVAS_H + 8) continue;
 
     const tw = bitmapTextWidth(sign);
@@ -993,9 +923,9 @@ function drawAssignmentMarkers(ctx: CanvasRenderingContext2D, s: GameState, cam:
   const a = s.assignment;
   if (!a || a.ready) return;
   for (const target of a.targets) {
-    const sx = isoX(target.x, target.y) - cam.px;
-    const sy = isoY(target.x, target.y) - cam.py + TH / 2;
-    if (sx < -TW || sy < -TH || sx > CANVAS_W + TW || sy > CANVAS_H + TH) continue;
+    const sx = screenX(target.x, target.y) - cam.px + TW / 2;
+    const sy = screenY(target.x, target.y) - cam.py + TD;
+    if (sx < -TW || sy < -TD * 3 || sx > CANVAS_W + TW || sy > CANVAS_H + TD) continue;
     const bounce = Math.sin(t / 260) * 2;
     const tip = sy - 20 + bounce;
     ctx.fillStyle = "#f0c85a";
@@ -1014,8 +944,7 @@ function drawFacingCursor(ctx: CanvasRenderingContext2D, s: GameState, cam: Came
   const highlight = assignmentStopAt(s, cell) >= 0;
   ctx.strokeStyle = highlight ? "rgba(240,200,90,0.9)" : `rgba(255,255,255,${0.20 + Math.sin(t / 500) * 0.08})`;
   ctx.lineWidth = 1;
-  diamondPath(ctx, isoX(cell.x, cell.y) - cam.px, isoY(cell.x, cell.y) - cam.py, -1);
-  ctx.stroke();
+  ctx.strokeRect(screenX(cell.x, cell.y) - cam.px + 0.5, screenY(cell.x, cell.y) - cam.py + 0.5, TW - 1, TD - 1);
 }
 
 /* ----------------------------------------------------------------- minimap */
