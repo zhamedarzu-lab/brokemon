@@ -265,8 +265,26 @@ function shade(hex: string, k: number): string {
  * faces is doing all the work, so keep them well apart.
  */
 function drawBox(ctx: CanvasRenderingContext2D, ox: number, oy: number, h: number, color: string): void {
-  ctx.fillStyle = shade(color, 0.62);
+  ctx.fillStyle = shade(color, 0.58);
   ctx.fillRect(ox, oy + TD - h, TW, h);
+  /**
+   * Cut the silhouette in.
+   *
+   * With one visible side instead of two, the only thing telling you a box is a
+   * box is how far its face sits from its top — so the two are pushed further
+   * apart than they were isometric (0.58 against 1.14) and the eave gets a dark
+   * line. A pixel of edge does more for solidity here than any amount of
+   * shading, because it is the edge that says where the geometry turns.
+   */
+  ctx.fillStyle = "rgba(0,0,0,0.38)";
+  ctx.fillRect(ox, oy + TD - h, TW, 1); // eave, where the top meets the face
+  // The corners only on something tall enough for them to read as edges. A
+  // hedge is eleven pixels; outlining all four sides of that leaves two pixels
+  // of hedge and a black brick, which is what the first pass did.
+  if (h >= 12) {
+    ctx.fillRect(ox, oy + TD - h, 1, h);
+    ctx.fillRect(ox + TW - 1, oy + TD - h, 1, h);
+  }
 }
 
 /**
@@ -401,9 +419,9 @@ function drawTile(
   // The top face — ground level for floor, `stands` pixels up for everything
   // else — and then the art, painted into the diamond by the transform.
   const top = oy - stands;
-  ctx.fillStyle = stands > 0 ? shade(tile.color, 1.06) : tile.color;
-  // A hair of overlap: neighbouring diamonds share an edge and antialiasing
-  // leaves a lit seam along every one of them otherwise.
+  ctx.fillStyle = stands > 0 ? shade(tile.color, 1.14) : tile.color;
+  // A hair of overlap: neighbouring tiles share an edge and antialiasing leaves
+  // a lit seam along every one of them otherwise.
   tileRect(ctx, ox, top, 0.5);
   ctx.fill();
 
@@ -521,9 +539,20 @@ function paintDetail(ctx: CanvasRenderingContext2D, tile: TileDef, x: number, y:
       break;
 
     case "pavement":
-      ctx.strokeStyle = "rgba(0,0,0,0.16)";
-      ctx.lineWidth = 1;
-      ctx.strokeRect(sx + 0.5, sy + 0.5, TILE - 1, TILE - 1);
+      /**
+       * Grout on two sides, not four.
+       *
+       * A stroked box round every tile was fine on a skewed diamond and reads
+       * as graph paper once the projection is straight-on and the tiles are
+       * bigger — a whole street of identical outlined squares. Two edges at
+       * half the weight reads as slabs laid next to each other, which is what
+       * it is, and `strokeRect` is out because the transform scales x and y
+       * differently now and a stroked line comes out thicker one way than the
+       * other.
+       */
+      ctx.fillStyle = "rgba(0,0,0,0.10)";
+      ctx.fillRect(sx, sy + TILE - 1, TILE, 1);
+      ctx.fillRect(sx + TILE - 1, sy, 1, TILE);
       speckle(ctx, x, y, sx, sy, tile.accent!, 2);
       break;
 

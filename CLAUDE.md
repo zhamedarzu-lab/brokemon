@@ -84,6 +84,13 @@ has already been made once, on ten minutes of evidence.
     camera looks straight down the grid. The isometric version had to sort by
     `x + y` and iterate diamonds; this is the simpler thing a straight-on
     camera buys.
+  - **One visible side means the edge does the work.** Face and top are pushed
+    well apart (0.58 against 1.14) and the eave gets a dark line, because with
+    only one face there is nothing else to say where the geometry turns. The
+    corners are only drawn on boxes 12px or taller — outlining all four sides of
+    an 11px hedge leaves two pixels of hedge and a black brick. `STANDS` did
+    *not* need retuning for this projection: a tile was 16px of screen depth
+    isometric and is 15px now, so a 15px wall is about one tile either way.
   - Tile art is still authored as 16x16 squares. `inTileSpace` is now a plain
     vertical squash and `inWallSpace` a plain upright rectangle — no skew at
     all, so the art is crisper than it was isometric. You see **one** side of a
