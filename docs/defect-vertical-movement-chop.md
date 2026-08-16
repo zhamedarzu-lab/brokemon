@@ -127,6 +127,37 @@ The camera stays fractional; nothing is drawn at a fraction.
 
 ---
 
+## The second defect: the legs were being painted over
+
+Fixing the sprite's *position* left a visible chop, because position was only
+half of it. The camera tracks `at.y` exactly, so the sprite holds still on
+screen while the world scrolls under it — which means **the tile row one south
+sweeps up through the sprite's legs** on every southward step. Whether it
+erases them is purely a question of the painter's sort order.
+
+`playerRow` was `Math.round(at.y)`. While `round` still returned `floor`, the
+row below sorted *after* the player and painted over the legs; at the halfway
+point `round` flipped to `floor + 1` and they snapped back. Measured over a
+step: **overdrawn for 45% of it, then not**, which is a hard flip mid-stride.
+
+Measured off the canvas — dark pixels in the leg band, frame by frame, walking
+south:
+
+| sort | frames | verdict |
+|---|---|---|
+| `Math.round(at.y)` | `28 0 64 64 46 28 0 64 64 46 …` | legs **fully erased**, ~1 frame in 5 |
+| `Math.floor(at.y) + 1` | `64 64 64 64 56 64 64 64 64 56 …` | steady; the dip to 56 is the leg animation |
+
+The sort row is now `playerSortRow(y)`, exported so the invariant is testable
+rather than inferred. `inFrontRow` stays at `Math.floor(at.y)` for the
+transparency test, so tall tiles immediately south still fade.
+
+A residue was measured and left alone: the row *two* south reaches the shadow's
+bottom pixel for 6.6% of a southward step. That is one pixel of a 28%-alpha
+shadow, below perception, and the frame-by-frame counts above show no
+disruption. Anchoring the shadow a pixel higher to dodge it would trade an
+invisible clip for a visible 1px wobble.
+
 ## Regression test
 
 `move.test.ts` — "the player does not jitter on the spot while walking". For
@@ -138,6 +169,17 @@ length of 1`.
 It asserts the symptom rather than the mechanism, so it still holds if the
 projection constants move. A companion test pins `cam.py` as non-integer, to
 stop the rounding being tidied back into `cameraFor`.
+
+That test could not see the second defect at all — the sprite never moved a
+pixel while its legs were being erased — so there is a second one beside it:
+"the row in front of the player is painted before the player", which samples
+201 points across a step and fails on `Math.round` at 101 of them. A third
+keeps the player sorted *behind* anything two rows south, because one row of
+slack is what the legs need and more would walk them through the front of
+buildings.
+
+**The lesson worth keeping: a test that a sprite holds still says nothing about
+whether it is still being drawn.**
 
 ---
 

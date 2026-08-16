@@ -10,7 +10,7 @@
 import { describe, expect, it } from "vitest";
 import { isSolid, TOWNS, townById, type Vec2 } from "../world/map";
 import { canStep, DIAGONAL_COST, facingFor, FACING_DELTA, stepCost, STEPS } from "./move";
-import { cameraFor, facingOnScreen, playerTile, screenPushToStep, screenStepLength, screenX, screenY, stepPacing } from "../engine/render";
+import { cameraFor, facingOnScreen, playerSortRow, playerTile, screenPushToStep, screenStepLength, screenX, screenY, stepPacing } from "../engine/render";
 import { createState } from "./state";
 
 const town = townById("brokemon");
@@ -363,5 +363,45 @@ describe("the player does not jitter on the spot while walking", () => {
     s.player.pos = { x: 30, y: 40 };
     const cam = cameraFor(s);
     expect(Number.isInteger(cam.py), "cam.py rounded — the vertical chop is back").toBe(false);
+  });
+});
+
+describe("the row in front of the player is painted before the player", () => {
+  /**
+   * The other half of the vertical chop, and the half a position test cannot
+   * see.
+   *
+   * The camera tracks `at.y` exactly, so the sprite holds still on screen
+   * while the world scrolls under it — which means the tile row one south
+   * sweeps *up through the sprite's legs* during a southward step. Whether it
+   * erases them depends purely on the painter's sort order.
+   *
+   * With `Math.round(at.y)` it erased them for the first 45% of every step and
+   * then stopped dead at the halfway mark, which reads as the legs flickering
+   * mid-stride. The sprite never moved a pixel while this was happening, so
+   * "the player does not jitter on the spot" passed throughout.
+   */
+  it("never lets the row below paint over the player, at any point in a step", () => {
+    const bad: string[] = [];
+    for (let i = 0; i <= 200; i++) {
+      const y = 40 + i / 200;
+      // The loop draws the player once `y >= playerRow`, so a row paints over
+      // the player exactly when its index is greater than the sort row.
+      if (Math.floor(y) + 1 > playerSortRow(y)) bad.push(y.toFixed(3));
+    }
+    expect(
+      bad.slice(0, 5),
+      `the tile row south of the player is painted after them at ${bad.length} of 201 sampled ` +
+        `points in the step, which erases the legs`,
+    ).toEqual([]);
+  });
+
+  it("still sorts the player behind anything two rows south", () => {
+    // The player belongs *in* the sort, not on top of it. One row of slack is
+    // what the legs need; more would walk them through the front of buildings.
+    for (let i = 0; i <= 20; i++) {
+      const y = 40 + i / 20;
+      expect(Math.floor(y) + 2).toBeGreaterThan(playerSortRow(y));
+    }
   });
 });

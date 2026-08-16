@@ -176,6 +176,29 @@ function snap(cam: Camera, x: number, y: number): { sx: number; sy: number } {
   };
 }
 
+/**
+ * Which row the player sorts into, for the painter's algorithm.
+ *
+ * Exported so the invariant is testable rather than inferred: the row
+ * immediately south of the player must be painted *before* them.
+ *
+ * `Math.round` was the obvious choice and it was wrong for half of every step.
+ * The camera tracks `at.y` exactly, so the sprite sits still on screen while
+ * the world scrolls under it — and the tile row one south scrolls up through
+ * the sprite's legs as you walk. While `round` still returned `floor`, that
+ * row was painted *after* the player and erased the legs; at the halfway point
+ * `round` flipped to `floor + 1` and they snapped back. Measured over a
+ * southward step: overdrawn for 45% of it, then not, which is a hard visual
+ * flip mid-stride and reads as chop.
+ *
+ * This is a second, separate defect from the half-pixel jitter in `cameraFor`.
+ * Fixing the sprite's *position* did nothing about it being painted over, and
+ * the test that guards the position could not see it.
+ */
+export function playerSortRow(y: number): number {
+  return Math.floor(y) + 1;
+}
+
 /** Where the player is standing, in fractional tiles, mid-step included. */
 export function playerTile(s: GameState): { x: number; y: number } {
   const p = s.player;
@@ -374,7 +397,7 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState, timeMs: 
   // transparency test: tall tiles immediately south of the player should still
   // fade so the player remains visible behind them.
   const inFrontRow = Math.floor(at.y);
-  const playerRow  = inFrontRow + 1;
+  const playerRow = playerSortRow(at.y);
   let playerDrawn = false;
 
   // Snapped, because the tiles it is compared against are: mixing a rounded
