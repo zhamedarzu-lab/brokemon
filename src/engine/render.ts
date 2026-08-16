@@ -145,9 +145,35 @@ export function facingOnScreen(facing: Facing): "up" | "down" | "left" | "right"
 }
 
 export interface Camera {
-  /** Top-left of the viewport in world pixels. */
+  /** Top-left of the viewport in world pixels. Deliberately fractional — see
+   * `cameraFor`. Nothing may be *drawn* at these coordinates without snapping;
+   * use `snap`. */
   px: number;
   py: number;
+}
+
+/**
+ * A tile's position on screen, snapped to the pixel grid.
+ *
+ * The camera is deliberately sub-pixel, because that is what stops the
+ * player's sprite jittering as they walk south. The cost is that every
+ * consumer now inherits a fractional offset, and half a pixel in a pixel-art
+ * game is not a subtle position change — it is an anti-aliased smear where a
+ * hard edge should be.
+ *
+ * `TD / 2` is 7.5, so `cam.py` carries half a pixel permanently, even at rest.
+ * That broke the facing cursor: `strokeRect(x + 0.5, ...)` is the standard
+ * trick for a crisp one-pixel line and it needs an *integer* base, so with the
+ * half already in `cam.py` the top and bottom edges landed exactly on a pixel
+ * boundary and were drawn as two half-lit rows. Measured on the canvas: the
+ * vertical edges sat in a single column at brightness 140 against a background
+ * of 119, while the horizontal edges split into two rows of +9.3 each.
+ */
+function snap(cam: Camera, x: number, y: number): { sx: number; sy: number } {
+  return {
+    sx: Math.round(screenX(x, y) - cam.px),
+    sy: Math.round(screenY(x, y) - cam.py),
+  };
 }
 
 /** Where the player is standing, in fractional tiles, mid-step included. */
@@ -335,7 +361,9 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState, timeMs: 
   const playerRow = Math.round(at.y);
   let playerDrawn = false;
 
-  const px = screenX(at.x, at.y) - cam.px;
+  // Snapped, because the tiles it is compared against are: mixing a rounded
+  // `ox` with an unrounded `px` moves the ghosting band by up to a pixel.
+  const px = Math.round(screenX(at.x, at.y) - cam.px);
 
   /**
    * Painter's algorithm, row by row, north to south.
@@ -348,8 +376,7 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState, timeMs: 
    */
   for (let y = b.y0; y <= b.y1; y++) {
     for (let x = b.x0; x <= b.x1; x++) {
-      const ox = Math.round(screenX(x, y) - cam.px);
-      const oy = Math.round(screenY(x, y) - cam.py);
+      const { sx: ox, sy: oy } = snap(cam, x, y);
       /**
        * Anything tall standing between you and the camera goes translucent.
        *
@@ -828,8 +855,9 @@ function drawLighting(ctx: CanvasRenderingContext2D, s: GameState, cam: Camera):
         for (let x = b.x0; x <= b.x1; x++) {
           if (glyphAt(townOf(s), x, y) !== "L") continue;
           // At the top of the lamp post, not at its foot.
-          const cx = screenX(x, y) - cam.px + TW / 2;
-          const cy = screenY(x, y) - cam.py + TD - STANDS.lamp!;
+          const lamp = snap(cam, x, y);
+          const cx = lamp.sx + TW / 2;
+          const cy = lamp.sy + TD - STANDS.lamp!;
           const g = ctx.createRadialGradient(cx, cy, 2, cx, cy, 46);
           g.addColorStop(0, `rgba(255,214,140,${0.55 * darkness})`);
           g.addColorStop(1, "rgba(255,214,140,0)");
@@ -942,7 +970,7 @@ function drawDoorSigns(ctx: CanvasRenderingContext2D, town: Town, cam: Camera): 
     const sign = DOOR_SIGNS[id];
     if (!sign) continue;
 
-    const cx = screenX(pos.x, pos.y) - cam.px + TW / 2;
+    const cx = snap(cam, pos.x, pos.y).sx + TW / 2;
 
     // The marker tile itself has been replaced by a floor glyph, so its own
     // STANDS value is always 0. Look at the four neighbours to find the
@@ -956,7 +984,7 @@ function drawDoorSigns(ctx: CanvasRenderingContext2D, town: Town, cam: Camera): 
       return Math.max(max, STANDS[tileAt(g ?? "_").detail ?? ""] ?? 0);
     }, 0);
 
-    const cy = screenY(pos.x, pos.y) - cam.py + TD - buildingH - 8;
+    const cy = snap(cam, pos.x, pos.y).sy + TD - buildingH - 8;
     if (cx < -40 || cy < -8 || cx > CANVAS_W + 40 || cy > CANVAS_H + 8) continue;
 
     const tw = bitmapTextWidth(sign);
@@ -977,8 +1005,9 @@ function drawAssignmentMarkers(ctx: CanvasRenderingContext2D, s: GameState, cam:
   const a = s.assignment;
   if (!a || a.ready) return;
   for (const target of a.targets) {
-    const sx = screenX(target.x, target.y) - cam.px + TW / 2;
-    const sy = screenY(target.x, target.y) - cam.py + TD;
+    const at = snap(cam, target.x, target.y);
+    const sx = at.sx + TW / 2;
+    const sy = at.sy + TD;
     if (sx < -TW || sy < -TD * 3 || sx > CANVAS_W + TW || sy > CANVAS_H + TD) continue;
     const bounce = Math.sin(t / 260) * 2;
     const tip = sy - 20 + bounce;
@@ -998,7 +1027,9 @@ function drawFacingCursor(ctx: CanvasRenderingContext2D, s: GameState, cam: Came
   const highlight = assignmentStopAt(s, cell) >= 0;
   ctx.strokeStyle = highlight ? "rgba(240,200,90,0.9)" : `rgba(255,255,255,${0.20 + Math.sin(t / 500) * 0.08})`;
   ctx.lineWidth = 1;
-  ctx.strokeRect(screenX(cell.x, cell.y) - cam.px + 0.5, screenY(cell.x, cell.y) - cam.py + 0.5, TW - 1, TD - 1);
+  // Snap first, then add the half: the hairline trick needs an integer base.
+  const { sx, sy } = snap(cam, cell.x, cell.y);
+  ctx.strokeRect(sx + 0.5, sy + 0.5, TW - 1, TD - 1);
 }
 
 /* ----------------------------------------------------------------- minimap */

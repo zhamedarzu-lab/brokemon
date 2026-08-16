@@ -1,108 +1,156 @@
 # Defect Report — Vertical Movement Choppiness
 
-**Date:** 2026-08-16  
-**Status:** Partially mitigated; root cause addressed but may warrant further observation  
-**Area:** `src/engine/render.ts` — camera and shadow rendering
+**Date:** 2026-08-16
+**Status:** Fixed, with a regression test that fails on the original code
+**Area:** `src/engine/render.ts` — camera, shadow, and every consumer of the camera
+
+> **Revision note.** The first version of this report diagnosed the cause as
+> vertical movement advancing fewer pixels per frame than horizontal. That is
+> not what was happening — the two rates are identical and are pinned by a test
+> — and the fix it proposed under "Remaining Risk" (raise `TD` to 16, or slow
+> the step animation) would have traded a real property away to chase a cause
+> that does not exist. The applied fix was nevertheless the right one, for the
+> reason set out below. The shadow analysis was correct as written and is kept.
 
 ---
 
 ## Description
 
-Walking vertically (north/south) produces visibly choppy movement. Walking horizontally (east/west) is smooth. The chop manifests as the player appearing to pause for a frame then jump one pixel, repeating throughout the step animation.
+Walking with any north/south component produces visibly choppy movement. The
+player appears to twitch one pixel up and back during the step.
 
-A secondary symptom reported first: the player shadow flickered and appeared half-clipped while walking vertically.
+It affects **six of the eight directions**, not two: north, south, and all four
+diagonals. Only due east and due west are clean. The original report described
+it as "vertical is choppy, horizontal is smooth", which is true as far as it
+goes but understates the reach — a diagonal has a vertical component and chops
+exactly like a vertical step.
 
----
-
-## Root Cause
-
-The projection uses two different tile dimensions:
-
-| Axis | Constant | Value |
-|------|----------|-------|
-| Horizontal | `TW` | 20 px |
-| Vertical (depth) | `TD` | 15 px |
-
-The 20×15 ratio was chosen deliberately — it is a 4:3 scaling of the standard 3-4-5 right triangle, which guarantees every diagonal is a whole number of pixels. At true 45° (16×12 or 32×24) the same property holds; 20×15 was chosen because it shows roughly the same number of tiles as the original top-down view while giving each tile enough pixels to carry its art.
-
-The consequence: the camera advances **15 px per tile vertically** but **20 px per tile horizontally**. At the animation speed used for a single step, the camera moves approximately:
-
-- **Horizontal:** ~1.11 screen pixels per frame → always advances ≥ 1 px, smooth
-- **Vertical:** ~0.83 screen pixels per frame → advances < 1 px, holds the same integer for 1–2 frames then jumps
-
-The original camera code rounded its output to the nearest integer pixel:
-
-```ts
-return {
-  px: Math.round(...),
-  py: Math.round(...),
-};
-```
-
-With vertical advancement at 0.83 px/frame, `Math.round` collapses multiple frames to the same integer value, then releases a 1 px jump — the classic sub-pixel stutter pattern.
-
-An additional contributing factor: `TD / 2 = 7.5`, so the camera's vertical offset always carried a persistent 0.5-pixel fractional component, causing `Math.round` to round in alternating directions as the player moved. This made the stutter slightly worse than it would have been with a clean integer offset.
+A secondary symptom, reported first: the player's shadow flickered and appeared
+half-clipped while walking vertically.
 
 ---
 
-## Shadow Flicker (Related Symptom)
+## Root cause: half a pixel, not a slower frame rate
 
-The player shadow was drawn as `ctx.ellipse(...)`, which is anti-aliased by the browser regardless of `ctx.imageSmoothingEnabled`. As the player moved vertically, the sub-pixel centre position changed each frame, causing the anti-aliasing pattern to shift and read as flicker.
+### What it is not
 
-A second problem: the shadow's bottom pixel landed exactly at the screen Y coordinate where the next tile row begins painting. Because the painter's algorithm draws tiles in row order and the player is inserted after their current row, the row below paints *after* the player — overwriting the lower half of the shadow each frame.
+The projection uses two tile dimensions — `TW` 20 across, `TD` 15 deep — so it
+is tempting to conclude that the camera advances fewer pixels per frame
+vertically and therefore stutters. Measured:
+
+| direction | px/step | animScale | duration | px/ms | **px/frame @60fps** |
+|---|---|---|---|---|---|
+| east | 20 | 1.00 | 180 ms | 0.1111 | **1.852** |
+| south | 15 | 0.75 | 135 ms | 0.1111 | **1.852** |
+| south-east | 25 | 1.25 | 225 ms | 0.1111 | **1.852** |
+
+The rates are identical, because `stepPacing` shortens a vertical step to 135 ms
+against a horizontal step's 180 ms for exactly this purpose. `move.test.ts` has
+asserted "the same number of pixels a second in every direction" to ten decimal
+places since the projection changed.
+
+The figures 1.11 and 0.83 in the first version of this report are `20 / 180` and
+`15 / 180` — pixels per *millisecond*, computed as though both steps ran the
+full 180 ms. That drops `animScale`, which is the one mechanism in the file
+written to prevent this exact asymmetry.
+
+### What it is
+
+`cameraFor` centres the player:
+
+```ts
+const px = screenX(at.x, at.y) + TW / 2 - CANVAS_W / 2;
+const py = screenY(at.x, at.y) + TD / 2 - CANVAS_H / 2;
+```
+
+`TW / 2` is **10**, an integer. `TD / 2` is **7.5**. So `cam.py` carries half a
+pixel permanently — at rest, mid-step, always — and `cam.px` never does.
+
+The player is then drawn at `Math.round(screenY(...) - cam.py + TD)`. With the
+half in place that expression sits exactly on a rounding boundary, so it flips
+between two integers as the fractional part drifts across it. Traced across one
+southward step with the camera rounded:
+
+```
+east   168 168 168 168 168 168 168 168 168 168 168 168   <- 0 jumps
+south  127 128 128 128 128 127 127 127 127               <- 2 jumps
+```
+
+The world slid smoothly; the sprite twitched on top of it. That is the chop.
 
 ---
 
-## Fixes Applied
+## Shadow flicker (related, and correctly diagnosed first time)
 
-### 1. Shadow flicker — `ctx.ellipse` → `fillRect` (first attempt)
+The shadow was drawn with `ctx.ellipse`, which the browser anti-aliases
+regardless of `imageSmoothingEnabled` — so its sub-pixel centre shifted every
+frame and read as flicker.
 
-Replaced the anti-aliased ellipse with three `fillRect` rows forming a pixelated oval. Eliminated the anti-aliasing flicker but the half-clip issue remained.
+Separately, its bottom pixel landed exactly where the next tile row begins
+painting. The painter draws row by row and inserts the player after their own
+row, so the row below painted *over* the lower half of the shadow.
 
-### 2. Shadow clip — anchor to integer row boundary
-
-Stopped deriving the shadow's vertical position from `footY` (which tracks `at.y`, a fractional value during movement). Instead, anchored it to `playerRow` (the integer row used by the painter's sort):
-
-```ts
-const playerRow = Math.round(at.y);
-const rowBottom = Math.round(playerRow * TD - cam.py + TD - 1);
-```
-
-This keeps the shadow's bottom pixel one pixel above the boundary where the next tile row begins, so tiles painted afterward no longer overwrite it.
-
-### 3. Vertical choppiness — sub-pixel camera
-
-Removed `Math.round` from the camera return value so the camera tracks the player continuously in floating-point:
-
-```ts
-// Before
-return {
-  px: Math.round(Math.min(Math.max(px, -overscanX), maxX + overscanX)),
-  py: Math.round(Math.min(Math.max(py, -overscanY), maxY + overscanY)),
-};
-
-// After
-return {
-  px: Math.min(Math.max(px, -overscanX), maxX + overscanX),
-  py: Math.min(Math.max(py, -overscanY), maxY + overscanY),
-};
-```
-
-Each tile's screen position is then rounded individually at draw time:
-
-```ts
-const ox = Math.round(screenX(x, y) - cam.px);
-const oy = Math.round(screenY(x, y) - cam.py);
-```
-
-Because all tiles in a given row share the same fractional component from `cam.py`, they all round in the same direction — consistent 15 px spacing is preserved and no seams appear between tiles. The camera now advances the full fractional amount each frame rather than holding a rounded integer, which removes the stutter.
+Fixed by replacing the ellipse with three `fillRect` rows, and anchoring the
+shadow to the integer `playerRow` rather than the fractional `footY`.
 
 ---
 
-## Remaining Risk
+## Fix
 
-The 15 px vertical tile depth is the underlying constraint. The fixes above remove the rounding amplification of the problem, but at sufficiently low frame rates (or very fast step animations) the sub-pixel movement could become perceptible again. If the chop reappears under different conditions, options to explore are:
+**1. Sub-pixel camera.** `Math.round` removed from `cameraFor`'s return, so the
+camera tracks the player continuously. The player's drawn position is then
+constant — 128 every frame — instead of alternating.
 
-- Increasing `TD` to 16 (loses the clean-diagonal property but matches `TILE` exactly)
-- Reducing step animation speed so each frame advances more pixels
-- Storing camera position in a higher-precision accumulator and applying a proper pixel-snapping scheme per-draw
+Worth being precise about what this did *not* change: tile positions. The old
+code computed `int - round(c)` and the new one computes `round(int - c)`, which
+are the same number except at an exact `.5` tie — measured at 840 of 16,040
+sampled row positions, about 5%. The tiles were never the problem.
+
+**2. Everything drawn snaps.** A fractional camera is only safe if no consumer
+draws at those coordinates raw, and five did. The worst was the facing cursor:
+
+```ts
+ctx.strokeRect(screenX(...) - cam.px + 0.5, screenY(...) - cam.py + 0.5, ...)
+```
+
+`+ 0.5` is the standard crisp-hairline trick and it needs an **integer** base.
+With the half already in `cam.py` it landed on a pixel boundary and drew as two
+half-lit rows. Measured off the canvas, cursor at (32,37):
+
+| | before | after |
+|---|---|---|
+| vertical edge (`cam.px` integer) | one column, 140 vs 119 background | unchanged |
+| horizontal edge (`cam.py` + .5) | **two rows, +9.3 each** | **one row, +19.7** |
+
+All world-to-screen conversions now go through `snap(cam, x, y)`, which rounds.
+The camera stays fractional; nothing is drawn at a fraction.
+
+---
+
+## Regression test
+
+`move.test.ts` — "the player does not jitter on the spot while walking". For
+each of the eight steps it samples the animation at 60 points and asserts the
+sprite's drawn position takes exactly **one** value. On the pre-fix camera it
+fails for six directions with `expected [ '168,127', '168,128' ] to have a
+length of 1`.
+
+It asserts the symptom rather than the mechanism, so it still holds if the
+projection constants move. A companion test pins `cam.py` as non-integer, to
+stop the rounding being tidied back into `cameraFor`.
+
+---
+
+## Remaining risk
+
+Low, and not what the first version of this report suggested.
+
+`TD = 15` is **not** the underlying constraint, and raising it to 16 would cost
+the whole-pixel diagonals (20/15/25 is a 3-4-5 triangle) to fix nothing — the
+half-pixel comes from `TD / 2` in the centring term, not from `TD` itself.
+Slowing the step animation would not help either, for the same reason.
+
+The live constraint is the discipline in fix 2: **any new draw call that
+consumes `cam.px`/`cam.py` must snap.** The two legitimate exceptions are
+`visibleBounds` and the minimap's `screenToTile`, which do bounds arithmetic
+rather than drawing.

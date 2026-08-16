@@ -10,7 +10,8 @@
 import { describe, expect, it } from "vitest";
 import { isSolid, TOWNS, townById, type Vec2 } from "../world/map";
 import { canStep, DIAGONAL_COST, facingFor, FACING_DELTA, stepCost, STEPS } from "./move";
-import { facingOnScreen, screenPushToStep, screenStepLength, screenX, screenY, stepPacing } from "../engine/render";
+import { cameraFor, facingOnScreen, playerTile, screenPushToStep, screenStepLength, screenX, screenY, stepPacing } from "../engine/render";
+import { createState } from "./state";
 
 const town = townById("brokemon");
 
@@ -297,5 +298,70 @@ describe("the town is still fully walkable", () => {
       if (gated(at)) continue;
       expect(seen.has(`${at.x},${at.y}`), `${town.id}: cannot walk to ${id}`).toBe(true);
     }
+  });
+});
+
+describe("the player does not jitter on the spot while walking", () => {
+  /**
+   * Reported as "walking north/south is choppy; east/west is smooth", and it
+   * was real — but not for the reason it first looked like.
+   *
+   * The tempting explanation is that the camera covers 15px a tile vertically
+   * against 20 horizontally, so vertical movement must advance fewer pixels
+   * per frame. It does not: `stepPacing` shortens a vertical step to 135ms
+   * against a horizontal step's 180ms precisely so that both cross 0.111px
+   * per millisecond — 1.85px a frame at 60fps, in every direction, which the
+   * two tests above pin to ten decimal places.
+   *
+   * The real cause is half a pixel. `cameraFor` centres on the player with
+   * `+ TD / 2`, and TD is 15, so `cam.py` carries a permanent .5 — which puts
+   * the player's *drawn* position exactly on a rounding boundary, where it
+   * flips between two integers as the fraction drifts. `TW / 2` is 10, an
+   * integer, so the horizontal axis never had the problem. Traced across one
+   * step with the camera rounded: 127 128 128 128 128 127 127 127 127.
+   *
+   * This asserts the symptom rather than the mechanism, so it still holds if
+   * the projection constants ever move.
+   */
+  function drawnAt(from: Vec2, to: Vec2, k: number): { x: number; y: number } {
+    const s = createState(1);
+    // Well away from every edge, so the camera is centring rather than clamped.
+    s.player.pos = { ...to };
+    s.player.moveFrom = { ...from };
+    s.player.moveProgress = k;
+    const cam = cameraFor(s);
+    const at = playerTile(s);
+    return {
+      x: Math.round(screenX(at.x, at.y) - cam.px + 20 / 2),
+      y: Math.round(screenY(at.x, at.y) - cam.py + 15),
+    };
+  }
+
+  for (const step of STEPS) {
+    const name = facingFor(step.x, step.y)!;
+    it(`holds still on screen while stepping ${name}`, () => {
+      const from = { x: 30, y: 40 };
+      const to = { x: from.x + step.x, y: from.y + step.y };
+      // Sample the step far more finely than any frame rate would.
+      const seen = new Set<string>();
+      for (let i = 0; i <= 60; i++) {
+        const p = drawnAt(from, to, i / 60);
+        seen.add(`${p.x},${p.y}`);
+      }
+      expect(
+        [...seen],
+        `the player's sprite moves ${seen.size} different places on screen during one ${name} step — ` +
+          `it should stay put while the world slides underneath`,
+      ).toHaveLength(1);
+    });
+  }
+
+  it("keeps the camera fractional, because that is what fixes it", () => {
+    // Guards against somebody "tidying" the rounding back into `cameraFor`.
+    // Nothing is *drawn* at these coordinates without snapping — see `snap`.
+    const s = createState(1);
+    s.player.pos = { x: 30, y: 40 };
+    const cam = cameraFor(s);
+    expect(Number.isInteger(cam.py), "cam.py rounded — the vertical chop is back").toBe(false);
   });
 });
