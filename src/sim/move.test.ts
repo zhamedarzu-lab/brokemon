@@ -194,9 +194,9 @@ describe("how a step is paced against what it costs", () => {
    *
    * A step is worth 1 or root-two *tiles* of ground; the clock charges that, or
    * crossing the map gets cheaper depending on which way you walked. The same
-   * step is worth 16 or 32 *pixels*, because the projection squashes the
-   * vertical two to one; the animation is paced by that, or walking down the
-   * screen looks like half the speed of walking across it.
+   * step is worth 15, 20 or 25 *pixels*, because a tile is 20 across and 15
+   * deep; the animation is paced by that, or walking down the screen looks
+   * slower than walking across it.
    */
   it("spends exactly the game time the ground is worth, whichever way you go", () => {
     for (const step of STEPS) {
@@ -218,12 +218,20 @@ describe("how a step is paced against what it costs", () => {
   });
 
   it("was not already uniform, which is why this exists", () => {
-    // Guard against somebody "simplifying" the pacing back to one number: a
-    // tile is 16 across and 12 deep, so the pixel lengths genuinely differ and
-    // no single scale can satisfy both invariants above. Four to three now,
-    // where the isometric view made it two to one.
+    // Guard against somebody "simplifying" the pacing back to one number. A
+    // tile is 20 across and 15 deep, so the eight steps are 15px (up/down),
+    // 20px (left/right) and 25px (the diagonals) — genuinely different lengths,
+    // and no single scale can satisfy both invariants above.
+    //
+    // The bound is the longest step over the shortest, 25/15, not the tile's
+    // own 20/15 anisotropy. Those are 5:3 and 4:3 and it is easy to write the
+    // wrong one: this assertion used to read `20 / 12`, which passes only
+    // because 20/12 and 25/15 are both 5/3, while describing a tile size the
+    // game has never had.
     const lengths = STEPS.map((s) => screenStepLength(s.x, s.y));
-    expect(Math.max(...lengths) / Math.min(...lengths)).toBeCloseTo(20 / 12, 6);
+    expect(Math.min(...lengths)).toBeCloseTo(15, 6);
+    expect(Math.max(...lengths)).toBeCloseTo(25, 6);
+    expect(Math.max(...lengths) / Math.min(...lengths)).toBeCloseTo(25 / 15, 6);
   });
 });
 

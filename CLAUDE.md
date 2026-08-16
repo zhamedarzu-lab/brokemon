@@ -144,9 +144,13 @@ recorded after it.**
   pacing the animation by ground alone makes walking north-south look slower
   than walking east-west. `animScale` stretches the duration so apparent speed
   is constant; `timeRate` scales the clock during it so the ground still costs
-  what it costs. The invariant `animScale * timeRate === ground` is tested; do
-  not collapse them into one number, because the pixel lengths genuinely differ
-  four to three and no single scale satisfies both.
+  what it costs. The invariant `animScale * timeRate === ground` is tested, as
+  is "same pixels per second in all eight directions"; do not collapse them
+  into one number, because the step lengths genuinely differ **five to three**
+  (25px diagonal against 15px vertical) and no single scale satisfies both.
+  Note that 5:3 is the spread of the *steps*; the *tile* is 4:3. Writing one
+  where the other belongs passes anyway, because 20/12 and 25/15 are the same
+  number — `move.test.ts` says so at the point it would happen.
 
   Two things in `move.ts` itself are load-bearing:
   - **A diagonal costs root two.** It covers 1.41 tiles of ground and takes
