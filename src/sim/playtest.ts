@@ -1087,6 +1087,7 @@ function playDay(p: Player): void {
 
   // Now the things with no closing time.
   if (clockInFirst) foodBank(p);
+  treatFever(p);
   wash(p);
   shop(p);
   groceries(p);
@@ -1176,13 +1177,36 @@ const PACKETS_TO_CARRY = 2;
  * treated one. The market sells tablets now and the bot buys them, which is
  * what a player would do the second time it happened to them.
  */
+/**
+ * Deal with a fever, wherever you happen to be.
+ *
+ * This only ever knew about Brokedale's night market, and it was only ever
+ * called from the stranded routine — so a bot ill in Brokemon had no way out
+ * of it at all. Every collapse in a Brokemon run had the same signature:
+ * `sick true`, health at 0, and hunger and thirst perfectly fine. It was
+ * dying of flu on days two to four holding $60 to $100, with the cure on a
+ * shelf at the Mart for $12 the whole time.
+ *
+ * Collapsing does clear it, which is why this was invisible for so long: the
+ * run continues, and the $100 of debt and the lost day look like bad luck
+ * rather than a shop the bot never walked into.
+ */
 function treatFever(p: Player): void {
   const s = p.s;
   if (!s.sick) return;
   if (countOf(s.inventory, "medicine") === 0) {
-    if (!hasMarker(townOf(s), "nightMarket") || s.cash < 18) return;
-    p.goto("nightMarket");
-    if (!p.took(p.press(), "Cold and flu tablets")) return;
+    if (hasMarker(townOf(s), "mart") && s.cash >= 12) {
+      p.goto("mart");
+      p.drive(p.press(), "buy something", "Cold Medicine");
+    }
+    if (countOf(s.inventory, "medicine") === 0 && hasMarker(townOf(s), "nightMarket") && s.cash >= 18) {
+      p.goto("nightMarket");
+      p.took(p.press(), "Cold and flu tablets");
+    }
+  }
+  if (countOf(s.inventory, "medicine") === 0) {
+    p.blocked.set("fever: nothing to take", (p.blocked.get("fever: nothing to take") ?? 0) + 1);
+    return;
   }
   consume(p.ctx, "medicine");
 }
