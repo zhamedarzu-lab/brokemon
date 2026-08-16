@@ -722,12 +722,19 @@ function drawPlayer(ctx: CanvasRenderingContext2D, s: GameState, cam: Camera, t:
   const bob = walking ? (Math.floor(t / 110) % 2 === 0 ? 0 : 1) : 0;
 
   // Shadow, flattened onto the ground plane.
-  // fillRect rather than ellipse — the canvas is pixel-art and ctx.ellipse
-  // anti-aliases, which flickers as the player moves vertically.
+  //
+  // The shadow is anchored to the *integer* player row, not the fractional
+  // step position. The tile at playerRow+1 is painted after the player, so
+  // any shadow pixel at or below `playerRow * TD + TD` gets overwritten by
+  // it — which is why the bottom of the shadow flickered while walking: as
+  // `at.y` drifted fractionally, `footY` crossed the tile boundary and the
+  // next row's tiles erased half the shadow on alternating frames.
+  const playerRow = Math.round(at.y);
+  const rowBottom = playerRow * TD - cam.py + TD - 1; // last safe pixel in this row
   ctx.fillStyle = "rgba(0,0,0,0.28)";
-  ctx.fillRect(footX - 4, footY - 3, 8, 1);
-  ctx.fillRect(footX - 5, footY - 2, 10, 2);
-  ctx.fillRect(footX - 4, footY,     8, 1);
+  ctx.fillRect(footX - 4, rowBottom - 3, 8,  1);
+  ctx.fillRect(footX - 5, rowBottom - 2, 10, 2);
+  ctx.fillRect(footX - 4, rowBottom,     8,  1);
 
   const outfit = OUTFITS[s.wearing];
   const body = outfitColor(s.wearing);
