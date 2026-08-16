@@ -751,7 +751,15 @@ function drawPlayer(ctx: CanvasRenderingContext2D, s: GameState, cam: Camera, t:
   const sy = footY - TILE;
 
   const walking = p.moveFrom !== null;
-  const bob = walking ? (Math.floor(t / 110) % 2 === 0 ? 0 : 1) : 0;
+  const look = facingOnScreen(p.facing);
+  const bobTick = walking ? (Math.floor(t / 110) % 2 === 0 ? 0 : 1) : 0;
+  // When walking north/south the camera scrolls vertically — a vertical body
+  // bob fights that motion and reads as chop even though the sprite's screen
+  // position is stable. Rotate the bob 90° for N/S steps: legs alternate
+  // left/right, upper body holds still. E/W keeps the standard vertical bob.
+  const verticalStep = look === "up" || look === "down";
+  const xBob = verticalStep ? bobTick : 0;
+  const yBob = verticalStep ? 0 : bobTick;
 
   // Shadow, flattened onto the ground plane.
   //
@@ -772,45 +780,47 @@ function drawPlayer(ctx: CanvasRenderingContext2D, s: GameState, cam: Camera, t:
   const body = outfitColor(s.wearing);
   const grimy = s.meters.hygiene < 35;
 
-  // Legs
+  // Legs — for N/S steps these alternate left/right (xBob); for E/W they
+  // alternate up/down (yBob). Either way only the legs move; the upper body
+  // holds still during vertical steps so it doesn't fight the camera scroll.
   ctx.fillStyle = grimy ? "#4a4038" : "#39404f";
-  ctx.fillRect(sx + 5, sy + 11 - bob, 2, 4);
-  ctx.fillRect(sx + 9, sy + 11 + bob, 2, 4);
+  ctx.fillRect(sx + 5 - xBob, sy + 11 - yBob, 2, 4);
+  ctx.fillRect(sx + 9 + xBob, sy + 11 + yBob, 2, 4);
 
-  // Torso
+  // Torso — upper body stays still on vertical steps (yBob=0 when verticalStep).
   ctx.fillStyle = body;
-  ctx.fillRect(sx + 4, sy + 6 - bob, 8, 6);
+  ctx.fillRect(sx + 4, sy + 6 - yBob, 8, 6);
   if (outfit.presentation >= 60) {
     ctx.fillStyle = "#e8e8e4";
-    ctx.fillRect(sx + 7, sy + 6 - bob, 2, 5);
+    ctx.fillRect(sx + 7, sy + 6 - yBob, 2, 5);
   }
   if (grimy) {
     ctx.fillStyle = "rgba(60,45,30,0.45)";
-    ctx.fillRect(sx + 4, sy + 9 - bob, 8, 3);
+    ctx.fillRect(sx + 4, sy + 9 - yBob, 8, 3);
   }
 
   // Head
   ctx.fillStyle = "#d9a97e";
-  ctx.fillRect(sx + 5, sy + 1 - bob, 6, 6);
+  ctx.fillRect(sx + 5, sy + 1 - yBob, 6, 6);
   ctx.fillStyle = grimy ? "#4a3a28" : "#37302a";
-  ctx.fillRect(sx + 5, sy + 1 - bob, 6, 2);
+  ctx.fillRect(sx + 5, sy + 1 - yBob, 6, 2);
   if (s.meters.hygiene < 25) {
     ctx.fillStyle = "#5a4a38";
-    ctx.fillRect(sx + 5, sy + 5 - bob, 6, 2);
+    ctx.fillRect(sx + 5, sy + 5 - yBob, 6, 2);
   }
 
   // Eyes, if we're facing the camera at all. Screen-relative, because the
   // controls are: pressing down means walking down the screen, and the face
   // has to agree with that rather than with the grid underneath it.
-  const look = facingOnScreen(p.facing);
+  // (`look` is already computed above for the bob direction.)
   ctx.fillStyle = "#20181a";
   if (look === "down") {
-    ctx.fillRect(sx + 6, sy + 4 - bob, 1, 1);
-    ctx.fillRect(sx + 9, sy + 4 - bob, 1, 1);
+    ctx.fillRect(sx + 6, sy + 4 - yBob, 1, 1);
+    ctx.fillRect(sx + 9, sy + 4 - yBob, 1, 1);
   } else if (look === "left") {
-    ctx.fillRect(sx + 5, sy + 4 - bob, 1, 1);
+    ctx.fillRect(sx + 5, sy + 4 - yBob, 1, 1);
   } else if (look === "right") {
-    ctx.fillRect(sx + 10, sy + 4 - bob, 1, 1);
+    ctx.fillRect(sx + 10, sy + 4 - yBob, 1, 1);
   }
 
   if (s.sick) {
