@@ -722,10 +722,12 @@ function drawPlayer(ctx: CanvasRenderingContext2D, s: GameState, cam: Camera, t:
   const bob = walking ? (Math.floor(t / 110) % 2 === 0 ? 0 : 1) : 0;
 
   // Shadow, flattened onto the ground plane.
+  // fillRect rather than ellipse — the canvas is pixel-art and ctx.ellipse
+  // anti-aliases, which flickers as the player moves vertically.
   ctx.fillStyle = "rgba(0,0,0,0.28)";
-  ctx.beginPath();
-  ctx.ellipse(footX, footY - 1, 6, 3, 0, 0, Math.PI * 2);
-  ctx.fill();
+  ctx.fillRect(footX - 4, footY - 3, 8, 1);
+  ctx.fillRect(footX - 5, footY - 2, 10, 2);
+  ctx.fillRect(footX - 4, footY,     8, 1);
 
   const outfit = OUTFITS[s.wearing];
   const body = outfitColor(s.wearing);
