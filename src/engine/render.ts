@@ -358,7 +358,23 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState, timeMs: 
 
   const b = visibleBounds(cam);
   const at = playerTile(state);
-  const playerRow = Math.round(at.y);
+
+  // Sort the player one full tile further south than their fractional position.
+  //
+  // With Math.round, `playerRow` flips at the halfway point of each step. The
+  // player sprite is 16px tall and the camera tracks at.y exactly, so the
+  // sprite's screen position is constant while the world scrolls around it.
+  // As the player moves south the tile at row floor(at.y)+1 scrolls upward
+  // and — when it reaches the sprite's lower body — is painted *after* the
+  // player (because y > playerRow fires too late), overwriting the legs. Using
+  // Math.floor(at.y)+1 draws the player after that row's tiles instead, so
+  // they are painted before and the sprite is never clipped.
+  //
+  // `inFrontRow` is the actual tile-row the player occupies, used for the
+  // transparency test: tall tiles immediately south of the player should still
+  // fade so the player remains visible behind them.
+  const inFrontRow = Math.floor(at.y);
+  const playerRow  = inFrontRow + 1;
   let playerDrawn = false;
 
   // Snapped, because the tiles it is compared against are: mixing a rounded
@@ -386,7 +402,7 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState, timeMs: 
        * isometric view had to fade.
        */
       const stands = STANDS[tileAt(glyphAt(town, x, y) ?? "_").detail ?? ""] ?? 0;
-      const inFront = stands > 0 && y > playerRow && (y - playerRow) * TD < stands + TD && Math.abs(ox - px) <= TW;
+      const inFront = stands > 0 && y > inFrontRow && (y - inFrontRow) * TD < stands + TD && Math.abs(ox - px) <= TW;
       drawTile(ctx, town, x, y, ox, oy, timeMs, inFront ? 0.32 : 1);
     }
     // The player belongs in the sort, not on top of it — otherwise you walk
@@ -763,18 +779,14 @@ function drawPlayer(ctx: CanvasRenderingContext2D, s: GameState, cam: Camera, t:
 
   // Shadow, flattened onto the ground plane.
   //
-  // The shadow is anchored to the *integer* player row, not the fractional
-  // step position. The tile at playerRow+1 is painted after the player, so
-  // any shadow pixel at or below `playerRow * TD + TD` gets overwritten by
-  // it — which is why the bottom of the shadow flickered while walking: as
-  // `at.y` drifted fractionally, `footY` crossed the tile boundary and the
-  // next row's tiles erased half the shadow on alternating frames.
-  const playerRow = Math.round(at.y);
-  const rowBottom = Math.round(playerRow * TD - cam.py + TD - 1); // last safe pixel in this row
+  // footY is a camera-tracked constant (always ≈128 screen pixels) because
+  // the camera follows at.y exactly. The render loop now draws all tiles up
+  // to row floor(at.y)+1 *before* the player, so nothing painted after the
+  // player overlaps footY — the shadow is safe to anchor here directly.
   ctx.fillStyle = "rgba(0,0,0,0.28)";
-  ctx.fillRect(footX - 4, rowBottom - 3, 8,  1);
-  ctx.fillRect(footX - 5, rowBottom - 2, 10, 2);
-  ctx.fillRect(footX - 4, rowBottom,     8,  1);
+  ctx.fillRect(footX - 4, footY - 3, 8,  1);
+  ctx.fillRect(footX - 5, footY - 2, 10, 2);
+  ctx.fillRect(footX - 4, footY,     8,  1);
 
   const outfit = OUTFITS[s.wearing];
   const body = outfitColor(s.wearing);
