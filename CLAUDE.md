@@ -242,6 +242,18 @@ those needs a box. `income` and `sick` open once per run and are silent after.
   of the good ones was measured at four days a run *worse*, because a bin holds
   a dollar or two and crossing town for it costs more clock than that is worth.
   Keep the rig's `BIN_ROUND` to doors it already stands at.
+- **No venue may be a tap you can leave running**, and it is checked by doing
+  rather than by reading. `src/sim/venue-pumps.test.ts` takes every option in
+  both towns — four times of day, one and two menus deep, ~340 trials — ten
+  times over, and compares against letting the same game-minutes pass. Anything
+  repeatable, free and better than idling has to be on the `DELIBERATE` list
+  with a reason, and being on that list is *not* an exemption: a second check
+  requires each one to stay bounded by a meter ceiling or by the clock, which
+  is what caught the church. St. Jude's had paid +25 meter points per 20-minute
+  sit with no limit (about +15 energy an hour, free, against a hostel bed's
+  +9.4 that you pay for) and $5 for +10 morale in **zero** minutes. Neither
+  harness had ever opened that door — the rig has no reason to visit a church
+  — which is exactly why the guard is behavioural.
 - **Exhaustion and dehydration feed each other** (`meters.ts`). Energy at zero
   drains thirst, thirst at zero drains energy, both gentler than the meters' own
   decay so a drink or an hour's sleep still climbs out faster than the loop
