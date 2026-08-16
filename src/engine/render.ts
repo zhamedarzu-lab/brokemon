@@ -187,9 +187,14 @@ export function cameraFor(state: GameState): Camera {
   const overscanY = TD * 4;
   const maxX = Math.max(0, town.width * TW - CANVAS_W);
   const maxY = Math.max(0, town.height * TD - CANVAS_H);
+  // Not rounded — sub-pixel camera precision is what makes vertical movement
+  // smooth. TD=15 means the camera only advances 0.83px/frame vertically at
+  // normal walking speed; rounding it to the nearest integer holds the same
+  // pixel value for two frames then jumps by one, which reads as chop.
+  // Individual tile positions are rounded at draw time instead.
   return {
-    px: Math.round(Math.min(Math.max(px, -overscanX), maxX + overscanX)),
-    py: Math.round(Math.min(Math.max(py, -overscanY), maxY + overscanY)),
+    px: Math.min(Math.max(px, -overscanX), maxX + overscanX),
+    py: Math.min(Math.max(py, -overscanY), maxY + overscanY),
   };
 }
 
@@ -343,8 +348,8 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState, timeMs: 
    */
   for (let y = b.y0; y <= b.y1; y++) {
     for (let x = b.x0; x <= b.x1; x++) {
-      const ox = screenX(x, y) - cam.px;
-      const oy = screenY(x, y) - cam.py;
+      const ox = Math.round(screenX(x, y) - cam.px);
+      const oy = Math.round(screenY(x, y) - cam.py);
       /**
        * Anything tall standing between you and the camera goes translucent.
        *
@@ -730,7 +735,7 @@ function drawPlayer(ctx: CanvasRenderingContext2D, s: GameState, cam: Camera, t:
   // `at.y` drifted fractionally, `footY` crossed the tile boundary and the
   // next row's tiles erased half the shadow on alternating frames.
   const playerRow = Math.round(at.y);
-  const rowBottom = playerRow * TD - cam.py + TD - 1; // last safe pixel in this row
+  const rowBottom = Math.round(playerRow * TD - cam.py + TD - 1); // last safe pixel in this row
   ctx.fillStyle = "rgba(0,0,0,0.28)";
   ctx.fillRect(footX - 4, rowBottom - 3, 8,  1);
   ctx.fillRect(footX - 5, rowBottom - 2, 10, 2);
