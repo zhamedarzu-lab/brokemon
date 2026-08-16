@@ -139,13 +139,32 @@ What the removal cost and what it exposed:
 |---|------|----------------|
 | 67 | You could not walk down a diagonal street | The town is drawn isometrically and its streets run diagonally on screen, so a four-direction grid had the control fighting the projection. Movement is eight-way now — two keys at once on a keyboard, an eight-sector thumbstick on touch, replacing a d-pad that could only ever ask for four. Brokedale's walking drops **91 → 77 minutes a day**; run length moves 193 → 192 across ten seeds, which is inside a noise floor of 2 |
 | 68 | The rig would have priced diagonals at zero | Its pathfinder was a breadth-first search counting steps, which is right only while every step is worth one tile. It is a Dijkstra over `move.ts` now. Left alone it would have reported a town 30% smaller than the one being played, in the same walking figure this document is built on |
-| 69 | The Brokedale report compared against a number nothing computed | `164 min a day in Brokemon` was a literal in a template string. Measured over ten seeds it is **303**. It had been wrong by a factor of nearly two for an unknown length of time, in the line that exists to justify the whole second town |
+| 69 | The Brokedale report compared against a number nothing computed | `164 min a day in Brokemon` was a literal in a template string. Measured over ten seeds it is **303**. It had been wrong by a factor of nearly two for an unknown length of time, in the line that exists to justify the whole second town. *(Re-measured at **229** after finding 73 — the 303 included a bot walking to the job board daily and being sacked every fifth day.)* |
 
 | 70 | The controls were wired to the grid, not to the screen | Press down, walk towards the bottom *left*. Under this projection the grid's cardinals point at the screen's diagonals, so a scheme wired straight to the grid fights the view — and the player steers by what they can see. The input is rotated 45 degrees in one place, `screenPushToStep`, which turns out to be exact rather than approximate: the eight screen directions map one-to-one onto the eight grid steps via `sign(dx+dy), sign(dy-dx)`. Nothing downstream changed — same grid, same pathfinder, same cost per step, same 192 days across ten seeds |
 
 | 71 | Walking down the screen looked half the speed of walking across it | Reported as "I move faster on the diagonal". The ground speed was already constant — measured 5.0–5.6 tiles/s in every direction, so the root-two charge was doing its job — but *screen* speed was not: 60 px/s up and down against 105 left and right, which is the projection's 2:1 vertical squash showing through the pacing. A step is now paced by its pixels and charged by its ground, two numbers instead of one. Measured after: 86–101 px/s, and the remaining spread is obstacles rather than direction. Ten seeds unchanged at 192 days |
 
 | 72 | Isometric fought the controls, so the rotation went | The 45-degree twist was the thing making the town hard to steer: the grid's cardinals pointed at the screen's diagonals, and no amount of rotating the input back stopped the view arguing with the keys. The camera looks straight down the grid now and tilts ~49 degrees, keeping the boxes. `screenPushToStep` is the identity, draw order is row-major instead of `x + y`, and the art lost both its skews. Same grid, same corner rule, same root-two cost, same Dijkstra — ten seeds unchanged at 192 days, 10/10 winning |
+
+## The job churn, which turned out to be the rig
+
+Reported as "the game keeps firing me". It does — 23 times in one 191-day run,
+always from the same job. Every strike was traced, and none of it was the game.
+
+| # | Item | What was found |
+|---|------|----------------|
+| 73 | The bot went shopping on the way to work | Instrumented over five full runs: **not one strike** came from the door-requirement path, and **95–101** came from lateness, of which **78% were exactly 105 minutes** late and 92% were 90–105. A constant is a collision, not bad luck — `playDay` woke at 7, crossed town to the food bank, ate and drank, and only then started walking to a 9 o'clock shift with an hour of grace. Three strikes is a firing, so the rig was sacked every fifth day for an entire run and reported a game that fires you |
+| 74 | Fixing that froze every seed for 400 days | `jobHunt` was gated behind `if (!worked)`, so the *only* reason the bot ever climbed the ladder was that being sacked gave it a free day. Clock in reliably and it never job-hunts again: all ten seeds stuck at Field Technician, mean 401 days, nobody winning. The two bugs had been holding each other up |
+| 75 | The job board had opening hours it does not have | `jobHunt` refused to run after 5PM, so a bot on a nine-to-five could never reach it even ungated. The board is a corkboard under perspex outside the parks office — no door, no hours, and `jobApplications` checks the clock for nothing. The cutoff was invented by the rig |
+| 76 | Hunting daily on foot cost more than it earned | Ungated, the bot crossed town to the board every day: walking went 300 → 440 min/day and the early game started collapsing on day 5. It asks `checkRequirements` from state first and only makes the walk when something is actually attainable. The block table is still filled in from the requirements, so the diagnostics survive |
+| 77 | The food bank was wedged between clocking out and the bank | With work moved to the front of the day, the food-bank run landed in the 5-to-6 window — the only hour a nine-to-five has at a bank that shuts at 6. Result: **`bank: arrived at 18` 388 times in 400 days**, a bot holding $2,726 cash against $621 of debt it could never hand over, credit pinned at 430 against a lease wanting 620, so no apartment, so never phase 3, so `endgame` returned at the first line and the game was unwinnable. Same shape as the banking-behind-school bug, third time in this file. `playDay` is now ordered by which doors shut |
+| 78 | Every near miss said "a lot" | `checkRequirements` phrased a one-point shortfall as "you need to be **a lot** cleaner (79/80)" — the rig hit that exact wall 60 times in one run. A player told they need to be a lot cleaner goes and finds a shower and loses the morning; what the door wanted was the sink they walked past. The wording now scales with the gap, and appearance got the same treatment. **This one was the game, not the rig** |
+
+Net: mean run length **191 → 84 days**, spread **114–284 → 82–93**, noise floor
+**22 → 2 days**, 10/10 winning either way. The game did not get easier; the
+measurement got honest. No number recorded before this is comparable with one
+recorded after it.
 
 ## Open — ranked by how much they cost the player
 

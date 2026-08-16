@@ -333,17 +333,37 @@ export interface RequirementCheck {
   reasons: string[];
 }
 
+/**
+ * How far short is short, in words.
+ *
+ * Every near miss used to read "you need to be a lot cleaner (79/80)". One
+ * point is not a lot, and the difference matters: a player told they need to
+ * be *a lot* cleaner goes and finds a shower and loses the morning, when what
+ * the door actually wanted was the sink they walked past. The rig hit this
+ * exact wall sixty times in one run at 79 against 80.
+ */
+function byHowMuch(short: number): string {
+  if (short <= 3) return "a touch";
+  if (short <= 12) return "somewhat";
+  return "a lot";
+}
+
 export function checkRequirements(s: GameState, req: Requirements): RequirementCheck {
   const reasons: string[] = [];
 
   if (req.hygiene !== undefined && s.meters.hygiene < req.hygiene) {
-    reasons.push(`you need to be a lot cleaner (${Math.floor(s.meters.hygiene)}/${req.hygiene})`);
+    reasons.push(`you need to be ${byHowMuch(req.hygiene - s.meters.hygiene)} cleaner (${Math.floor(s.meters.hygiene)}/${req.hygiene})`);
   }
   if (req.outfit !== undefined && outfitRank(s.wearing) < outfitRank(req.outfit)) {
     reasons.push(`you'd need ${OUTFITS[req.outfit].name.toLowerCase()} at minimum`);
   }
   if (req.appearance !== undefined && currentAppearance(s) < req.appearance) {
-    reasons.push(`you don't look the part (${currentAppearance(s)}/${req.appearance})`);
+    const short = req.appearance - currentAppearance(s);
+    reasons.push(
+      short <= 3
+        ? `you're not quite presentable enough (${currentAppearance(s)}/${req.appearance})`
+        : `you don't look the part (${currentAppearance(s)}/${req.appearance})`,
+    );
   }
   if (req.education !== undefined && s.education < req.education) {
     reasons.push(`${req.education} night-class credit${req.education === 1 ? "" : "s"} required, you have ${s.education}`);

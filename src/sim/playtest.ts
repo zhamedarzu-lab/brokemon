@@ -24,6 +24,7 @@ import type { Choice, Prompt } from "./prompt";
 import { Rng } from "./rng";
 import {
   bestHousing,
+  checkRequirements,
   createState,
   currentAppearance,
   housingIn,
@@ -35,8 +36,8 @@ import {
 } from "./state";
 import { advance, policeCheck } from "./tick";
 import type { HousingId } from "./social";
-import { dayOf, formatClock, hourOf, minuteOfDay, withinHours } from "./time";
-import { consume, shiftWindow, type ActionCtx } from "./work";
+import { dayOf, formatClock, hourOf, minuteOfDay, minutesUntilHour, withinHours } from "./time";
+import { consume, rotaDay, shiftWindow, type ActionCtx } from "./work";
 
 /* --------------------------------------------------------------- walking */
 
@@ -768,25 +769,72 @@ function groceries(p: Player): void {
   }
 }
 
+/**
+ * Look for something better. Called every day, employed or not.
+ *
+ * Two things here used to conspire to keep the bot in the same job forever.
+ * It was gated behind `if (!worked)` in `playDay`, and it refused to run after
+ * 5PM — so a bot on a nine-to-five could never reach it, and the *only* reason
+ * it ever climbed the ladder was that it kept being fired and having a free
+ * day. Fixing the lateness that caused the firings therefore froze every seed
+ * at Field Technician for four hundred days.
+ *
+ * The 5PM cutoff had nothing behind it. The board is a corkboard under perspex
+ * outside the parks office: no door, no opening hours, and `jobApplications`
+ * checks the clock for nothing. Night is bounded only because walking around
+ * at 3AM is a police check, not because the board is shut.
+ */
 function jobHunt(p: Player): void {
   const s = p.s;
-  if (hourOf(s.time) < 8 || hourOf(s.time) >= 17) return;
+  if (hourOf(s.time) < 8 || hourOf(s.time) >= 21) return;
   const currentPay = s.employment ? EMPLOYMENT[s.employment].pay : 0;
   const wanted = EMPLOYMENT_ORDER.filter((id) => EMPLOYMENT[id].pay > currentPay).sort(
     (a, b) => EMPLOYMENT[b].pay - EMPLOYMENT[a].pay,
   );
   if (wanted.length === 0) return;
 
-  // The job board carries the same listings without the dress code on the door.
-  p.goto("jobBoard");
-  const list = p.drive(p.press(), "career listings");
-
+  // Both of these are answerable from state alone, and both mean the walk is
+  // wasted. Ask before crossing town, not after.
   const owed = new Set<EmploymentId>();
   for (const id of EMPLOYMENT_ORDER) {
     const exp = EMPLOYMENT[id].requires.experience;
     if (exp && (s.shiftsWorked[exp.job] ?? 0) < exp.shifts) owed.add(exp.job);
   }
   if (s.employment && owed.has(s.employment)) return;
+
+  // Ask the requirements before walking, not after. Hunting every day is
+  // right — you do not stop wanting a better job because you have one — but
+  // hunting on foot every day is not: crossing town to the board and back is
+  // over two hours, and it took the bot from ~300 minutes of walking a day to
+  // ~440, with the early game collapsing on day five. The block reasons are
+  // still recorded, because that table is where the findings come from; it is
+  // only the walk that is conditional.
+  // Turn up to an interview as clean as you turn up to a shift. `workShift`
+  // has always washed to the door requirement plus a margin; `jobHunt` washed
+  // to a flat 80 and then spent the walk to the board losing a point of it,
+  // which is how the bot arrived at 79 against Regional Director's 80 and was
+  // turned away sixty times in one run over a single point.
+  const need = Math.max(...wanted.map((id) => EMPLOYMENT[id].requires.hygiene ?? 0), 0);
+  if (need > 0 && s.meters.hygiene < need + 10) wash(p, Math.min(100, need + 20));
+
+  const open: EmploymentId[] = [];
+  for (const id of wanted) {
+    const gate = checkRequirements(s, EMPLOYMENT[id].requires);
+    if (gate.ok) {
+      open.push(id);
+      continue;
+    }
+    const why = `job ${EMPLOYMENT[id].name}: ${gate.reasons[0]}`;
+    p.blocked.set(why, (p.blocked.get(why) ?? 0) + 1);
+  }
+  const stepDownWanted = EMPLOYMENT_ORDER.filter(
+    (id) => owed.has(id) && checkRequirements(s, EMPLOYMENT[id].requires).ok,
+  );
+  if (open.length === 0 && stepDownWanted.length === 0) return;
+
+  // The job board carries the same listings without the dress code on the door.
+  p.goto("jobBoard");
+  const list = p.drive(p.press(), "career listings");
 
   for (const id of wanted) {
     if (p.can(list, EMPLOYMENT[id].name)) {
@@ -795,8 +843,8 @@ function jobHunt(p: Player): void {
       p.note(s.employment !== before ? `HIRED as ${EMPLOYMENT[id].name}` : `interview failed: ${EMPLOYMENT[id].name}`);
       return;
     }
-    const why = p.lockReason(list, EMPLOYMENT[id].name);
-    if (why) p.blocked.set(`job ${EMPLOYMENT[id].name}: ${why}`, (p.blocked.get(`job ${EMPLOYMENT[id].name}: ${why}`) ?? 0) + 1);
+    // Locks were already counted above, from the requirements rather than
+    // from the button, so nothing is recorded here.
   }
 
   // Nothing better is open. Take the pay cut that earns the reference.
@@ -869,12 +917,16 @@ function endgame(p: Player): void {
 function banking(p: Player): void {
   const s = p.s;
   // The bank shuts at six, and that last hour is the only one a 9-to-5 has.
-  if (hourOf(s.time) < 9 || hourOf(s.time) >= 18) return;
+  if (hourOf(s.time) < 9 || hourOf(s.time) >= 18) {
+    p.blocked.set(`bank: arrived at ${hourOf(s.time)}`, (p.blocked.get(`bank: arrived at ${hourOf(s.time)}`) ?? 0) + 1);
+    return;
+  }
   if (s.cash < 300) return;
   p.goto("bank");
   const b = p.press();
   if (s.debt > 0 && p.can(b, "pay down")) p.drive(b, "pay down the debt");
   else if (p.can(b, "deposit")) p.drive(b, "deposit cash");
+  else p.blocked.set(`bank: nothing doable (debt ${s.debt > 0})`, (p.blocked.get(`bank: nothing doable (debt ${s.debt > 0})`) ?? 0) + 1);
 }
 
 function sleep(p: Player): void {
@@ -907,6 +959,30 @@ function sleep(p: Player): void {
   p.ctx.advance(60 * 8, { asleep: true });
 }
 
+/**
+ * Whether the shift is close enough that the errands have to wait.
+ *
+ * The bot used to run its whole morning — cross town to the food bank, eat,
+ * drink — and only then start walking to work, which put it through the door
+ * 105 minutes after the hour on 78% of its shifts. Grace is an hour, so every
+ * one of those was a strike, and three strikes is a firing: the rig was
+ * sacked every fifth day for an entire run and reported a game that fires
+ * you, when what it had was a bot that went shopping on the way in.
+ *
+ * A job that starts in the evening — the 10PM stocker — genuinely has a free
+ * morning, so this asks about the clock rather than assuming every shift is a
+ * nine o'clock one.
+ */
+function shiftIsImminent(p: Player): boolean {
+  const s = p.s;
+  const job = s.employment;
+  if (!job) return false;
+  if (s.lastShiftDay === rotaDay(s, job)) return false;
+  const w = shiftWindow(s, job);
+  if (w === "open" || w === "late") return true;
+  return minutesUntilHour(s.time, EMPLOYMENT[job].shiftStart) <= 150;
+}
+
 function workShift(p: Player): boolean {
   const s = p.s;
   const job = s.employment;
@@ -937,6 +1013,16 @@ function workShift(p: Player): boolean {
   return after > before;
 }
 
+/** Free calories and a nurse, and the whole safety net on day one. */
+function foodBank(p: Player): void {
+  const s = p.s;
+  p.goto("communityCenter");
+  p.drive(p.press(), "food bank");
+  if (s.sick || s.meters.health < 45) p.drive(p.press(), "nurse") ?? p.drive(p.press(), "checked over");
+  p.eat();
+  drink(p);
+}
+
 function playDay(p: Player): void {
   const s = p.s;
   const day = dayOf(s.time);
@@ -961,14 +1047,26 @@ function playDay(p: Player): void {
     return;
   }
 
-  // Food bank first: free calories, and it is the whole safety net on day one.
-  p.goto("communityCenter");
-  p.drive(p.press(), "food bank");
-  if (s.sick || s.meters.health < 45) p.drive(p.press(), "nurse") ?? p.drive(p.press(), "checked over");
-  p.eat();
-  drink(p);
-
-  const worked = workShift(p);
+  /**
+   * The day is ordered by which doors shut, not by which errand feels urgent.
+   *
+   * The shift, the bank, the plaza and the letting agent all close at a fixed
+   * hour; the food bank, the shops and the job board are open all day or free
+   * to miss. Putting a discretionary stop in front of a closing one is a bug
+   * this function has now grown three separate times: banking behind school,
+   * the plaza behind the shopping, and the food bank wedged between clocking
+   * out at 5 and a bank that shuts at 6 — which cost 388 of 400 days' banking
+   * in one run and left the bot on $2,726 cash it could not use to clear $621
+   * of debt that was pinning its credit score below the lease it needed.
+   */
+  const clockInFirst = shiftIsImminent(p);
+  let worked = false;
+  if (clockInFirst) {
+    worked = workShift(p);
+  } else {
+    foodBank(p);
+    worked = workShift(p);
+  }
 
   // Straight from the shift to the bank, while the last hour of opening is
   // still there. Doing it at the end of the errand list meant a 9-to-5 always
@@ -976,13 +1074,23 @@ function playDay(p: Player): void {
   // cash, a few hundred of debt they could never hand over, and the estate
   // refusing them on a credit score the debt was pinning down.
   banking(p);
+  // The corporate plaza shuts at 6PM, same as the bank, and for the same
+  // reason it has to be asked early: a Regional Director clocks out at 5, and
+  // if the wash, the shopping, the groceries and the job board come first the
+  // plaza is always shut by the time anybody knocks. The old rig only ever
+  // bought the franchise on days it had been *fired*, because those were the
+  // only days it was free before six. Fixing the firings therefore made the
+  // game unwinnable until this moved up two lines — the same shape as the
+  // banking-before-school bug above, and worth the same hundred and fifty days.
+  endgame(p);
+  housing(p);
 
+  // Now the things with no closing time.
+  if (clockInFirst) foodBank(p);
   wash(p);
   shop(p);
   groceries(p);
-  if (!worked) jobHunt(p);
-  housing(p);
-  endgame(p);
+  jobHunt(p);
   p.eat();
   drink(p);
 
@@ -1578,8 +1686,13 @@ const seeds = args.map(Number).filter((n: number) => !Number.isNaN(n));
  * The line below used to compare against a bare `164`, which nothing computed
  * and nothing checked; the real figure is nearer twice that. Re-measure with
  * `npm run playtest` and the day rows' walk column if this is ever in doubt.
+ *
+ * Re-measured at 229 over the ten default seeds once the day was reordered by
+ * closing time. The old 303 included a bot that crossed town to the job board
+ * every single day and was fired every fifth one; that is not what walking to
+ * work costs, it is what walking badly costs.
  */
-const BROKEMON_WALK_MINUTES = 303;
+const BROKEMON_WALK_MINUTES = 229;
 
 const DEFAULT_SEEDS = [2026, 7, 11, 99, 3, 42, 77, 500, 1234, 8888];
 

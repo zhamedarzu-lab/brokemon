@@ -15,6 +15,7 @@ import {
   EMPLOYMENT_ORDER,
   GIGS,
   energyToFinish,
+  type EmploymentId,
 } from "./jobs";
 import { countOf, type ItemId } from "./items";
 import type { Choice, Prompt } from "./prompt";
@@ -902,5 +903,67 @@ describe("the job board says what a job will take out of you", () => {
       (c) => c.label === "Deliver flyers",
     );
     expect(shown?.hint).not.toContain("run dry");
+  });
+});
+
+describe("the doors that shut, against the shifts that end", () => {
+  /**
+   * The bank is the only place a debt can be paid, the debt is the only thing
+   * holding the credit score under the lease, and the lease is the only door
+   * to the last phase of the game. So the bank's closing time is load-bearing
+   * for the ending, and it is measured against a career that works 9 to 5.
+   *
+   * This has already gone wrong twice. Once in the game, when the bank kept
+   * exactly the hours of the top two jobs and a Regional Director could never
+   * walk in. Once in the rig, when an errand was scheduled between the 5PM
+   * clock-out and the 6PM close and swallowed 388 of 400 days' banking.
+   * Neither was caught by anything until a full run was read line by line.
+   */
+  const CLOSING = { bank: 18, plaza: 18 } as const;
+
+  function shutsAfter(door: keyof typeof CLOSING, job: EmploymentId): number {
+    return CLOSING[door] - EMPLOYMENT[job].shiftEnd;
+  }
+
+  const salaried = EMPLOYMENT_ORDER.filter((id) => EMPLOYMENT[id].tier >= 3);
+
+  it("leaves every career job an hour to reach the bank after clocking out", () => {
+    expect(salaried.length).toBeGreaterThan(0);
+    for (const id of salaried) {
+      const def = EMPLOYMENT[id];
+      // An overnight shift ends in the morning and has the whole day.
+      if (def.shiftEnd <= def.shiftStart) continue;
+      expect(
+        shutsAfter("bank", id),
+        `${def.name} clocks out at ${def.shiftEnd} and the bank shuts at ${CLOSING.bank} — ` +
+          `no hour left to pay down the debt that gates the ending`,
+      ).toBeGreaterThanOrEqual(1);
+    }
+  });
+
+  it("leaves the same hour to reach the corporate plaza", () => {
+    for (const id of salaried) {
+      const def = EMPLOYMENT[id];
+      if (def.shiftEnd <= def.shiftStart) continue;
+      expect(
+        shutsAfter("plaza", id),
+        `${def.name} clocks out at ${def.shiftEnd} and the plaza shuts at ${CLOSING.plaza}`,
+      ).toBeGreaterThanOrEqual(1);
+    }
+  });
+
+  it("keeps the bank open past the hour it is documented to close", () => {
+    // Guards the constant above against the venue drifting away from it.
+    const bot = new Bot(1);
+    bot.waitUntilHour(CLOSING.bank - 1);
+    bot.standOn("bank");
+    expect(bot.press()?.lines.join(" ") ?? "").not.toContain("Closed");
+  });
+
+  it("shuts the bank at the hour it is documented to close", () => {
+    const bot = new Bot(1);
+    bot.waitUntilHour(CLOSING.bank);
+    bot.standOn("bank");
+    expect(bot.press()?.lines.join(" ") ?? "").toContain("Closed");
   });
 });

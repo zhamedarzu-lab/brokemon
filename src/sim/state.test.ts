@@ -78,6 +78,31 @@ describe("checkRequirements", () => {
     expect(check.reasons.length).toBe(4);
   });
 
+  it("says how far short you are, rather than 'a lot' for one point", () => {
+    // The rig was turned away from Regional Director sixty times in one run at
+    // 79 against 80, and told every time that it needed to be "a lot" cleaner.
+    // A player who believes that goes and finds a shower and loses the morning;
+    // what the door wanted was the sink they walked past.
+    const s = createState(1);
+    const reasonAt = (hygiene: number) => {
+      s.meters.hygiene = hygiene;
+      return checkRequirements(s, { hygiene: 80 }).reasons[0]!;
+    };
+    expect(reasonAt(79)).toContain("a touch cleaner");
+    expect(reasonAt(79)).toContain("(79/80)");
+    expect(reasonAt(70)).toContain("somewhat cleaner");
+    expect(reasonAt(20)).toContain("a lot cleaner");
+  });
+
+  it("does not call a near miss on appearance 'you don't look the part'", () => {
+    const s = createState(1);
+    const req = { appearance: currentAppearance(s) + 2 };
+    expect(checkRequirements(s, req).reasons[0]).toContain("not quite presentable");
+    expect(checkRequirements(s, { appearance: currentAppearance(s) + 40 }).reasons[0]).toContain(
+      "don't look the part",
+    );
+  });
+
   it("accepts an outfit above the minimum tier", () => {
     const s = createState(1);
     s.wearing = "tailored";

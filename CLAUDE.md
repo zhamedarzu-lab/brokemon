@@ -48,12 +48,37 @@ where the findings come from — a wall shows up as the same lock reason repeati
 eighty times.
 
 Run the playtest after any change to meters, jobs, prices or venue hours. A
-change can pass all 233 tests and still make the game unwinnable.
+change can pass all 346 tests and still make the game unwinnable.
 
-**Read the spread line before believing a number.** Run length swings 114–284
-days on identical code, so the last line of the run tells you what is inside the
-noise — currently about 22 days. One seed moving is not a finding. That mistake
-has already been made once, on ten minutes of evidence.
+**When a venue's hours move, check where it sits in `playDay`.** The rig's day
+is ordered by which doors shut — shift, bank, plaza, letting agent — with the
+all-day stops (food bank, shops, job board) filling the gaps. Putting a
+discretionary stop in front of a closing one has broken this file three times:
+banking behind school, the plaza behind the shopping, and the food bank wedged
+between a 5PM clock-out and a bank that shuts at 6. That last one cost 388 of
+400 days' banking and left the bot holding $2,726 it could not use to clear
+$621 of debt that was pinning its credit below the lease it needed.
+
+**Read the spread line before believing a number.** The last line of the run
+tells you what is inside the noise. One seed moving is not a finding. That
+mistake has already been made once, on ten minutes of evidence.
+
+The noise floor used to be about 22 days on a 114–284 day run. It is now about
+2 days on an 82–93 day run, because most of that spread was the rig being fired
+at random rather than the game being variable — see below. A change of five
+days is now a real signal; it did not used to be.
+
+**The rig's *policy* is part of the measurement, and it had three compensating
+bugs.** It ran its morning errands before walking to work and clocked in 105
+minutes late on 78% of shifts, so it was sacked every fifth day all run. It
+only job-hunted on days it had *not* worked, so the sackings were the only
+reason it ever got promoted. And it only reached the corporate plaza before
+closing on those same free days, so the sackings were also the only reason it
+ever bought the franchise. Fixing the lateness alone froze every seed at Field
+Technician for 400 days; all three had to go together. A run is now 84 days
+mean where it was 191, and that is the instrument getting better, not the game
+getting easier. **Do not compare any number recorded before this against one
+recorded after it.**
 
 ## Where things live
 
