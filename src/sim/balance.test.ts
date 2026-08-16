@@ -967,3 +967,106 @@ describe("the doors that shut, against the shifts that end", () => {
     expect(bot.press()?.lines.join(" ") ?? "").toContain("Closed");
   });
 });
+
+describe("St. Jude's gives once a day, not once a click", () => {
+  /**
+   * The church is charity, so it hands things out — that is the point of it,
+   * and the difference between Brokemon and Brokedale. What it must not be is
+   * a tap you can leave running.
+   *
+   * Neither harness had ever opened this door. The walking rig has no reason
+   * to visit and no test named it, so an unlimited restore of three meters at
+   * once sat in the game unmeasured: +14 morale, +5 health and +6 energy for
+   * twenty minutes, repeatable. Energy decays 2.6 an hour, so that nets about
+   * +15 an hour against the +75 over eight hours a hostel bed charges for.
+   */
+  function atChurch(seed = 1) {
+    const bot = new Bot(seed);
+    bot.waitUntilHour(12); // kitchen open, everything available
+    bot.state.cash = 200;
+    bot.state.meters.morale = 40;
+    bot.state.meters.health = 60;
+    bot.state.meters.energy = 40;
+    bot.standOn("church");
+    return bot;
+  }
+
+  it("lets you sit down as often as you like", () => {
+    // Shelter is never refused: the door being open is the character of the
+    // place, and a dry pew in the rain is worth something by itself.
+    const bot = atChurch();
+    for (let i = 0; i < 4; i++) {
+      expect(bot.canChoose(bot.press(), "Sit quietly"), `sit ${i + 1} was refused`).toBe(true);
+      bot.drive(bot.press(), "Sit quietly");
+    }
+  });
+
+  it("only lifts you the first time", () => {
+    const bot = atChurch();
+    bot.drive(bot.press(), "Sit quietly");
+    const after = { ...bot.state.meters };
+    expect(after.morale).toBeGreaterThan(40);
+
+    // Sit four more times. The clock moves; the meters only decay.
+    for (let i = 0; i < 4; i++) bot.drive(bot.press(), "Sit quietly");
+    expect(bot.state.meters.morale).toBeLessThanOrEqual(after.morale);
+    expect(bot.state.meters.health).toBeLessThanOrEqual(after.health);
+    expect(bot.state.meters.energy).toBeLessThanOrEqual(after.energy);
+  });
+
+  it("does not out-rest a bed you have to pay for", () => {
+    // A pew used to be 1.6x a hostel bed, for free, with no bed.
+    const bot = atChurch();
+    const before = bot.state.meters.energy;
+    const t0 = bot.state.time;
+    for (let i = 0; i < 6; i++) bot.drive(bot.press(), "Sit quietly");
+    const perHour = (bot.state.meters.energy - before) / ((bot.state.time - t0) / 60);
+    expect(perHour, "sitting in a pew still refills energy faster than sleeping").toBeLessThan(9.4);
+  });
+
+  it("takes the donation once and charges time for it", () => {
+    const bot = atChurch();
+    const cash = bot.state.cash;
+    const t0 = bot.state.time;
+    bot.drive(bot.press(), "Leave a donation");
+    expect(bot.state.cash).toBe(cash - 5);
+    expect(bot.state.time, "donating cost no time, so it was a morale vending machine").toBeGreaterThan(t0);
+    expect(bot.canChoose(bot.press(), "Leave a donation")).toBe(false);
+  });
+
+  it("does not let $50 buy a full dignity bar", () => {
+    const bot = atChurch();
+    bot.state.meters.morale = 10;
+    for (let i = 0; i < 10; i++) bot.drive(bot.press(), "Leave a donation");
+    expect(bot.state.meters.morale).toBeLessThan(30);
+    expect(bot.state.cash).toBeGreaterThanOrEqual(195 - 5);
+  });
+
+  it("still feeds you once a day", () => {
+    const bot = atChurch();
+    const hunger = bot.state.meters.hunger;
+    bot.drive(bot.press(), "Soup kitchen");
+    expect(bot.state.meters.hunger).toBeGreaterThan(hunger);
+    expect(bot.canChoose(bot.press(), "Soup kitchen")).toBe(false);
+  });
+
+  it("opens all three again tomorrow", () => {
+    const bot = atChurch();
+    bot.drive(bot.press(), "Sit quietly");
+    bot.drive(bot.press(), "Leave a donation");
+    bot.drive(bot.press(), "Soup kitchen");
+    // A day on. Left alone for 24 hours with no food, water or bed the bot
+    // collapses, which moves it and pushes the clock past the kitchen's hours
+    // — neither of which is what this test is about, so put it back on its
+    // feet at the door in the middle of the day.
+    bot.ctx.advance(24 * 60);
+    bot.state.meters = { hunger: 70, thirst: 70, hygiene: 60, energy: 60, morale: 40, health: 70 };
+    if (hourOf(bot.state.time) < 10 || hourOf(bot.state.time) >= 20) bot.waitUntilHour(12);
+    bot.standOn("church");
+    expect(bot.canChoose(bot.press(), "Leave a donation")).toBe(true);
+    expect(bot.canChoose(bot.press(), "Soup kitchen")).toBe(true);
+    const morale = bot.state.meters.morale;
+    bot.drive(bot.press(), "Sit quietly");
+    expect(bot.state.meters.morale).toBeGreaterThan(morale);
+  });
+});

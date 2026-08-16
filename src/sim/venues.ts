@@ -50,7 +50,7 @@ import {
   townOf,
   type GameState,
 } from "./state";
-import { withinHours } from "./time";
+import { dayOf, withinHours } from "./time";
 import {
   caffeineCup,
   clockInHint,
@@ -2308,14 +2308,40 @@ const bikeShop: Venue = (ctx) => {
 
 /* --------------------------------------------------------------- church */
 
+/**
+ * St. Jude's, and the three things it gives away.
+ *
+ * The soup kitchen was always once a day. The other two were not, and both
+ * were pumps rather than choices:
+ *
+ * - **Sitting quietly** paid +14 morale, +5 health and +6 energy for twenty
+ *   minutes, unlimited. Energy decays 2.6 an hour, so a sit netted +5.1 — call
+ *   it +15 energy an hour, free and forever, against the +75 over eight hours
+ *   that a hostel bed costs money for. A pew was 1.6x a bed. It refilled
+ *   health faster than the hospital charges for, and morale at +42 an hour,
+ *   which is the meter the bin food and the panhandling are priced against:
+ *   taking food out of a bin costs dignity precisely so that it means
+ *   something, and this handed it straight back.
+ * - **The donation** took $5 for +10 morale with *no time cost at all*, so it
+ *   was a vending machine — ten clicks and no minutes for a full bar.
+ *
+ * Neither harness has ever opened this door, which is how both survived. The
+ * fix keeps the flavour: the door is always open and sitting down is always
+ * allowed, because shelter is the point of the place and a dry pew in the rain
+ * is worth something on its own. What is once a day is the *lift* you get
+ * from it.
+ */
 const church: Venue = (ctx) => {
   const s = ctx.state;
   const choices: Choice[] = [];
 
-  // Soup kitchen — once per day, same pattern as the food bank
+  const today = dayOf(s.time);
   const soupKey = "churchSoupDay";
-  const today = Math.floor(s.time / 1440);
+  const restKey = "churchRestDay";
+  const almsKey = "churchAlmsDay";
   const hadSoup = (s.flags[soupKey] ?? -1) === today;
+  const hadRest = (s.flags[restKey] ?? -1) === today;
+  const gaveAlms = (s.flags[almsKey] ?? -1) === today;
   const kitchenOpen = withinHours(s.time, 10, 20);
 
   if (kitchenOpen) {
@@ -2347,12 +2373,23 @@ const church: Venue = (ctx) => {
     choices.push({ label: "Soup kitchen", hint: "10AM–8PM", locked: "The kitchen is closed right now" });
   }
 
-  // Prayer — always available, small morale and health restore
+  // Sitting down is never refused. The lift from it is once a day.
   choices.push({
     label: "Sit quietly for a while",
-    hint: "20 min, free",
+    hint: hadRest ? "20 min, out of the weather" : "20 min, free",
     run: () => {
       ctx.advance(20, { sheltered: true });
+      if (hadRest) {
+        return menu(
+          "St. Jude's",
+          [
+            "You sit in the same pew. It is still quiet, and still dry.",
+            "It does not do what it did earlier. You already had that today.",
+          ],
+          [BACK],
+        );
+      }
+      s.flags[restKey] = today;
       applyDelta(s.meters, { morale: +14, health: +5, energy: +6 });
       pushLog(s, "Rested at St. Jude's.", "good");
       return menu(
@@ -2366,26 +2403,33 @@ const church: Venue = (ctx) => {
     },
   });
 
-  // Donate — optional, available when you have something to give
-  const canDonate = s.cash >= 5;
+  // Donate — a sink, not a shop. Giving twice in a day is still giving, but
+  // the second five does not buy back another slice of your own self-respect.
   choices.push(
-    canDonate
-      ? {
-          label: "Leave a donation",
-          hint: "$5",
-          run: () => {
-            s.cash -= 5;
-            applyDelta(s.meters, { morale: +10 });
-            pushLog(s, "Donated $5 at St. Jude's.", "money");
-            return menu(
-              "St. Jude's",
-              ["You drop a five into the box by the door.", "It's not much. It still counts."],
-              [BACK],
-              "money",
-            );
-          },
-        }
-      : { label: "Leave a donation", locked: "You don't have $5 to spare" },
+    gaveAlms
+      ? // The hint carries the rule and the lock carries the reason, same as
+        // the kitchen above — a greyed row reading only "$5" tells a player
+        // who has the $5 nothing at all.
+        { label: "Leave a donation", hint: "one a day", locked: "You've already given today" }
+      : s.cash >= 5
+        ? {
+            label: "Leave a donation",
+            hint: "$5, 5 min",
+            run: () => {
+              ctx.advance(5, { sheltered: true });
+              s.cash -= 5;
+              s.flags[almsKey] = today;
+              applyDelta(s.meters, { morale: +10 });
+              pushLog(s, "Donated $5 at St. Jude's.", "money");
+              return menu(
+                "St. Jude's",
+                ["You drop a five into the box by the door.", "It's not much. It still counts."],
+                [BACK],
+                "money",
+              );
+            },
+          }
+        : { label: "Leave a donation", locked: "You don't have $5 to spare" },
   );
 
   choices.push(BACK);
