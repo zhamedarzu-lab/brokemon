@@ -174,11 +174,22 @@ export function cameraFor(state: GameState): Camera {
   const at = playerTile(state);
   const px = screenX(at.x, at.y) + TW / 2 - CANVAS_W / 2;
   const py = screenY(at.x, at.y) + TD / 2 - CANVAS_H / 2;
+  /**
+   * Clamped to the town, but allowed to overscan a few tiles past it.
+   *
+   * A hard clamp pins the player against the screen edge wherever the map ends
+   * — at the spawn, two rows from the southern wall, they sat fifteen pixels
+   * off the bottom and could not see the ground they were walking into. The
+   * overscan buys back that margin, and what shows beyond the boundary is the
+   * "outside" ground rather than a hole, so there is nothing to hide.
+   */
+  const overscanX = TW * 4;
+  const overscanY = TD * 4;
   const maxX = Math.max(0, town.width * TW - CANVAS_W);
   const maxY = Math.max(0, town.height * TD - CANVAS_H);
   return {
-    px: Math.round(Math.min(Math.max(px, 0), maxX)),
-    py: Math.round(Math.min(Math.max(py, 0), maxY)),
+    px: Math.round(Math.min(Math.max(px, -overscanX), maxX + overscanX)),
+    py: Math.round(Math.min(Math.max(py, -overscanY), maxY + overscanY)),
   };
 }
 

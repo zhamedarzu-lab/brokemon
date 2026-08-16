@@ -6,10 +6,10 @@
  * three things or the rig reports a game nobody is playing: which steps are
  * legal, which way you end up facing, and what a step costs.
  *
- * Diagonals are the reason this file exists. They are worth having — the town
- * is drawn isometrically and its streets run diagonally on screen, so being
- * unable to walk down one was the first thing that felt wrong — but they are
- * only honest if a diagonal step costs what a diagonal step is: root two.
+ * Diagonals are the reason this file exists. They are worth having — eight-way
+ * movement is what a thumbstick wants and what a keyboard can express with two
+ * keys — but they are only honest if a diagonal step costs what a diagonal step
+ * is: root two.
  * Charging one step for 1.41 tiles of ground would have handed every route in
  * the game a 41% discount and quietly invalidated every walking number in
  * `docs/playtest-findings.md`.

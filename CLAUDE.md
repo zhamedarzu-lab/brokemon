@@ -105,30 +105,23 @@ has already been made once, on ten minutes of evidence.
   what a step costs. Movement is eight-way: two keys at once on a keyboard, an
   eight-sector thumbstick on touch.
 
-  **The controls are screen-relative, and the rotation lives in `render.ts`.**
-  Press down and the character walks down the *screen*, not down the grid. Those
-  are 45 degrees apart here — the grid's cardinals point at the screen's
-  diagonals — so wiring the keys straight to the grid sent the player towards
-  the bottom-left when they pressed down, which reads as broken even once you
-  know why. `screenPushToStep` is the single place that rotation happens, it is
-  exact rather than approximate (`sign(dx+dy), sign(dy-dx)`), and `move.test.ts`
-  checks it against `isoX`/`isoY` rather than against a table, so changing the
-  projection fails the tests instead of quietly breaking the controls. Note the
-  consequence: a single key is a grid *diagonal* and costs root two; two keys
-  make a grid cardinal and cost one.
+  **The controls are wired straight to the grid, and that is deliberate.** The
+  camera looks down the grid rather than across it, so pressing down walks you
+  down the screen with no rotation in between. `screenPushToStep` is the
+  identity; it survives as a function so `move.test.ts` can keep checking
+  "pushing down moves you down the screen" against `screenX`/`screenY` rather
+  than against a table, which is what made the change from isometric safe.
 
   **A step is paced by pixels and charged by ground, and those are two numbers**
-  (`stepPacing`). They came apart the moment the controls were rotated. A step
-  is worth 1 or root-two tiles and the clock must charge that, or crossing the
-  map gets cheaper depending on the route. The same step is worth 16 or 32
-  *pixels*, because the projection squashes the vertical two to one — so pacing
-  the animation by ground made walking down the screen look like half the speed
-  of walking across it, at 60 px/s against 105. `animScale` stretches the
-  duration so apparent speed is constant; `timeRate` scales the clock during it
-  so the ground still costs what it costs. The invariant
-  `animScale * timeRate === ground` is tested; do not collapse them back into
-  one number, because the pixel lengths genuinely differ two to one and no
-  single scale satisfies both.
+  (`stepPacing`). A step is worth 1 or root-two tiles and the clock must charge
+  that, or crossing the map gets cheaper depending on the route. The same step
+  is worth 15, 20 or 25 *pixels*, because a tile is 20 across and 15 deep — so
+  pacing the animation by ground alone makes walking north-south look slower
+  than walking east-west. `animScale` stretches the duration so apparent speed
+  is constant; `timeRate` scales the clock during it so the ground still costs
+  what it costs. The invariant `animScale * timeRate === ground` is tested; do
+  not collapse them into one number, because the pixel lengths genuinely differ
+  four to three and no single scale satisfies both.
 
   Two things in `move.ts` itself are load-bearing:
   - **A diagonal costs root two.** It covers 1.41 tiles of ground and takes
